@@ -32,7 +32,9 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Proteger toutes les routes sauf /login, /register, et la racine (si c'est une landing page)
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/register')
+  const isAuthRoute = request.nextUrl.pathname.startsWith('/login') || 
+                      request.nextUrl.pathname.startsWith('/register') ||
+                      request.nextUrl.pathname.startsWith('/auth/confirm')
 
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone()
