@@ -34,6 +34,7 @@ export default function RegisterPage() {
       email,
       password,
       options: {
+        emailRedirectTo: `${location.origin}/auth/confirm`,
         data: {
           full_name: name,
         }
