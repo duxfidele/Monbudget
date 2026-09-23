@@ -210,7 +210,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   updateCategoryAmount: async (id, amount) => {
     const budgetId = get().budget_id;
-    if(!budgetId) return;
+    if(!budgetId) throw new Error("Le budget n'a pas pu être chargé. Assurez-vous que votre profil est bien configuré (erreur de base de données).");
 
     const category = get().categories.find(c => c.id === id);
     if (!category) return;
@@ -235,7 +235,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addTransaction: async (tx) => {
     const budgetId = get().budget_id;
-    if(!budgetId) return;
+    if(!budgetId) throw new Error("Le budget n'a pas pu être chargé. Assurez-vous que votre profil est bien configuré (erreur de base de données).");
 
     // Find category ID
     let category_id = null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,17 @@ export default function TransactionsPage() {
   const [newLabel, setNewLabel] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newCategory, setNewCategory] = useState("");
-  const [newDate, setNewDate] = useState("");
+  const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  useEffect(() => {
+    if (!newCategory) {
+      if (categories.length > 0) {
+        setNewCategory(categories[0].name);
+      } else if (categories.length === 0) {
+        setNewCategory("Autre (Hors Budget)");
+      }
+    }
+  }, [categories, newCategory]);
   const [newType, setNewType] = useState<"expense" | "income">("expense");
 
   const handleAddTransaction = async () => {
