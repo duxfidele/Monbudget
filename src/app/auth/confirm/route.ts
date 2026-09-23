@@ -16,6 +16,10 @@ export async function GET(request: NextRequest) {
       token_hash,
     })
     if (!error) {
+      if (type === 'recovery') {
+        const redirectUrl = new URL('/reset-password', request.url)
+        return NextResponse.redirect(redirectUrl)
+      }
       // Rediriger l'utilisateur vers la page spécifiée ou vers l'accueil
       const redirectUrl = new URL(next, request.url)
       return NextResponse.redirect(redirectUrl)

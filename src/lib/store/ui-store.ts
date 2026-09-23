@@ -35,6 +35,8 @@ interface UIState {
   addSavingsAmount: (id: string, amount: number) => Promise<void>;
 
   // Init
+  alertThreshold: number;
+  updateAlertThreshold: (percent: number) => Promise<void>;
   isLoading: boolean;
   initStore: () => Promise<void>;
 }
@@ -53,6 +55,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     get().initStore();
   },
 
+  alertThreshold: 80,
   isLoading: true,
   budget_id: null,
   income: 0,
@@ -67,6 +70,12 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (!user) { set({ isLoading: false }); return; }
 
       const { year, month } = get().activeMonth;
+
+      // Fetch profile for alert threshold
+      const { data: profile } = await supabase.from('profiles').select('alert_threshold_percent').eq('id', user.id).single();
+      if (profile && profile.alert_threshold_percent) {
+        set({ alertThreshold: Number(profile.alert_threshold_percent) });
+      }
 
       // 1. Get or Create Monthly Budget
       let { data: budget } = await supabase
@@ -156,10 +165,20 @@ export const useUIStore = create<UIState>((set, get) => ({
       }));
       set({ savingsGoals: mappedGoals });
 
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error init store", e);
+      // Ensure toast is imported or use a simple alert if we can't easily add it here.
+      // Wait, we can't easily use toast here if it's outside a React component unless we import it.
+      // toast is imported at the top? No, let's check.
     }
     set({ isLoading: false });
+  },
+
+  updateAlertThreshold: async (percent) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('profiles').update({ alert_threshold_percent: percent }).eq('id', user.id);
+    set({ alertThreshold: percent });
   },
 
   setIncome: async (income) => {
@@ -223,7 +242,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     const cat = get().categories.find(c => c.name.toLowerCase() === tx.category.toLowerCase());
     if (cat) category_id = cat.id;
 
-    const { data: newTx } = await supabase.from('transactions').insert({
+    const { data: newTx, error } = await supabase.from('transactions').insert({
       monthly_budget_id: budgetId,
       category_id,
       amount: tx.amount,
@@ -232,6 +251,11 @@ export const useUIStore = create<UIState>((set, get) => ({
       type: tx.type === 'expense' ? 'expense' : 'income_adjustment'
     }).select().single();
 
+    if (error) {
+      console.error("Supabase insert error:", error);
+      throw error;
+    }
+    
     if (newTx) {
       tx.id = newTx.id;
       set((state) => {

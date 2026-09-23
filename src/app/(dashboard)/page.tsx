@@ -33,9 +33,9 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-8 pb-10">
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Tableau de bord</h2>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">Tableau de bord</h2>
           <p className="text-slate-500 mt-2">
             Aperçu de vos finances pour le mois en cours.
           </p>

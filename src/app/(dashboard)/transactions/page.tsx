@@ -4,12 +4,12 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Plus, Trash2, ArrowUpRight, ArrowDownRight, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
 
 export default function TransactionsPage() {
-  const { transactions, addTransaction, removeTransaction, categories } = useUIStore();
+  const { transactions, addTransaction, removeTransaction, categories, alertThreshold } = useUIStore();
 
   const [newLabel, setNewLabel] = useState("");
   const [newAmount, setNewAmount] = useState("");
@@ -17,7 +17,7 @@ export default function TransactionsPage() {
   const [newDate, setNewDate] = useState("");
   const [newType, setNewType] = useState<"expense" | "income">("expense");
 
-  const handleAddTransaction = () => {
+  const handleAddTransaction = async () => {
     if (!newLabel || !newAmount || !newCategory || !newDate) {
       toast.error("Veuillez remplir tous les champs.");
       return;
@@ -33,8 +33,9 @@ export default function TransactionsPage() {
           .filter(tx => tx.type === "expense" && tx.category.toLowerCase() === newCategory.toLowerCase())
           .reduce((sum, tx) => sum + tx.amount, 0);
         
-        if (spentSoFar + amount > categoryObj.amount) {
-          toast.warning(`Attention ! Budget "${newCategory}" dépassé !`, {
+        const thresholdValue = categoryObj.amount * ((alertThreshold || 80) / 100);
+        if (spentSoFar + amount >= thresholdValue) {
+          toast.warning(`Attention ! Vous avez atteint ${alertThreshold || 80}% du budget "${newCategory}" !`, {
             description: `Le budget alloué était de ${categoryObj.amount.toLocaleString('fr-FR')} FCFA.`,
             duration: 6000,
           });
@@ -42,22 +43,55 @@ export default function TransactionsPage() {
       }
     }
 
-    addTransaction({
-      id: Date.now().toString(),
-      label: newLabel,
-      amount: amount,
-      category: newCategory,
-      date: newDate,
-      type: newType,
-    });
-    
-    toast.success("Transaction ajoutée avec succès !");
-    
-    // Reset form
-    setNewLabel("");
-    setNewAmount("");
-    setNewCategory("");
-    setNewDate("");
+    try {
+      await addTransaction({
+        id: Date.now().toString(),
+        label: newLabel,
+        amount: amount,
+        category: newCategory,
+        date: newDate,
+        type: newType,
+      });
+      
+      toast.success("Transaction ajoutée avec succès !");
+      
+      // Reset form
+      setNewLabel("");
+      setNewAmount("");
+      setNewCategory("");
+      setNewDate("");
+    } catch (error: any) {
+      toast.error("Erreur: " + (error.message || "Impossible d'ajouter la transaction"));
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (transactions.length === 0) {
+      toast.info("Aucune transaction à exporter.");
+      return;
+    }
+    const headers = ["Date", "Type", "Catégorie", "Libellé", "Montant (FCFA)"];
+    const rows = transactions.map(tx => [
+      tx.date,
+      tx.type === "income" ? "Revenu" : "Dépense",
+      tx.category,
+      tx.label,
+      tx.amount.toString()
+    ]);
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(e => e.map(item => `"${item}"`).join(","))
+    ].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "transactions_monbudget.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Exportation réussie !");
   };
 
   const handleDelete = (id: string) => {
@@ -68,13 +102,13 @@ export default function TransactionsPage() {
   return (
     <div className="flex flex-col gap-8 pb-10">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight text-slate-900">Dépenses</h2>
+        <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">Dépenses</h2>
         <p className="text-slate-500 mt-2">
           Gérez toutes vos entrées et sorties d'argent.
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="flex flex-col md:grid gap-6 md:grid-cols-3">
         {/* Formulaire d'ajout */}
         <Card className="md:col-span-1 border-none shadow-sm h-fit">
           <CardHeader>
@@ -140,9 +174,15 @@ export default function TransactionsPage() {
 
         {/* Liste des transactions */}
         <Card className="md:col-span-2 border-none shadow-sm">
-          <CardHeader>
-            <CardTitle>Historique</CardTitle>
-            <CardDescription>Vos dépenses et revenus pour le mois sélectionné.</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="space-y-1">
+              <CardTitle>Historique</CardTitle>
+              <CardDescription>Vos dépenses et revenus pour le mois sélectionné.</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleExportCSV}>
+              <Download className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Exporter</span>
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">

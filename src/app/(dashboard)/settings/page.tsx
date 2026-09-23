@@ -8,12 +8,16 @@ import { Save, User, Bell, Shield, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { useUIStore } from "@/lib/store/ui-store";
+import { useEffect } from "react";
 
 export default function SettingsPage() {
   const [name, setName] = useState("Fr Fidèle");
   const [email, setEmail] = useState("fidele@example.com");
   const [currency, setCurrency] = useState("FCFA");
-  const [alerts, setAlerts] = useState(true);
+  const { alertThreshold, updateAlertThreshold } = useUIStore();
+  const [localAlert, setLocalAlert] = useState(80);
+  useEffect(() => { if (alertThreshold) setLocalAlert(alertThreshold); }, [alertThreshold]);
   
   const supabase = createClient();
   const router = useRouter();
@@ -24,7 +28,8 @@ export default function SettingsPage() {
     router.refresh();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    await updateAlertThreshold(localAlert);
     toast.success("Paramètres mis à jour avec succès !");
   };
 
@@ -99,14 +104,18 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between border-t pt-4">
                 <div className="space-y-0.5">
                   <label className="text-sm font-medium text-slate-900">Alertes de dépassement</label>
-                  <p className="text-sm text-slate-500">Recevoir une alerte quand vous dépassez 80% d'un budget.</p>
+                  <p className="text-sm text-slate-500">Seuil d'alerte pour vos budgets.</p>
                 </div>
-                <button 
-                  onClick={() => setAlerts(!alerts)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${alerts ? 'bg-emerald-600' : 'bg-slate-200'}`}
+                <select 
+                  value={localAlert} 
+                  onChange={(e) => setLocalAlert(Number(e.target.value))}
+                  className="flex h-10 w-28 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                 >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${alerts ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
+                  <option value={50}>50 %</option>
+                  <option value={80}>80 %</option>
+                  <option value={90}>90 %</option>
+                  <option value={100}>100 %</option>
+                </select>
               </div>
             </CardContent>
           </Card>
