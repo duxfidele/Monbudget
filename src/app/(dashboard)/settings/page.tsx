@@ -14,10 +14,16 @@ import { useEffect } from "react";
 export default function SettingsPage() {
   const [name, setName] = useState("Fr Fidèle");
   const [email, setEmail] = useState("fidele@example.com");
-  const [currency, setCurrency] = useState("FCFA");
-  const { alertThreshold, updateAlertThreshold } = useUIStore();
+  const { alertThreshold, currency: storeCurrency, payDay: storePayDay, updatePreferences } = useUIStore();
   const [localAlert, setLocalAlert] = useState(80);
-  useEffect(() => { if (alertThreshold) setLocalAlert(alertThreshold); }, [alertThreshold]);
+  const [localCurrency, setLocalCurrency] = useState("FCFA");
+  const [localPayDay, setLocalPayDay] = useState(28);
+
+  useEffect(() => {
+    if (alertThreshold) setLocalAlert(alertThreshold);
+    if (storeCurrency) setLocalCurrency(storeCurrency);
+    if (storePayDay) setLocalPayDay(storePayDay);
+  }, [alertThreshold, storeCurrency, storePayDay]);
   
   const supabase = createClient();
   const router = useRouter();
@@ -29,7 +35,11 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
-    await updateAlertThreshold(localAlert);
+    await updatePreferences({
+      alertThreshold: localAlert,
+      currency: localCurrency,
+      payDay: localPayDay,
+    });
     toast.success("Paramètres mis à jour avec succès !");
   };
 
@@ -84,15 +94,15 @@ export default function SettingsPage() {
 
           <Card className="border-none shadow-sm">
             <CardHeader>
-              <CardTitle>Préférences de l'application</CardTitle>
+              <CardTitle>Préférences de l&apos;application</CardTitle>
               <CardDescription>Personnalisez votre expérience sur MonBudget.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700">Devise par défaut</label>
                 <select 
-                  value={currency} 
-                  onChange={(e) => setCurrency(e.target.value)}
+                  value={localCurrency} 
+                  onChange={(e) => setLocalCurrency(e.target.value)}
                   className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
                 >
                   <option value="FCFA">FCFA (Franc CFA)</option>
@@ -103,8 +113,28 @@ export default function SettingsPage() {
 
               <div className="flex items-center justify-between border-t pt-4">
                 <div className="space-y-0.5">
+                  <label className="text-sm font-medium text-slate-900">Jour de paie habituel</label>
+                  <p className="text-sm text-slate-500">Date du mois à laquelle vous recevez votre salaire (pour le calcul du budget journalier).</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-500">Le</span>
+                  <select 
+                    value={localPayDay} 
+                    onChange={(e) => setLocalPayDay(Number(e.target.value))}
+                    className="flex h-10 w-24 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                      <option key={day} value={day}>{day}</option>
+                    ))}
+                  </select>
+                  <span className="text-sm text-slate-500">du mois</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t pt-4">
+                <div className="space-y-0.5">
                   <label className="text-sm font-medium text-slate-900">Alertes de dépassement</label>
-                  <p className="text-sm text-slate-500">Seuil d'alerte pour vos budgets.</p>
+                  <p className="text-sm text-slate-500">Seuil d&apos;alerte pour vos budgets.</p>
                 </div>
                 <select 
                   value={localAlert} 

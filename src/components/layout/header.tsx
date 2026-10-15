@@ -1,27 +1,36 @@
-import { User, Menu } from "lucide-react";
+"use client";
+
+import { User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { MonthSelector } from "@/components/dashboard/month-selector";
 
 export const Header = () => {
   return (
-    <div className="flex items-center justify-between p-4 border-b h-full">
+    <header className="flex items-center justify-between px-4 md:px-8 border-b bg-white/80 backdrop-blur-md sticky top-0 z-30 h-16">
+      {/* Mobile Logo */}
       <div className="md:hidden flex items-center">
         <Link href="/" className="flex items-center">
-          <div className="relative w-8 h-8 mr-2 flex items-center justify-center bg-[#1E3A5F] rounded-full">
-            <span className="text-white font-bold text-lg">M</span>
+          <div className="relative w-8 h-8 mr-2 flex items-center justify-center bg-[#1E3A5F] rounded-lg shadow-xs">
+            <span className="text-white font-bold text-sm">MB</span>
           </div>
-          <h1 className="text-xl font-bold text-[#1E3A5F]">MonBudget</h1>
+          <span className="text-lg font-bold text-[#1E3A5F]">MonBudget</span>
         </Link>
       </div>
-      
-      <div className="flex w-full justify-end gap-2">
-        <Button variant="ghost" size="icon" className="rounded-full md:hidden text-slate-500">
-          <Menu className="h-5 w-5" />
-        </Button>
-        <Button variant="ghost" size="icon" className="rounded-full">
-          <User className="h-5 w-5" />
-        </Button>
+
+      {/* Global Month Selector */}
+      <div className="flex items-center">
+        <MonthSelector />
       </div>
-    </div>
+      
+      {/* User Actions */}
+      <div className="flex items-center gap-2">
+        <Link href="/settings">
+          <Button variant="ghost" size="icon" className="rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+            <User className="h-5 w-5" />
+          </Button>
+        </Link>
+      </div>
+    </header>
   );
 };

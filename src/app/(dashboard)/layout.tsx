@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { BottomNav } from "@/components/layout/bottom-nav";
+import { StoreInitializer } from "@/components/store-initializer";
 
 export default function DashboardLayout({
   children,
@@ -19,6 +20,7 @@ export default function DashboardLayout({
         <div className="p-4 md:p-8 pb-24 md:pb-8 flex-1">{children}</div>
       </main>
       <BottomNav />
+      <StoreInitializer />
     </div>
   );
 }

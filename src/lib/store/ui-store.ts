@@ -3,7 +3,23 @@ import { createClient } from "@/lib/supabase/client";
 
 export type Category = { id: string; name: string; amount: number; color: string; allocation_id?: string };
 export type Transaction = { id: string; label: string; amount: number; category: string; category_id?: string; date: string; type: "expense" | "income" | "income_adjustment" };
-export type SavingsGoal = { id: string; name: string; target: number; current: number; color: string };
+export type SavingsContribution = {
+  id: string;
+  amount: number;
+  date: string;
+  notes?: string;
+};
+
+export type SavingsGoal = {
+  id: string;
+  name: string;
+  target: number;
+  current: number;
+  color: string;
+  target_date?: string;
+  status: "active" | "completed" | "paused";
+  contributions: SavingsContribution[];
+};
 
 interface UIState {
   // Navigation
@@ -30,13 +46,20 @@ interface UIState {
   removeTransaction: (id: string) => Promise<void>;
 
   savingsGoals: SavingsGoal[];
-  addSavingsGoal: (goal: SavingsGoal) => Promise<void>;
+  addSavingsGoal: (goal: { name: string; target: number; color?: string; target_date?: string }) => Promise<void>;
   removeSavingsGoal: (id: string) => Promise<void>;
+  updateSavingsGoalStatus: (id: string, status: "active" | "completed" | "paused") => Promise<void>;
+  addSavingsContribution: (goalId: string, amount: number, notes?: string, date?: string) => Promise<void>;
+  removeSavingsContribution: (contributionId: string, goalId: string) => Promise<void>;
   addSavingsAmount: (id: string, amount: number) => Promise<void>;
 
-  // Init
+  // Preferences & Init
   alertThreshold: number;
+  currency: string;
+  payDay: number;
+  updatePreferences: (prefs: { alertThreshold?: number; currency?: string; payDay?: number }) => Promise<void>;
   updateAlertThreshold: (percent: number) => Promise<void>;
+  duplicatePreviousMonth: () => Promise<{ prevMonthName: string; allocationsCount: number; income: number }>;
   isLoading: boolean;
   initStore: () => Promise<void>;
 }
@@ -56,6 +79,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   alertThreshold: 80,
+  currency: "FCFA",
+  payDay: 28,
   isLoading: true,
   budget_id: null,
   income: 0,
@@ -71,10 +96,21 @@ export const useUIStore = create<UIState>((set, get) => ({
 
       const { year, month } = get().activeMonth;
 
-      // Fetch profile for alert threshold
-      const { data: profile } = await supabase.from('profiles').select('alert_threshold_percent').eq('id', user.id).single();
-      if (profile && profile.alert_threshold_percent) {
-        set({ alertThreshold: Number(profile.alert_threshold_percent) });
+      // Fetch profile for preferences & alert threshold
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      
+      if (!profile) {
+        // Attempt to create missing profile (fixes issues where trigger failed or user existed before trigger)
+        await supabase.from('profiles').insert({
+          id: user.id,
+          full_name: user.user_metadata?.full_name || 'Utilisateur',
+          currency: 'FCFA',
+          alert_threshold_percent: 80,
+        });
+      } else {
+        if (profile.alert_threshold_percent) set({ alertThreshold: Number(profile.alert_threshold_percent) });
+        if (profile.currency) set({ currency: profile.currency });
+        if (profile.pay_day) set({ payDay: Number(profile.pay_day) });
       }
 
       // 1. Get or Create Monthly Budget
@@ -84,15 +120,24 @@ export const useUIStore = create<UIState>((set, get) => ({
         .eq('user_id', user.id)
         .eq('year', year)
         .eq('month', month)
-        .single();
+        .maybeSingle();
 
       if (!budget) {
-        const { data: newBudget } = await supabase
+        const { data: newBudget, error: budgetError } = await supabase
           .from('monthly_budgets')
           .insert({ user_id: user.id, year, month })
           .select()
-          .single();
+          .maybeSingle();
+          
+        if (budgetError) {
+          console.error("Erreur lors de la création du budget:", budgetError);
+          throw new Error("Impossible de créer le budget mensuel. " + budgetError.message);
+        }
         budget = newBudget;
+      }
+
+      if (!budget) {
+         throw new Error("Budget est toujours null après l'insertion.");
       }
 
       set({ budget_id: budget.id });
@@ -107,11 +152,33 @@ export const useUIStore = create<UIState>((set, get) => ({
       set({ income: totalIncome });
 
       // 3. Fetch categories & allocations
-      const { data: allCategories } = await supabase
+      let { data: allCategories } = await supabase
         .from('categories')
         .select('*')
         .eq('user_id', user.id)
         .eq('is_active', true);
+
+      // --- DEDUPLICATION AUTOMATIQUE ---
+      if (allCategories) {
+        const seen = new Set();
+        const duplicates = [];
+        for (const cat of allCategories) {
+          if (seen.has(cat.name.toLowerCase())) {
+            duplicates.push(cat.id);
+          } else {
+            seen.add(cat.name.toLowerCase());
+          }
+        }
+        if (duplicates.length > 0) {
+          for (const id of duplicates) {
+            await supabase.from('categories').delete().eq('id', id);
+          }
+          // Refetch after deletion
+          const { data: newCats } = await supabase.from('categories').select('*').eq('user_id', user.id).eq('is_active', true);
+          allCategories = newCats;
+        }
+      }
+      // ---------------------------------
 
       const { data: allocations } = await supabase
         .from('budget_allocations')
@@ -141,48 +208,183 @@ export const useUIStore = create<UIState>((set, get) => ({
         id: tx.id,
         label: tx.description || 'Transaction',
         amount: Number(tx.amount),
-        category: tx.categories?.name || 'Général',
+        category: tx.categories?.name || 'Autre (Hors Budget)',
         category_id: tx.category_id,
         date: tx.transaction_date,
-        type: tx.type === 'expense' ? 'expense' : 'income'
+        type: tx.type === 'expense' ? 'expense' : 'income_adjustment'
       }));
       
       set({ transactions: mappedTxs });
 
-      // 5. Fetch Savings
+      // 5. Fetch Savings & Contributions
       const { data: goals } = await supabase
         .from('savings_goals')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'active');
+        .select('*, savings_contributions(*)')
+        .eq('user_id', user.id);
 
-      const mappedGoals: SavingsGoal[] = (goals || []).map(g => ({
-        id: g.id,
-        name: g.name,
-        target: Number(g.target_amount),
-        current: Number(g.current_amount),
-        color: g.color || 'bg-blue-500'
-      }));
+      const mappedGoals: SavingsGoal[] = (goals || []).map(g => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const contributions: SavingsContribution[] = (g.savings_contributions || []).map((c: any) => ({
+          id: c.id,
+          amount: Number(c.amount),
+          date: c.contribution_date,
+          notes: c.notes || undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        const sumContribs = contributions.reduce((s, c) => s + c.amount, 0);
+        const current = contributions.length > 0 ? sumContribs : Number(g.current_amount || 0);
+
+        return {
+          id: g.id,
+          name: g.name,
+          target: Number(g.target_amount),
+          current,
+          target_date: g.target_date || undefined,
+          status: (g.status as "active" | "completed" | "paused") || "active",
+          color: g.color || "bg-blue-500",
+          contributions,
+        };
+      });
       set({ savingsGoals: mappedGoals });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       console.error("Error init store", e);
-      // Ensure toast is imported or use a simple alert if we can't easily add it here.
-      // Wait, we can't easily use toast here if it's outside a React component unless we import it.
-      // toast is imported at the top? No, let's check.
+      if (typeof window !== "undefined") {
+        alert("ERREUR CRITIQUE (Envoyez ceci au développeur) : " + (e.message || JSON.stringify(e)));
+      }
     }
     set({ isLoading: false });
   },
 
-  updateAlertThreshold: async (percent) => {
+  updatePreferences: async (prefs) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('profiles').update({ alert_threshold_percent: percent }).eq('id', user.id);
-    set({ alertThreshold: percent });
+    const updates: Record<string, any> = {};
+    if (prefs.alertThreshold !== undefined) updates.alert_threshold_percent = prefs.alertThreshold;
+    if (prefs.currency !== undefined) updates.currency = prefs.currency;
+    if (prefs.payDay !== undefined) updates.pay_day = prefs.payDay;
+    await supabase.from('profiles').update(updates).eq('id', user.id);
+    set((state) => ({
+      alertThreshold: prefs.alertThreshold ?? state.alertThreshold,
+      currency: prefs.currency ?? state.currency,
+      payDay: prefs.payDay ?? state.payDay,
+    }));
+  },
+
+  updateAlertThreshold: async (percent) => {
+    await get().updatePreferences({ alertThreshold: percent });
+  },
+
+  duplicatePreviousMonth: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Utilisateur non connecté");
+
+    const { year, month } = get().activeMonth;
+    const currentBudgetId = get().budget_id;
+    if (!currentBudgetId) throw new Error("Le budget du mois actuel n'est pas initialisé");
+
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevMonthName = new Date(prevYear, prevMonth - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+    // 1. Fetch previous monthly budget
+    const { data: prevBudget } = await supabase
+      .from('monthly_budgets')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('year', prevYear)
+      .eq('month', prevMonth)
+      .maybeSingle();
+
+    if (!prevBudget) {
+      throw new Error("Aucun budget trouvé pour le mois précédent (" + prevMonthName + ").");
+    }
+
+    // 2. Fetch previous allocations & incomes
+    const { data: prevAllocations } = await supabase
+      .from('budget_allocations')
+      .select('category_id, allocated_amount, notes')
+      .eq('monthly_budget_id', prevBudget.id);
+
+    const { data: prevIncomes } = await supabase
+      .from('income_entries')
+      .select('label, amount')
+      .eq('monthly_budget_id', prevBudget.id);
+
+    if ((!prevAllocations || prevAllocations.length === 0) && (!prevIncomes || prevIncomes.length === 0)) {
+      throw new Error("Le budget de " + prevMonthName + " ne contient aucune enveloppe ni revenu à dupliquer.");
+    }
+
+    // 3. Duplicate Income
+    let copiedIncome = 0;
+    if (prevIncomes && prevIncomes.length > 0) {
+      copiedIncome = prevIncomes.reduce((sum, item) => sum + Number(item.amount), 0);
+      await get().setIncome(copiedIncome);
+    }
+
+    // 4. Duplicate Allocations
+    if (prevAllocations && prevAllocations.length > 0) {
+      for (const alloc of prevAllocations) {
+        const { data: existingAlloc } = await supabase
+          .from('budget_allocations')
+          .select('id')
+          .eq('monthly_budget_id', currentBudgetId)
+          .eq('category_id', alloc.category_id)
+          .maybeSingle();
+
+        if (existingAlloc) {
+          await supabase
+            .from('budget_allocations')
+            .update({ allocated_amount: alloc.allocated_amount, notes: alloc.notes })
+            .eq('id', existingAlloc.id);
+        } else {
+          await supabase
+            .from('budget_allocations')
+            .insert({
+              monthly_budget_id: currentBudgetId,
+              category_id: alloc.category_id,
+              allocated_amount: alloc.allocated_amount,
+              notes: alloc.notes
+            });
+        }
+      }
+    }
+
+    // 5. Refresh active month state in store
+    await get().initStore();
+    return {
+      prevMonthName,
+      allocationsCount: prevAllocations ? prevAllocations.length : 0,
+      income: copiedIncome
+    };
   },
 
   setIncome: async (income) => {
-    // on a real app, update income_entries. Here we simplify.
+    const budgetId = get().budget_id;
+    if (budgetId) {
+      const { data: existing } = await supabase
+        .from('income_entries')
+        .select('id')
+        .eq('monthly_budget_id', budgetId);
+
+      if (existing && existing.length > 0) {
+        await supabase
+          .from('income_entries')
+          .update({ amount: income, label: 'Salaire principal' })
+          .eq('id', existing[0].id);
+      } else {
+        await supabase
+          .from('income_entries')
+          .insert({
+            monthly_budget_id: budgetId,
+            label: 'Salaire principal',
+            amount: income,
+            received_date: new Date().toISOString().split('T')[0]
+          });
+      }
+    }
     set({ income });
   },
 
@@ -210,7 +412,10 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   updateCategoryAmount: async (id, amount) => {
     const budgetId = get().budget_id;
-    if(!budgetId) throw new Error("Le budget n'a pas pu être chargé. Assurez-vous que votre profil est bien configuré (erreur de base de données).");
+    if(!budgetId) {
+      alert("Le budget n'est pas chargé. Veuillez patienter ou recharger la page.");
+      throw new Error("Le budget n'a pas pu être chargé. Assurez-vous que votre profil est bien configuré (erreur de base de données).");
+    }
 
     const category = get().categories.find(c => c.id === id);
     if (!category) return;
@@ -235,7 +440,10 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addTransaction: async (tx) => {
     const budgetId = get().budget_id;
-    if(!budgetId) throw new Error("Le budget n'a pas pu être chargé. Assurez-vous que votre profil est bien configuré (erreur de base de données).");
+    if(!budgetId) {
+      alert("Le budget n'est pas chargé. Veuillez patienter ou recharger la page.");
+      throw new Error("Le budget n'a pas pu être chargé. Assurez-vous que votre profil est bien configuré (erreur de base de données).");
+    }
 
     // Find category ID
     let category_id = null;
@@ -284,36 +492,100 @@ export const useUIStore = create<UIState>((set, get) => ({
       user_id: user.id,
       name: goal.name,
       target_amount: goal.target,
-      color: goal.color
+      color: goal.color || "bg-blue-500",
+      target_date: goal.target_date || null,
+      status: "active",
+      current_amount: 0,
     }).select().single();
 
     if (newGoal) {
-      goal.id = newGoal.id;
-      set((state) => ({ savingsGoals: [...state.savingsGoals, goal] }));
+      const createdGoal: SavingsGoal = {
+        id: newGoal.id,
+        name: newGoal.name,
+        target: Number(newGoal.target_amount),
+        current: 0,
+        color: newGoal.color || "bg-blue-500",
+        target_date: newGoal.target_date || undefined,
+        status: "active",
+        contributions: [],
+      };
+      set((state) => ({ savingsGoals: [createdGoal, ...state.savingsGoals] }));
     }
   },
 
   removeSavingsGoal: async (id) => {
-    await supabase.from('savings_goals').update({ status: 'paused' }).eq('id', id);
+    await supabase.from('savings_goals').delete().eq('id', id);
     set((state) => ({ savingsGoals: state.savingsGoals.filter(g => g.id !== id) }));
   },
 
-  addSavingsAmount: async (id, amount) => {
-    const goal = get().savingsGoals.find(g => g.id === id);
+  updateSavingsGoalStatus: async (id, status) => {
+    await supabase.from('savings_goals').update({ status }).eq('id', id);
+    set((state) => ({
+      savingsGoals: state.savingsGoals.map(g => g.id === id ? { ...g, status } : g)
+    }));
+  },
+
+  addSavingsContribution: async (goalId, amount, notes, date) => {
+    const goal = get().savingsGoals.find(g => g.id === goalId);
     if (!goal) return;
 
-    const newCurrent = Math.min(goal.current + amount, goal.target);
-    await supabase.from('savings_goals').update({ current_amount: newCurrent }).eq('id', id);
-    
-    // insert history
-    await supabase.from('savings_contributions').insert({
-      savings_goal_id: id,
+    const contributionDate = date || new Date().toISOString().split('T')[0];
+    const { data: newContrib, error } = await supabase
+      .from('savings_contributions')
+      .insert({
+        savings_goal_id: goalId,
+        amount,
+        contribution_date: contributionDate,
+        notes: notes || null
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const contribItem: SavingsContribution = {
+      id: newContrib ? newContrib.id : Date.now().toString(),
       amount,
-      contribution_date: new Date().toISOString().split('T')[0]
-    });
+      date: contributionDate,
+      notes: notes || undefined,
+    };
+
+    const newCurrent = goal.current + amount;
+    await supabase.from('savings_goals').update({ current_amount: newCurrent }).eq('id', goalId);
 
     set((state) => ({
-      savingsGoals: state.savingsGoals.map(g => g.id === id ? { ...g, current: newCurrent } : g)
+      savingsGoals: state.savingsGoals.map(g => {
+        if (g.id !== goalId) return g;
+        const updatedContributions = [contribItem, ...(g.contributions || [])];
+        return {
+          ...g,
+          current: newCurrent,
+          status: newCurrent >= g.target ? "completed" : g.status,
+          contributions: updatedContributions,
+        };
+      })
     }));
+  },
+
+  removeSavingsContribution: async (contributionId, goalId) => {
+    await supabase.from('savings_contributions').delete().eq('id', contributionId);
+    
+    set((state) => ({
+      savingsGoals: state.savingsGoals.map(g => {
+        if (g.id !== goalId) return g;
+        const filtered = (g.contributions || []).filter(c => c.id !== contributionId);
+        const newCurrent = filtered.reduce((s, c) => s + c.amount, 0);
+        return {
+          ...g,
+          current: newCurrent,
+          status: newCurrent >= g.target ? "completed" : "active",
+          contributions: filtered,
+        };
+      })
+    }));
+  },
+
+  addSavingsAmount: async (id, amount) => {
+    await get().addSavingsContribution(id, amount);
   },
 }));
