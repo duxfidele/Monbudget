@@ -111,7 +111,14 @@ function loadLocalCache(): LocalCache | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const cache: LocalCache = JSON.parse(raw);
+    if (!cache.currency || cache.currency === "EUR") {
+      cache.currency = "FCFA";
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
+      } catch {}
+    }
+    return cache;
   } catch {
     return null;
   }
@@ -190,7 +197,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   alertThreshold: initialCache?.alertThreshold ?? 80,
-  currency: initialCache?.currency || "FCFA",
+  currency: (initialCache?.currency && initialCache.currency !== "EUR") ? initialCache.currency : "FCFA",
   payDay: initialCache?.payDay ?? 28,
   isLoading: false,
   budget_id: null,
@@ -220,10 +227,24 @@ export const useUIStore = create<UIState>((set, get) => ({
         });
         set({ currency: "FCFA", alertThreshold: 80, payDay: 28 });
       } else {
-        const cur = profile.currency && profile.currency.trim() ? profile.currency : "FCFA";
+        let cur = profile.currency && profile.currency.trim() ? profile.currency : "FCFA";
+        if (cur === "EUR") {
+          cur = "FCFA";
+          try {
+            await supabase.from("profiles").update({ currency: "FCFA" }).eq("id", user.id);
+          } catch (e) {
+            console.warn("Could not migrate profile currency to FCFA", e);
+          }
+        }
         const th = profile.alert_threshold_percent ? Number(profile.alert_threshold_percent) : 80;
         const pd = profile.pay_day ? Number(profile.pay_day) : 28;
         set({ currency: cur, alertThreshold: th, payDay: pd });
+
+        const cache = loadLocalCache();
+        if (cache) {
+          cache.currency = cur;
+          saveLocalCache(cache);
+        }
       }
 
       // 2. Budget mensuel

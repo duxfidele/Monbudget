@@ -73,7 +73,12 @@ export default function SettingsPage() {
 
           if (profile) {
             setName(profile.full_name || user.user_metadata?.full_name || "");
-            if (profile.currency) setLocalCurrency(profile.currency);
+            let pCur = profile.currency && profile.currency.trim() ? profile.currency : "FCFA";
+            if (pCur === "EUR") {
+              pCur = "FCFA";
+              supabase.from("profiles").update({ currency: "FCFA" }).eq("id", user.id).then(() => {});
+            }
+            setLocalCurrency(pCur);
             if (profile.pay_day) setLocalPayDay(Number(profile.pay_day));
             if (profile.alert_threshold_percent) setLocalAlert(Number(profile.alert_threshold_percent));
           } else {
@@ -94,7 +99,8 @@ export default function SettingsPage() {
   // Sync with store when store loads
   useEffect(() => {
     if (alertThreshold) setLocalAlert(alertThreshold);
-    if (storeCurrency) setLocalCurrency(storeCurrency);
+    if (storeCurrency && storeCurrency !== "EUR") setLocalCurrency(storeCurrency);
+    else setLocalCurrency("FCFA");
     if (storePayDay) setLocalPayDay(storePayDay);
   }, [alertThreshold, storeCurrency, storePayDay]);
 
