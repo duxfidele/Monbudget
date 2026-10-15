@@ -44,9 +44,34 @@ export function getTotalIncome(incomes: IncomeItem[] | number): number {
 /**
  * Calcule le total des dépenses réelles
  */
+
+/**
+ * Vérifie si une transaction est un revenu (income ou income_adjustment)
+ */
+export function isIncomeTransaction(tx: TransactionItem): boolean {
+  return tx.type === "income" || tx.type === "income_adjustment";
+}
+
+/**
+ * Vérifie si une transaction est une dépense
+ */
+export function isExpenseTransaction(tx: TransactionItem): boolean {
+  if (tx.type === "income" || tx.type === "income_adjustment") return false;
+  return tx.type === "expense" || !tx.type;
+}
+
+/**
+ * Calcule le total des revenus complémentaires issus des transactions
+ */
+export function getTotalAdditionalIncome(transactions: TransactionItem[]): number {
+  return transactions
+    .filter((tx) => isIncomeTransaction(tx))
+    .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+}
+
 export function getTotalExpenses(transactions: TransactionItem[]): number {
   return transactions
-    .filter((tx) => tx.type === "expense" || !tx.type)
+    .filter((tx) => isExpenseTransaction(tx))
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
 }
 
@@ -79,7 +104,7 @@ export function getSpentByCategory(transactions: TransactionItem[], categoryName
   return transactions
     .filter(
       (tx) =>
-        (tx.type === "expense" || !tx.type) &&
+        isExpenseTransaction(tx) &&
         (tx.category || "").trim().toLowerCase() === normalized
     )
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
@@ -200,10 +225,11 @@ export function getDailyBudget({
  * Formate un montant dans la devise choisie
  */
 export function formatMoney(amount: number, currency: string = "FCFA", locale: string = "fr-FR"): string {
-  const formatted = Math.round(amount).toLocaleString(locale);
-  if (currency === "EUR") return `${formatted} €`;
-  if (currency === "USD") return `$${formatted}`;
-  return `${formatted} ${currency}`;
+  const safeCurrency = currency && currency.trim() ? currency.trim() : "FCFA";
+  const formatted = Math.round(amount || 0).toLocaleString(locale);
+  if (safeCurrency === "EUR") return `${formatted} €`;
+  if (safeCurrency === "USD") return `${formatted}`;
+  return `${formatted} ${safeCurrency}`;
 }
 
 /**

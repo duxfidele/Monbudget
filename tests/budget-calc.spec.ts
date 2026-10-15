@@ -5,6 +5,9 @@ import {
   getRemainingToLive, 
   getCategoryProgress, 
   formatMoney,
+  isIncomeTransaction,
+  isExpenseTransaction,
+  getTotalAdditionalIncome,
   formatThousands,
   parseThousands
 } from '../src/lib/utils/budget-calc';
@@ -74,5 +77,24 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
     expect(parseThousands("50 000")).toBe(50000);
     expect(parseThousands("1 500 000")).toBe(1500000);
     expect(parseThousands("")).toBe(0);
+  });
+  test("strictly separates income transactions from expense transactions", () => {
+    const txs = [
+      { amount: 50000, type: "income" as const, category: "Prime" },
+      { amount: 25000, type: "income_adjustment" as const, category: "Vente" },
+      { amount: 15000, type: "expense" as const, category: "Alimentation" },
+      { amount: 10000, category: "Transport" }, // untyped -> default expense
+    ];
+
+    expect(isIncomeTransaction(txs[0])).toBe(true);
+    expect(isIncomeTransaction(txs[1])).toBe(true);
+    expect(isIncomeTransaction(txs[2])).toBe(false);
+
+    expect(isExpenseTransaction(txs[2])).toBe(true);
+    expect(isExpenseTransaction(txs[3])).toBe(true);
+    expect(isExpenseTransaction(txs[0])).toBe(false);
+
+    expect(getTotalAdditionalIncome(txs)).toBe(75000);
+    expect(getTotalExpenses(txs)).toBe(25000); // 15000 + 10000, NOT counting the 75000 income!
   });
 });

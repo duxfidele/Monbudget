@@ -1,8 +1,24 @@
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
 
-export type Category = { id: string; name: string; amount: number; color: string; allocation_id?: string };
-export type Transaction = { id: string; label: string; amount: number; category: string; category_id?: string; date: string; type: "expense" | "income" | "income_adjustment" };
+export type Category = { 
+  id: string; 
+  name: string; 
+  amount: number; 
+  color: string; 
+  allocation_id?: string 
+};
+
+export type Transaction = { 
+  id: string; 
+  label: string; 
+  amount: number; 
+  category: string; 
+  category_id?: string; 
+  date: string; 
+  type: "expense" | "income" | "income_adjustment";
+};
+
 export type SavingsContribution = {
   id: string;
   amount: number;
@@ -21,6 +37,22 @@ export type SavingsGoal = {
   contributions: SavingsContribution[];
 };
 
+export interface MonthData {
+  baseSalary: number;
+  income: number;
+  categories: Category[];
+  transactions: Transaction[];
+}
+
+export interface LocalCache {
+  currency: string;
+  payDay: number;
+  alertThreshold: number;
+  fullName?: string;
+  months: Record<string, MonthData>;
+  savingsGoals: SavingsGoal[];
+}
+
 interface UIState {
   // Navigation
   isSidebarOpen: boolean;
@@ -33,6 +65,7 @@ interface UIState {
 
   // Global Data
   budget_id: string | null;
+  baseSalary: number;
   income: number;
   setIncome: (income: number) => Promise<void>;
   
@@ -65,9 +98,40 @@ interface UIState {
   initStore: () => Promise<void>;
 }
 
+const STORAGE_KEY = "monbudget_local_cache_v3";
 const currentDate = new Date();
 const supabase = createClient();
 
+function getMonthKey(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function loadLocalCache(): LocalCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalCache(cache: LocalCache) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
+  } catch (err) {
+    console.warn("Could not save to localStorage", err);
+  }
+}
+
+// Hydratation initiale synchrone
+const initialCache = loadLocalCache();
+const initialMonthKey = getMonthKey(currentDate.getFullYear(), currentDate.getMonth() + 1);
+const initialMonthData = initialCache?.months?.[initialMonthKey];
+
+// Debounce timers pour la saisie sans lag
 const allocationDebounceTimers: Record<string, NodeJS.Timeout> = {};
 let incomeDebounceTimer: NodeJS.Timeout | null = null;
 
@@ -78,551 +142,780 @@ export const useUIStore = create<UIState>((set, get) => ({
   
   activeMonth: { year: currentDate.getFullYear(), month: currentDate.getMonth() + 1 },
   setActiveMonth: (year, month) => {
-    set({ activeMonth: { year, month } });
+    // 1. Sauvegarder l état du mois courant dans le cache local
+    const curState = get();
+    const curKey = getMonthKey(curState.activeMonth.year, curState.activeMonth.month);
+    const cache = loadLocalCache() || {
+      currency: curState.currency || "FCFA",
+      payDay: curState.payDay || 28,
+      alertThreshold: curState.alertThreshold || 80,
+      months: {},
+      savingsGoals: curState.savingsGoals,
+    };
+
+    cache.months[curKey] = {
+      baseSalary: curState.baseSalary,
+      income: curState.income,
+      categories: curState.categories,
+      transactions: curState.transactions,
+    };
+    saveLocalCache(cache);
+
+    // 2. Préparer le nouveau mois
+    const newKey = getMonthKey(year, month);
+    const cachedMonth = cache.months[newKey];
+
+    if (cachedMonth) {
+      set({
+        activeMonth: { year, month },
+        baseSalary: cachedMonth.baseSalary || 0,
+        income: cachedMonth.income || 0,
+        categories: cachedMonth.categories || [],
+        transactions: cachedMonth.transactions || [],
+      });
+    } else {
+      // Hériter des catégories existantes avec montant 0 si nouveau mois
+      const defaultCats = curState.categories.map((c) => ({ ...c, amount: 0, allocation_id: undefined }));
+      set({
+        activeMonth: { year, month },
+        baseSalary: 0,
+        income: 0,
+        categories: defaultCats,
+        transactions: [],
+      });
+    }
+
+    // 3. Sync Supabase en arrière-plan
     get().initStore();
   },
 
-  alertThreshold: 80,
-  currency: "FCFA",
-  payDay: 28,
-  isLoading: true,
+  alertThreshold: initialCache?.alertThreshold ?? 80,
+  currency: initialCache?.currency || "FCFA",
+  payDay: initialCache?.payDay ?? 28,
+  isLoading: false,
   budget_id: null,
-  income: 0,
-  categories: [],
-  transactions: [],
-  savingsGoals: [],
+  baseSalary: initialMonthData?.baseSalary || 0,
+  income: initialMonthData?.income || 0,
+  categories: initialMonthData?.categories || [],
+  transactions: initialMonthData?.transactions || [],
+  savingsGoals: initialCache?.savingsGoals || [],
 
   initStore: async () => {
-    set({ isLoading: true });
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { set({ isLoading: false }); return; }
+      if (!user) return;
 
       const { year, month } = get().activeMonth;
+      const monthKey = getMonthKey(year, month);
 
-      // Fetch profile for preferences & alert threshold
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      
+      // 1. Profil & Préférences
+      const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
       if (!profile) {
-        // Attempt to create missing profile (fixes issues where trigger failed or user existed before trigger)
-        await supabase.from('profiles').insert({
+        await supabase.from("profiles").insert({
           id: user.id,
-          full_name: user.user_metadata?.full_name || 'Utilisateur',
-          currency: 'FCFA',
+          full_name: user.user_metadata?.full_name || "Utilisateur",
+          currency: "FCFA",
           alert_threshold_percent: 80,
+          pay_day: 28,
         });
+        set({ currency: "FCFA", alertThreshold: 80, payDay: 28 });
       } else {
-        if (profile.alert_threshold_percent) set({ alertThreshold: Number(profile.alert_threshold_percent) });
-        if (profile.currency) set({ currency: profile.currency });
-        if (profile.pay_day) set({ payDay: Number(profile.pay_day) });
+        const cur = profile.currency && profile.currency.trim() ? profile.currency : "FCFA";
+        const th = profile.alert_threshold_percent ? Number(profile.alert_threshold_percent) : 80;
+        const pd = profile.pay_day ? Number(profile.pay_day) : 28;
+        set({ currency: cur, alertThreshold: th, payDay: pd });
       }
 
-      // 1. Get or Create Monthly Budget
+      // 2. Budget mensuel
       let { data: budget } = await supabase
-        .from('monthly_budgets')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('year', year)
-        .eq('month', month)
+        .from("monthly_budgets")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("year", year)
+        .eq("month", month)
         .maybeSingle();
 
       if (!budget) {
-        const { data: newBudget, error: budgetError } = await supabase
-          .from('monthly_budgets')
+        const { data: newBudget } = await supabase
+          .from("monthly_budgets")
           .insert({ user_id: user.id, year, month })
           .select()
           .maybeSingle();
-          
-        if (budgetError) {
-          console.error("Erreur lors de la création du budget:", budgetError);
-          throw new Error("Impossible de créer le budget mensuel. " + budgetError.message);
-        }
         budget = newBudget;
       }
 
-      if (!budget) {
-         throw new Error("Budget est toujours null après l'insertion.");
-      }
+      if (budget) {
+        set({ budget_id: budget.id });
 
-      set({ budget_id: budget.id });
+        // 3. Revenus de base (salaire)
+        const { data: incomes } = await supabase
+          .from("income_entries")
+          .select("*")
+          .eq("monthly_budget_id", budget.id);
 
-      // 2. Fetch income for this budget
-      const { data: incomes } = await supabase
-        .from('income_entries')
-        .select('*')
-        .eq('monthly_budget_id', budget.id);
-      
-      const totalIncome = incomes?.reduce((sum, inc) => sum + Number(inc.amount), 0) || 0;
-      set({ income: totalIncome });
+        const fetchedBaseSalary = incomes?.reduce((sum, inc) => sum + Number(inc.amount), 0) || 0;
 
-      // 3. Fetch categories & allocations
-      let { data: allCategories } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true);
+        // 4. Catégories & Allocations
+        const { data: allCategories } = await supabase
+          .from("categories")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("is_active", true);
 
-      // --- DEDUPLICATION AUTOMATIQUE ---
-      if (allCategories) {
-        const seen = new Set();
-        const duplicates = [];
-        for (const cat of allCategories) {
-          if (seen.has(cat.name.toLowerCase())) {
-            duplicates.push(cat.id);
-          } else {
-            seen.add(cat.name.toLowerCase());
-          }
-        }
-        if (duplicates.length > 0) {
-          for (const id of duplicates) {
-            await supabase.from('categories').delete().eq('id', id);
-          }
-          // Refetch after deletion
-          const { data: newCats } = await supabase.from('categories').select('*').eq('user_id', user.id).eq('is_active', true);
-          allCategories = newCats;
-        }
-      }
-      // ---------------------------------
+        const { data: allocations } = await supabase
+          .from("budget_allocations")
+          .select("*")
+          .eq("monthly_budget_id", budget.id);
 
-      const { data: allocations } = await supabase
-        .from('budget_allocations')
-        .select('*')
-        .eq('monthly_budget_id', budget.id);
+        const categoriesMap: Category[] = (allCategories || []).map((cat) => {
+          const alloc = allocations?.find((a) => a.category_id === cat.id);
+          return {
+            id: cat.id,
+            name: cat.name,
+            color: cat.color || "bg-blue-500",
+            amount: alloc ? Number(alloc.allocated_amount) : 0,
+            allocation_id: alloc?.id,
+          };
+        });
 
-      const categoriesMap: Category[] = (allCategories || []).map(cat => {
-        const alloc = allocations?.find(a => a.category_id === cat.id);
-        return {
-          id: cat.id,
-          name: cat.name,
-          color: cat.color || 'bg-slate-500',
-          amount: alloc ? Number(alloc.allocated_amount) : 0,
-          allocation_id: alloc?.id
+        // 5. Transactions
+        const { data: txs } = await supabase
+          .from("transactions")
+          .select("*, categories(name)")
+          .eq("monthly_budget_id", budget.id)
+          .order("transaction_date", { ascending: false });
+
+        const mappedTxs: Transaction[] = (txs || []).map((tx) => {
+          const isInc = tx.type === "income" || tx.type === "income_adjustment";
+          return {
+            id: tx.id,
+            label: tx.description || (isInc ? "Revenu complémentaire" : "Dépense"),
+            amount: Number(tx.amount),
+            category: tx.categories?.name || (isInc ? "Revenu" : "Autre (Hors Budget)"),
+            category_id: tx.category_id,
+            date: tx.transaction_date,
+            type: isInc ? "income" : "expense",
+          };
+        });
+
+        // Calcul du revenu total : Salaire de base + revenus supplémentaires des transactions
+        const additionalIncomes = mappedTxs
+          .filter((t) => t.type === "income")
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const totalIncome = fetchedBaseSalary + additionalIncomes;
+
+        // Ne pas écraser si le local est déjà plus récent et que le remote est vide
+        const currentCats = get().categories;
+        const finalCats = categoriesMap.length > 0 ? categoriesMap : (currentCats.length > 0 ? currentCats : []);
+        const finalBaseSalary = fetchedBaseSalary > 0 ? fetchedBaseSalary : get().baseSalary;
+        const finalIncome = totalIncome > 0 ? totalIncome : get().income;
+
+        set({
+          baseSalary: finalBaseSalary,
+          income: finalIncome,
+          categories: finalCats,
+          transactions: mappedTxs,
+        });
+
+        // Mettre à jour le cache local
+        const cache = loadLocalCache() || {
+          currency: get().currency,
+          payDay: get().payDay,
+          alertThreshold: get().alertThreshold,
+          months: {},
+          savingsGoals: get().savingsGoals,
         };
-      });
-      set({ categories: categoriesMap });
+        cache.months[monthKey] = {
+          baseSalary: finalBaseSalary,
+          income: finalIncome,
+          categories: finalCats,
+          transactions: mappedTxs,
+        };
+        saveLocalCache(cache);
+      }
 
-      // 4. Fetch Transactions
-      const { data: txs } = await supabase
-        .from('transactions')
-        .select('*, categories(name)')
-        .eq('monthly_budget_id', budget.id)
-        .order('transaction_date', { ascending: false });
-
-      const mappedTxs: Transaction[] = (txs || []).map(tx => ({
-        id: tx.id,
-        label: tx.description || 'Transaction',
-        amount: Number(tx.amount),
-        category: tx.categories?.name || 'Autre (Hors Budget)',
-        category_id: tx.category_id,
-        date: tx.transaction_date,
-        type: tx.type === 'expense' ? 'expense' : 'income_adjustment'
-      }));
-      
-      set({ transactions: mappedTxs });
-
-      // 5. Fetch Savings & Contributions
+      // 6. Objectifs d épargne
       const { data: goals } = await supabase
-        .from('savings_goals')
-        .select('*, savings_contributions(*)')
-        .eq('user_id', user.id);
+        .from("savings_goals")
+        .select("*, savings_contributions(*)")
+        .eq("user_id", user.id);
 
-      const mappedGoals: SavingsGoal[] = (goals || []).map(g => {
+      if (goals && goals.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const contributions: SavingsContribution[] = (g.savings_contributions || []).map((c: any) => ({
-          id: c.id,
-          amount: Number(c.amount),
-          date: c.contribution_date,
-          notes: c.notes || undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const mappedGoals: SavingsGoal[] = goals.map((g: any) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const contributions: SavingsContribution[] = (g.savings_contributions || []).map((c: any) => ({
+            id: c.id,
+            amount: Number(c.amount),
+            date: c.contribution_date,
+            notes: c.notes || undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-        const sumContribs = contributions.reduce((s, c) => s + c.amount, 0);
-        const current = contributions.length > 0 ? sumContribs : Number(g.current_amount || 0);
+          const sumContribs = contributions.reduce((s, c) => s + c.amount, 0);
+          const current = contributions.length > 0 ? sumContribs : Number(g.current_amount || 0);
 
-        return {
-          id: g.id,
-          name: g.name,
-          target: Number(g.target_amount),
-          current,
-          target_date: g.target_date || undefined,
-          status: (g.status as "active" | "completed" | "paused") || "active",
-          color: g.color || "bg-blue-500",
-          contributions,
-        };
-      });
-      set({ savingsGoals: mappedGoals });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      console.error("Error init store", e);
-      if (typeof window !== "undefined") {
-        alert("ERREUR CRITIQUE (Envoyez ceci au développeur) : " + (e.message || JSON.stringify(e)));
+          return {
+            id: g.id,
+            name: g.name,
+            target: Number(g.target_amount),
+            current,
+            target_date: g.target_date || undefined,
+            status: (g.status as "active" | "completed" | "paused") || "active",
+            color: g.color || "bg-blue-500",
+            contributions,
+          };
+        });
+        set({ savingsGoals: mappedGoals });
       }
+    } catch (e) {
+      console.warn("Notice: Offline or local mode active", e);
     }
-    set({ isLoading: false });
   },
 
   updatePreferences: async (prefs) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const updates: Record<string, any> = {};
-    if (prefs.alertThreshold !== undefined) updates.alert_threshold_percent = prefs.alertThreshold;
-    if (prefs.currency !== undefined) updates.currency = prefs.currency;
-    if (prefs.payDay !== undefined) updates.pay_day = prefs.payDay;
-    if (prefs.fullName !== undefined) {
-      updates.full_name = prefs.fullName;
-      try {
+    const newCurrency = prefs.currency !== undefined ? (prefs.currency.trim() || "FCFA") : get().currency;
+    const newAlert = prefs.alertThreshold ?? get().alertThreshold;
+    const newPayDay = prefs.payDay ?? get().payDay;
+
+    set({
+      alertThreshold: newAlert,
+      currency: newCurrency,
+      payDay: newPayDay,
+    });
+
+    // Sauvegarde locale instantanée
+    const cache = loadLocalCache() || {
+      currency: newCurrency,
+      payDay: newPayDay,
+      alertThreshold: newAlert,
+      months: {},
+      savingsGoals: get().savingsGoals,
+    };
+    cache.currency = newCurrency;
+    cache.alertThreshold = newAlert;
+    cache.payDay = newPayDay;
+    if (prefs.fullName) cache.fullName = prefs.fullName;
+    saveLocalCache(cache);
+
+    // Sync Supabase
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const updates: Record<string, any> = {};
+      if (prefs.alertThreshold !== undefined) updates.alert_threshold_percent = prefs.alertThreshold;
+      if (prefs.currency !== undefined) updates.currency = newCurrency;
+      if (prefs.payDay !== undefined) updates.pay_day = prefs.payDay;
+      if (prefs.fullName !== undefined) {
+        updates.full_name = prefs.fullName;
         await supabase.auth.updateUser({ data: { full_name: prefs.fullName } });
-      } catch (err) {
-        console.warn("Could not update auth metadata", err);
       }
+      await supabase.from("profiles").update(updates).eq("id", user.id);
+    } catch (err) {
+      console.warn("Could not sync preferences to Supabase", err);
     }
-    await supabase.from('profiles').update(updates).eq('id', user.id);
-    set((state) => ({
-      alertThreshold: prefs.alertThreshold ?? state.alertThreshold,
-      currency: prefs.currency ?? state.currency,
-      payDay: prefs.payDay ?? state.payDay,
-    }));
   },
 
   updateAlertThreshold: async (percent) => {
     await get().updatePreferences({ alertThreshold: percent });
   },
 
-  duplicatePreviousMonth: async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Utilisateur non connecté");
-
-    const { year, month } = get().activeMonth;
-    const currentBudgetId = get().budget_id;
-    if (!currentBudgetId) throw new Error("Le budget du mois actuel n'est pas initialisé");
-
-    const prevYear = month === 1 ? year - 1 : year;
-    const prevMonth = month === 1 ? 12 : month - 1;
-    const prevMonthName = new Date(prevYear, prevMonth - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
-
-    // 1. Fetch previous monthly budget
-    const { data: prevBudget } = await supabase
-      .from('monthly_budgets')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('year', prevYear)
-      .eq('month', prevMonth)
-      .maybeSingle();
-
-    if (!prevBudget) {
-      throw new Error("Aucun budget trouvé pour le mois précédent (" + prevMonthName + ").");
-    }
-
-    // 2. Fetch previous allocations & incomes
-    const { data: prevAllocations } = await supabase
-      .from('budget_allocations')
-      .select('category_id, allocated_amount, notes')
-      .eq('monthly_budget_id', prevBudget.id);
-
-    const { data: prevIncomes } = await supabase
-      .from('income_entries')
-      .select('label, amount')
-      .eq('monthly_budget_id', prevBudget.id);
-
-    if ((!prevAllocations || prevAllocations.length === 0) && (!prevIncomes || prevIncomes.length === 0)) {
-      throw new Error("Le budget de " + prevMonthName + " ne contient aucune enveloppe ni revenu à dupliquer.");
-    }
-
-    // 3. Duplicate Income
-    let copiedIncome = 0;
-    if (prevIncomes && prevIncomes.length > 0) {
-      copiedIncome = prevIncomes.reduce((sum, item) => sum + Number(item.amount), 0);
-      await get().setIncome(copiedIncome);
-    }
-
-    // 4. Duplicate Allocations
-    if (prevAllocations && prevAllocations.length > 0) {
-      for (const alloc of prevAllocations) {
-        const { data: existingAlloc } = await supabase
-          .from('budget_allocations')
-          .select('id')
-          .eq('monthly_budget_id', currentBudgetId)
-          .eq('category_id', alloc.category_id)
-          .maybeSingle();
-
-        if (existingAlloc) {
-          await supabase
-            .from('budget_allocations')
-            .update({ allocated_amount: alloc.allocated_amount, notes: alloc.notes })
-            .eq('id', existingAlloc.id);
-        } else {
-          await supabase
-            .from('budget_allocations')
-            .insert({
-              monthly_budget_id: currentBudgetId,
-              category_id: alloc.category_id,
-              allocated_amount: alloc.allocated_amount,
-              notes: alloc.notes
-            });
-        }
-      }
-    }
-
-    // 5. Refresh active month state in store
-    await get().initStore();
-    return {
-      prevMonthName,
-      allocationsCount: prevAllocations ? prevAllocations.length : 0,
-      income: copiedIncome
-    };
-  },
-
   setIncome: async (income) => {
-    // 1. Mise à jour locale instantanée (0ms de latence)
-    set({ income });
+    const additionalIncomes = get().transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
 
-    // 2. Synchronisation Supabase debouncée en arrière-plan
+    const baseSalary = Math.max(0, income - additionalIncomes);
+
+    // 1. Mise à jour synchrone en mémoire
+    set({ income, baseSalary });
+
+    // 2. Sauvegarde locale instantanée
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache() || {
+      currency: get().currency,
+      payDay: get().payDay,
+      alertThreshold: get().alertThreshold,
+      months: {},
+      savingsGoals: get().savingsGoals,
+    };
+    cache.months[monthKey] = {
+      baseSalary,
+      income,
+      categories: get().categories,
+      transactions: get().transactions,
+    };
+    saveLocalCache(cache);
+
+    // 3. Sync Supabase debouncée
     if (incomeDebounceTimer) clearTimeout(incomeDebounceTimer);
     incomeDebounceTimer = setTimeout(async () => {
       try {
         const budgetId = get().budget_id;
         if (!budgetId) return;
         const { data: existing } = await supabase
-          .from('income_entries')
-          .select('id')
-          .eq('monthly_budget_id', budgetId);
+          .from("income_entries")
+          .select("id")
+          .eq("monthly_budget_id", budgetId);
 
         if (existing && existing.length > 0) {
           await supabase
-            .from('income_entries')
-            .update({ amount: income, label: 'Salaire principal' })
-            .eq('id', existing[0].id);
+            .from("income_entries")
+            .update({ amount: baseSalary, label: "Salaire principal" })
+            .eq("id", existing[0].id);
         } else {
           await supabase
-            .from('income_entries')
+            .from("income_entries")
             .insert({
               monthly_budget_id: budgetId,
-              label: 'Salaire principal',
-              amount: income,
-              received_date: new Date().toISOString().split('T')[0]
+              label: "Salaire principal",
+              amount: baseSalary,
+              received_date: new Date().toISOString().split("T")[0],
             });
         }
       } catch (err) {
-        console.warn("Could not sync income to Supabase:", err);
+        console.warn("Could not sync income to Supabase", err);
       }
     }, 600);
   },
 
   addCategory: async (cat) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    
-    // Insert category
-    const { data: newCat } = await supabase.from('categories').insert({
-      user_id: user.id,
-      name: cat.name,
-      color: cat.color
-    }).select().single();
+    const updated = [...get().categories, cat];
+    set({ categories: updated });
 
-    if (newCat) {
-      cat.id = newCat.id;
-      set((state) => ({ categories: [...state.categories, cat] }));
+    // Sauvegarde locale
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache();
+    if (cache && cache.months[monthKey]) {
+      cache.months[monthKey].categories = updated;
+      saveLocalCache(cache);
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: newCat } = await supabase
+        .from("categories")
+        .insert({ user_id: user.id, name: cat.name, color: cat.color })
+        .select()
+        .single();
+      if (newCat) {
+        cat.id = newCat.id;
+        set((state) => ({
+          categories: state.categories.map((c) => (c.name === cat.name ? { ...c, id: newCat.id } : c)),
+        }));
+      }
+    } catch (err) {
+      console.warn("Could not sync category to Supabase", err);
     }
   },
 
   removeCategory: async (id) => {
-    await supabase.from('categories').update({ is_active: false }).eq('id', id);
-    set((state) => ({ categories: state.categories.filter(c => c.id !== id) }));
+    const updated = get().categories.filter((c) => c.id !== id);
+    set({ categories: updated });
+
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache();
+    if (cache && cache.months[monthKey]) {
+      cache.months[monthKey].categories = updated;
+      saveLocalCache(cache);
+    }
+
+    try {
+      await supabase.from("categories").update({ is_active: false }).eq("id", id);
+    } catch (err) {
+      console.warn("Could not remove category from Supabase", err);
+    }
   },
 
   updateCategory: async (id, updates) => {
-    set((state) => ({
-      categories: state.categories.map(c => c.id === id ? { ...c, ...updates } : c)
-    }));
+    const updated = get().categories.map((c) => (c.id === id ? { ...c, ...updates } : c));
+    set({ categories: updated });
+
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache();
+    if (cache && cache.months[monthKey]) {
+      cache.months[monthKey].categories = updated;
+      saveLocalCache(cache);
+    }
+
     try {
-      await supabase.from('categories').update(updates).eq('id', id);
+      await supabase.from("categories").update(updates).eq("id", id);
     } catch (err) {
-      console.warn("Could not update category in Supabase:", err);
+      console.warn("Could not update category in Supabase", err);
     }
   },
 
   updateCategoryAmount: async (id, amount) => {
-    // 1. Mise à jour locale ultra-rapide sans bloquer l interface
-    set((state) => ({
-      categories: state.categories.map(c => c.id === id ? { ...c, amount } : c)
-    }));
+    const updated = get().categories.map((c) => (c.id === id ? { ...c, amount } : c));
+    set({ categories: updated });
 
-    // 2. Debounce de la sauvegarde en base pour ne pas saturer lors de la frappe
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache();
+    if (cache && cache.months[monthKey]) {
+      cache.months[monthKey].categories = updated;
+      saveLocalCache(cache);
+    }
+
     if (allocationDebounceTimers[id]) clearTimeout(allocationDebounceTimers[id]);
     allocationDebounceTimers[id] = setTimeout(async () => {
-      const budgetId = get().budget_id;
-      if (!budgetId) return;
-
-      const category = get().categories.find(c => c.id === id);
-      if (!category) return;
-
       try {
+        const budgetId = get().budget_id;
+        if (!budgetId) return;
+        const category = get().categories.find((c) => c.id === id);
+        if (!category) return;
+
         if (category.allocation_id) {
-          await supabase.from('budget_allocations').update({ allocated_amount: amount }).eq('id', category.allocation_id);
+          await supabase.from("budget_allocations").update({ allocated_amount: amount }).eq("id", category.allocation_id);
         } else {
-          const { data: newAlloc } = await supabase.from('budget_allocations').insert({
-            monthly_budget_id: budgetId,
-            category_id: id,
-            allocated_amount: amount
-          }).select().single();
+          const { data: newAlloc } = await supabase
+            .from("budget_allocations")
+            .insert({ monthly_budget_id: budgetId, category_id: id, allocated_amount: amount })
+            .select()
+            .single();
           if (newAlloc) {
             set((state) => ({
-              categories: state.categories.map(c => c.id === id ? { ...c, allocation_id: newAlloc.id } : c)
+              categories: state.categories.map((c) => (c.id === id ? { ...c, allocation_id: newAlloc.id } : c)),
             }));
           }
         }
       } catch (err) {
-        console.warn("Could not sync allocation to Supabase:", err);
+        console.warn("Could not sync allocation to Supabase", err);
       }
     }, 600);
   },
 
   addTransaction: async (tx) => {
-    const budgetId = get().budget_id;
-    if(!budgetId) {
-      alert("Le budget n'est pas chargé. Veuillez patienter ou recharger la page.");
-      throw new Error("Le budget n'a pas pu être chargé. Assurez-vous que votre profil est bien configuré (erreur de base de données).");
+    const isInc = tx.type === "income" || tx.type === "income_adjustment";
+    const normalizedType: "income" | "expense" = isInc ? "income" : "expense";
+    const transactionItem: Transaction = {
+      ...tx,
+      type: normalizedType,
+      category: tx.category || (isInc ? "Revenu" : "Autre (Hors Budget)"),
+    };
+
+    const newTransactions = [transactionItem, ...get().transactions];
+    const newIncome = isInc ? get().income + tx.amount : get().income;
+
+    set({
+      transactions: newTransactions,
+      income: newIncome,
+    });
+
+    // Sauvegarde locale instantanée
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache();
+    if (cache && cache.months[monthKey]) {
+      cache.months[monthKey].transactions = newTransactions;
+      cache.months[monthKey].income = newIncome;
+      saveLocalCache(cache);
     }
 
-    // Find category ID
-    let category_id = null;
-    const cat = get().categories.find(c => c.name.toLowerCase() === tx.category.toLowerCase());
-    if (cat) category_id = cat.id;
+    try {
+      const budgetId = get().budget_id;
+      if (!budgetId) return;
 
-    const { data: newTx, error } = await supabase.from('transactions').insert({
-      monthly_budget_id: budgetId,
-      category_id,
-      amount: tx.amount,
-      description: tx.label,
-      transaction_date: tx.date,
-      type: tx.type === 'expense' ? 'expense' : 'income_adjustment'
-    }).select().single();
+      let category_id = null;
+      if (!isInc) {
+        const cat = get().categories.find((c) => c.name.toLowerCase() === tx.category.toLowerCase());
+        if (cat) category_id = cat.id;
+      }
 
-    if (error) {
-      console.error("Supabase insert error:", error);
-      throw error;
-    }
-    
-    if (newTx) {
-      tx.id = newTx.id;
-      set((state) => {
-        let newIncome = state.income;
-        if (tx.type === "income") newIncome += tx.amount;
-        return { transactions: [tx, ...state.transactions], income: newIncome };
-      });
+      const { data: newTx } = await supabase
+        .from("transactions")
+        .insert({
+          monthly_budget_id: budgetId,
+          category_id,
+          amount: tx.amount,
+          description: tx.label,
+          transaction_date: tx.date,
+          type: isInc ? "income_adjustment" : "expense",
+        })
+        .select()
+        .single();
+
+      if (newTx) {
+        transactionItem.id = newTx.id;
+      }
+    } catch (err) {
+      console.warn("Could not sync transaction to Supabase", err);
     }
   },
 
   removeTransaction: async (id) => {
-    await supabase.from('transactions').delete().eq('id', id);
-    set((state) => {
-      const tx = state.transactions.find(t => t.id === id);
-      let newIncome = state.income;
-      if (tx && tx.type === "income") newIncome -= tx.amount;
-      return { transactions: state.transactions.filter(t => t.id !== id), income: newIncome };
+    const tx = get().transactions.find((t) => t.id === id);
+    const newTransactions = get().transactions.filter((t) => t.id !== id);
+    let newIncome = get().income;
+    if (tx && (tx.type === "income" || tx.type === "income_adjustment")) {
+      newIncome = Math.max(0, newIncome - tx.amount);
+    }
+
+    set({
+      transactions: newTransactions,
+      income: newIncome,
     });
+
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache();
+    if (cache && cache.months[monthKey]) {
+      cache.months[monthKey].transactions = newTransactions;
+      cache.months[monthKey].income = newIncome;
+      saveLocalCache(cache);
+    }
+
+    try {
+      await supabase.from("transactions").delete().eq("id", id);
+    } catch (err) {
+      console.warn("Could not delete transaction from Supabase", err);
+    }
+  },
+
+  duplicatePreviousMonth: async () => {
+    const { year, month } = get().activeMonth;
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevMonthName = new Date(prevYear, prevMonth - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+    const prevKey = getMonthKey(prevYear, prevMonth);
+
+    const cache = loadLocalCache();
+    const prevMonthData = cache?.months?.[prevKey];
+
+    let copiedIncome = 0;
+    let allocationsCount = 0;
+
+    if (prevMonthData && prevMonthData.categories.length > 0) {
+      copiedIncome = prevMonthData.baseSalary || prevMonthData.income;
+      const duplicatedCats = prevMonthData.categories.map((c) => ({ ...c, allocation_id: undefined }));
+      allocationsCount = duplicatedCats.filter((c) => c.amount > 0).length;
+
+      set({
+        baseSalary: copiedIncome,
+        income: copiedIncome,
+        categories: duplicatedCats,
+      });
+
+      const currentKey = getMonthKey(year, month);
+      if (cache) {
+        cache.months[currentKey] = {
+          baseSalary: copiedIncome,
+          income: copiedIncome,
+          categories: duplicatedCats,
+          transactions: get().transactions,
+        };
+        saveLocalCache(cache);
+      }
+    } else {
+      // Tenter depuis Supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: prevBudget } = await supabase
+          .from("monthly_budgets")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("year", prevYear)
+          .eq("month", prevMonth)
+          .maybeSingle();
+
+        if (prevBudget) {
+          const { data: prevIncomes } = await supabase
+            .from("income_entries")
+            .select("amount")
+            .eq("monthly_budget_id", prevBudget.id);
+
+          const { data: prevAllocations } = await supabase
+            .from("budget_allocations")
+            .select("category_id, allocated_amount")
+            .eq("monthly_budget_id", prevBudget.id);
+
+          if (prevIncomes && prevIncomes.length > 0) {
+            copiedIncome = prevIncomes.reduce((s, i) => s + Number(i.amount), 0);
+          }
+
+          if (prevAllocations && prevAllocations.length > 0) {
+            allocationsCount = prevAllocations.length;
+            const updatedCats = get().categories.map((c) => {
+              const prev = prevAllocations.find((a) => a.category_id === c.id);
+              return { ...c, amount: prev ? Number(prev.allocated_amount) : c.amount };
+            });
+            set({ categories: updatedCats });
+          }
+          await get().setIncome(copiedIncome);
+        }
+      }
+    }
+
+    return {
+      prevMonthName,
+      allocationsCount,
+      income: copiedIncome,
+    };
   },
 
   addSavingsGoal: async (goal) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: newGoal } = await supabase.from('savings_goals').insert({
-      user_id: user.id,
+    const newGoal: SavingsGoal = {
+      id: Date.now().toString(),
       name: goal.name,
-      target_amount: goal.target,
+      target: goal.target,
+      current: 0,
       color: goal.color || "bg-blue-500",
-      target_date: goal.target_date || null,
+      target_date: goal.target_date,
       status: "active",
-      current_amount: 0,
-    }).select().single();
+      contributions: [],
+    };
 
-    if (newGoal) {
-      const createdGoal: SavingsGoal = {
-        id: newGoal.id,
-        name: newGoal.name,
-        target: Number(newGoal.target_amount),
-        current: 0,
-        color: newGoal.color || "bg-blue-500",
-        target_date: newGoal.target_date || undefined,
-        status: "active",
-        contributions: [],
-      };
-      set((state) => ({ savingsGoals: [createdGoal, ...state.savingsGoals] }));
+    const updated = [newGoal, ...get().savingsGoals];
+    set({ savingsGoals: updated });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.savingsGoals = updated;
+      saveLocalCache(cache);
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: created } = await supabase
+        .from("savings_goals")
+        .insert({
+          user_id: user.id,
+          name: goal.name,
+          target_amount: goal.target,
+          color: goal.color || "bg-blue-500",
+          target_date: goal.target_date || null,
+          status: "active",
+          current_amount: 0,
+        })
+        .select()
+        .single();
+      if (created) {
+        newGoal.id = created.id;
+      }
+    } catch (err) {
+      console.warn("Could not sync goal to Supabase", err);
     }
   },
 
   removeSavingsGoal: async (id) => {
-    await supabase.from('savings_goals').delete().eq('id', id);
-    set((state) => ({ savingsGoals: state.savingsGoals.filter(g => g.id !== id) }));
+    const updated = get().savingsGoals.filter((g) => g.id !== id);
+    set({ savingsGoals: updated });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.savingsGoals = updated;
+      saveLocalCache(cache);
+    }
+
+    try {
+      await supabase.from("savings_goals").delete().eq("id", id);
+    } catch (err) {
+      console.warn("Could not delete goal from Supabase", err);
+    }
   },
 
   updateSavingsGoalStatus: async (id, status) => {
-    await supabase.from('savings_goals').update({ status }).eq('id', id);
-    set((state) => ({
-      savingsGoals: state.savingsGoals.map(g => g.id === id ? { ...g, status } : g)
-    }));
+    const updated = get().savingsGoals.map((g) => (g.id === id ? { ...g, status } : g));
+    set({ savingsGoals: updated });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.savingsGoals = updated;
+      saveLocalCache(cache);
+    }
+
+    try {
+      await supabase.from("savings_goals").update({ status }).eq("id", id);
+    } catch (err) {
+      console.warn("Could not update goal status in Supabase", err);
+    }
   },
 
   addSavingsContribution: async (goalId, amount, notes, date) => {
-    const goal = get().savingsGoals.find(g => g.id === goalId);
+    const goal = get().savingsGoals.find((g) => g.id === goalId);
     if (!goal) return;
 
-    const contributionDate = date || new Date().toISOString().split('T')[0];
-    const { data: newContrib, error } = await supabase
-      .from('savings_contributions')
-      .insert({
-        savings_goal_id: goalId,
-        amount,
-        contribution_date: contributionDate,
-        notes: notes || null
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
+    const contributionDate = date || new Date().toISOString().split("T")[0];
     const contribItem: SavingsContribution = {
-      id: newContrib ? newContrib.id : Date.now().toString(),
+      id: Date.now().toString(),
       amount,
       date: contributionDate,
       notes: notes || undefined,
     };
 
     const newCurrent = goal.current + amount;
-    await supabase.from('savings_goals').update({ current_amount: newCurrent }).eq('id', goalId);
+    const updatedGoals = get().savingsGoals.map((g) => {
+      if (g.id !== goalId) return g;
+      return {
+        ...g,
+        current: newCurrent,
+        status: newCurrent >= g.target ? ("completed" as const) : g.status,
+        contributions: [contribItem, ...(g.contributions || [])],
+      };
+    });
 
-    set((state) => ({
-      savingsGoals: state.savingsGoals.map(g => {
-        if (g.id !== goalId) return g;
-        const updatedContributions = [contribItem, ...(g.contributions || [])];
-        return {
-          ...g,
-          current: newCurrent,
-          status: newCurrent >= g.target ? "completed" : g.status,
-          contributions: updatedContributions,
-        };
-      })
-    }));
+    set({ savingsGoals: updatedGoals });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.savingsGoals = updatedGoals;
+      saveLocalCache(cache);
+    }
+
+    try {
+      const { data: newContrib } = await supabase
+        .from("savings_contributions")
+        .insert({
+          savings_goal_id: goalId,
+          amount,
+          contribution_date: contributionDate,
+          notes: notes || null,
+        })
+        .select()
+        .single();
+
+      if (newContrib) {
+        contribItem.id = newContrib.id;
+      }
+      await supabase.from("savings_goals").update({ current_amount: newCurrent }).eq("id", goalId);
+    } catch (err) {
+      console.warn("Could not sync savings contribution to Supabase", err);
+    }
   },
 
   removeSavingsContribution: async (contributionId, goalId) => {
-    await supabase.from('savings_contributions').delete().eq('id', contributionId);
-    
-    set((state) => ({
-      savingsGoals: state.savingsGoals.map(g => {
-        if (g.id !== goalId) return g;
-        const filtered = (g.contributions || []).filter(c => c.id !== contributionId);
-        const newCurrent = filtered.reduce((s, c) => s + c.amount, 0);
-        return {
-          ...g,
-          current: newCurrent,
-          status: newCurrent >= g.target ? "completed" : "active",
-          contributions: filtered,
-        };
-      })
-    }));
+    const updatedGoals = get().savingsGoals.map((g) => {
+      if (g.id !== goalId) return g;
+      const filtered = (g.contributions || []).filter((c) => c.id !== contributionId);
+      const newCurrent = filtered.reduce((s, c) => s + c.amount, 0);
+      return {
+        ...g,
+        current: newCurrent,
+        status: newCurrent >= g.target ? ("completed" as const) : ("active" as const),
+        contributions: filtered,
+      };
+    });
+
+    set({ savingsGoals: updatedGoals });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.savingsGoals = updatedGoals;
+      saveLocalCache(cache);
+    }
+
+    try {
+      await supabase.from("savings_contributions").delete().eq("id", contributionId);
+    } catch (err) {
+      console.warn("Could not delete savings contribution from Supabase", err);
+    }
   },
 
   addSavingsAmount: async (id, amount) => {

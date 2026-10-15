@@ -24,7 +24,8 @@ import {
   getDailyBudget, 
   formatMoney, 
   getCategoryProgress,
-  getSpentByCategory 
+  getSpentByCategory,
+  isIncomeTransaction
 } from "@/lib/utils/budget-calc";
 
 export default function DashboardPage() {
@@ -242,8 +243,8 @@ export default function DashboardPage() {
               {transactions.slice(0, 5).map((tx) => (
                 <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3.5">
-                    <div className={`p-2.5 rounded-xl ${tx.type === 'income' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
-                      {tx.type === 'income' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                    <div className={`p-2.5 rounded-xl ${isIncomeTransaction(tx) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                      {isIncomeTransaction(tx) ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-slate-800">{tx.label}</p>
@@ -254,8 +255,8 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <div suppressHydrationWarning className={`font-semibold text-sm ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}`}>
-                    {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount, currency)}
+                  <div suppressHydrationWarning className={`font-semibold text-sm ${isIncomeTransaction(tx) ? 'text-emerald-600' : 'text-slate-800'}`}>
+                    {isIncomeTransaction(tx) ? '+' : '-'}{formatMoney(tx.amount, currency)}
                   </div>
                 </div>
               ))}

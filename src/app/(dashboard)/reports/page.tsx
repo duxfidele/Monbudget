@@ -30,7 +30,7 @@ import {
   Area
 } from "recharts";
 import { useUIStore } from "@/lib/store/ui-store";
-import { formatMoney, getTotalExpenses, getRemainingToLive } from "@/lib/utils/budget-calc";
+import { formatMoney, getTotalExpenses, getRemainingToLive, getSpentByCategory, isExpenseTransaction, isIncomeTransaction } from "@/lib/utils/budget-calc";
 import { createClient } from "@/lib/supabase/client";
 
 const PIE_COLORS = [
@@ -95,18 +95,25 @@ export default function ReportsPage() {
           const monthLabel = monthDate.toLocaleDateString("fr-FR", { month: "short" });
           const capitalized = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const monthIncome = (b.income_entries || []).reduce((s: number, i: any) => s + Number(i.amount), 0);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const monthExpenses = (b.transactions || [])
-            .filter((t: any) => t.type === "expense" || !t.type)
+          const addIncome = (b.transactions || [])
+            .filter((t: any) => isIncomeTransaction(t))
             .reduce((s: number, t: any) => s + Number(t.amount), 0);
+          let mIncome = (b.income_entries || []).reduce((s: number, i: any) => s + Number(i.amount), 0) + addIncome;
+          let mExpenses = (b.transactions || [])
+            .filter((t: any) => isExpenseTransaction(t))
+            .reduce((s: number, t: any) => s + Number(t.amount), 0);
+
+          // Synchronisation exacte si mois actif
+          if (b.year === activeMonth.year && b.month === activeMonth.month) {
+            mIncome = income;
+            mExpenses = getTotalExpenses(transactions);
+          }
 
           return {
             month: capitalized,
-            revenus: monthIncome,
-            depenses: monthExpenses,
-            epargne: Math.max(0, monthIncome - monthExpenses),
+            revenus: mIncome,
+            depenses: mExpenses,
+            epargne: Math.max(0, mIncome - mExpenses),
           };
         });
         setHistoryData(mapped);
@@ -141,11 +148,9 @@ export default function ReportsPage() {
   const tauxEpargne = income > 0 ? (totalSavings / income) * 100 : 0;
   const tauxDepense = income > 0 ? (totalExpenses / income) * 100 : 0;
 
-  // Répartition par catégorie
+  // Répartition par catégorie strictement concordante
   const categoryStats = categories.map((cat, idx) => {
-    const spent = currentExpenses
-      .filter((tx) => (tx.category || "").toLowerCase() === cat.name.toLowerCase())
-      .reduce((sum, tx) => sum + tx.amount, 0);
+    const spent = getSpentByCategory(transactions, cat.name);
     return {
       name: cat.name,
       value: spent,

@@ -28,7 +28,8 @@ import {
   getSpentByCategory, 
   getCategoryProgress,
   formatThousands,
-  parseThousands
+  parseThousands,
+  isIncomeTransaction
 } from "@/lib/utils/budget-calc";
 import {
   Dialog,
@@ -512,6 +513,7 @@ function CategoryRowInput({
 export default function BudgetPage() {
   const { 
     income, 
+    baseSalary, 
     setIncome, 
     categories, 
     addCategory, 
@@ -549,6 +551,10 @@ export default function BudgetPage() {
     month: "long",
     year: "numeric"
   });
+
+  const additionalIncomes = transactions
+    .filter((tx) => isIncomeTransaction(tx))
+    .reduce((sum, tx) => sum + tx.amount, 0);
 
   const totalAllocated = categories.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const remaining = income - totalAllocated;
@@ -714,6 +720,18 @@ export default function BudgetPage() {
                     <strong className="text-white">
                       ~{formatMoney(Math.round(income / 30), currency)} / jour
                     </strong>
+                  </div>
+                )}
+                {additionalIncomes > 0 && (
+                  <div className="text-[11px] bg-white/10 p-2 rounded-lg text-slate-200 space-y-0.5 border border-white/10">
+                    <div className="flex justify-between">
+                      <span className="text-slate-300">Salaire budgété :</span>
+                      <strong>{formatMoney(baseSalary, currency)}</strong>
+                    </div>
+                    <div className="flex justify-between text-emerald-300">
+                      <span>Revenus complémentaires :</span>
+                      <strong>+{formatMoney(additionalIncomes, currency)}</strong>
+                    </div>
                   </div>
                 )}
                 <p className="text-[11px] text-slate-300/70">
