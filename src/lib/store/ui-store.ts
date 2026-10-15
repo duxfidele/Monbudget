@@ -69,6 +69,8 @@ interface UIState {
   baseSalary: number;
   income: number;
   setIncome: (income: number) => Promise<void>;
+  setSalary: (salary: number) => Promise<void>;
+  saveBudget: () => Promise<void>;
   
   categories: Category[];
   addCategory: (cat: Category) => Promise<void>;
@@ -388,11 +390,43 @@ export const useUIStore = create<UIState>((set, get) => ({
 
         const totalIncome = fetchedBaseSalary + additionalIncomes;
 
-        // Ne pas écraser si le local est déjà plus récent et que le remote est vide
+        // FUSION RIGOUREUSE : Ne JAMAIS écraser les montants saisis localement avec 0
         const currentCats = get().categories;
-        const finalCats = categoriesMap.length > 0 ? categoriesMap : (currentCats.length > 0 ? currentCats : []);
-        const finalBaseSalary = fetchedBaseSalary > 0 ? fetchedBaseSalary : get().baseSalary;
-        const finalIncome = totalIncome > 0 ? totalIncome : get().income;
+        const mergedCats: Category[] = categoriesMap.map((remoteCat) => {
+          const localMatch = currentCats.find(
+            (c) => c.name.trim().toLowerCase() === remoteCat.name.trim().toLowerCase()
+          );
+          // Si Supabase a une allocation > 0, on prend la valeur distante
+          if (remoteCat.amount > 0) {
+            return remoteCat;
+          }
+          // Si le local a une valeur > 0 saisie par l'utilisateur, ON LA PRÉSERVE IMPÉRATIVEMENT
+          if (localMatch && localMatch.amount > 0) {
+            return {
+              ...remoteCat,
+              amount: localMatch.amount,
+              color: localMatch.color || remoteCat.color,
+            };
+          }
+          return remoteCat;
+        });
+
+        // Conserver également toute catégorie locale non présente dans remoteCat
+        for (const localCat of currentCats) {
+          const exists = mergedCats.some(
+            (c) => c.name.trim().toLowerCase() === localCat.name.trim().toLowerCase()
+          );
+          if (!exists) {
+            mergedCats.push(localCat);
+          }
+        }
+
+        const finalCats = mergedCats.length > 0 ? deduplicateCategories(mergedCats) : currentCats;
+
+        // Pour le salaire : préserver la saisie locale si elle est > 0
+        const localBaseSalary = get().baseSalary;
+        const finalBaseSalary = localBaseSalary > 0 ? localBaseSalary : (fetchedBaseSalary > 0 ? fetchedBaseSalary : 0);
+        const finalIncome = finalBaseSalary + additionalIncomes;
 
         set({
           baseSalary: finalBaseSalary,
@@ -400,6 +434,32 @@ export const useUIStore = create<UIState>((set, get) => ({
           categories: finalCats,
           transactions: mappedTxs,
         });
+
+        // Synchroniser en arrière-plan les allocations locales vers Supabase si elles manquaient
+        if (budget && user) {
+          for (const cat of finalCats) {
+            if (cat.amount > 0 && !cat.allocation_id) {
+              supabase
+                .from("budget_allocations")
+                .upsert(
+                  { monthly_budget_id: budget.id, category_id: cat.id, allocated_amount: cat.amount },
+                  { onConflict: "monthly_budget_id,category_id" }
+                )
+                .then();
+            }
+          }
+          if (finalBaseSalary > 0 && fetchedBaseSalary === 0) {
+            supabase
+              .from("income_entries")
+              .insert({
+                monthly_budget_id: budget.id,
+                label: "Salaire principal",
+                amount: finalBaseSalary,
+                received_date: new Date().toISOString().split("T")[0],
+              })
+              .then();
+          }
+        }
 
         // Mettre à jour le cache local
         const cache = loadLocalCache() || {
@@ -504,15 +564,16 @@ export const useUIStore = create<UIState>((set, get) => ({
     await get().updatePreferences({ alertThreshold: percent });
   },
 
-  setIncome: async (income) => {
+  setSalary: async (salary) => {
     const additionalIncomes = get().transactions
       .filter((t) => t.type === "income")
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const baseSalary = Math.max(0, income - additionalIncomes);
+    const baseSalary = Math.max(0, salary);
+    const totalIncome = baseSalary + additionalIncomes;
 
-    // 1. Mise à jour synchrone en mémoire
-    set({ income, baseSalary });
+    // 1. Mise à jour synchrone en mémoire : le salaire ne change jamais tout seul
+    set({ baseSalary, income: totalIncome });
 
     // 2. Sauvegarde locale instantanée
     const { year, month } = get().activeMonth;
@@ -526,7 +587,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     };
     cache.months[monthKey] = {
       baseSalary,
-      income,
+      income: totalIncome,
       categories: get().categories,
       transactions: get().transactions,
     };
@@ -564,6 +625,79 @@ export const useUIStore = create<UIState>((set, get) => ({
     }, 600);
   },
 
+  setIncome: async (income) => {
+    // Si l'utilisateur saisit directement un revenu, on le traite comme son salaire principal
+    await get().setSalary(income);
+  },
+
+  saveBudget: async () => {
+    const curState = get();
+    const { year, month } = curState.activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache() || {
+      currency: curState.currency,
+      payDay: curState.payDay,
+      alertThreshold: curState.alertThreshold,
+      months: {},
+      savingsGoals: curState.savingsGoals,
+    };
+    cache.months[monthKey] = {
+      baseSalary: curState.baseSalary,
+      income: curState.income,
+      categories: curState.categories,
+      transactions: curState.transactions,
+    };
+    saveLocalCache(cache);
+
+    try {
+      const budgetId = curState.budget_id;
+      if (!budgetId) return;
+
+      // Sauvegarde salaire Supabase
+      const { data: existing } = await supabase
+        .from("income_entries")
+        .select("id")
+        .eq("monthly_budget_id", budgetId);
+
+      if (existing && existing.length > 0) {
+        await supabase
+          .from("income_entries")
+          .update({ amount: curState.baseSalary, label: "Salaire principal" })
+          .eq("id", existing[0].id);
+      } else if (curState.baseSalary > 0) {
+        await supabase
+          .from("income_entries")
+          .insert({
+            monthly_budget_id: budgetId,
+            label: "Salaire principal",
+            amount: curState.baseSalary,
+            received_date: new Date().toISOString().split("T")[0],
+          });
+      }
+
+      // Sauvegarde des allocations pour chaque catégorie
+      for (const cat of curState.categories) {
+        if (cat.allocation_id) {
+          await supabase
+            .from("budget_allocations")
+            .update({ allocated_amount: cat.amount })
+            .eq("id", cat.allocation_id);
+        } else {
+          const { data: newAlloc } = await supabase
+            .from("budget_allocations")
+            .insert({ monthly_budget_id: budgetId, category_id: cat.id, allocated_amount: cat.amount })
+            .select()
+            .single();
+          if (newAlloc) {
+            cat.allocation_id = newAlloc.id;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not sync budget to Supabase", e);
+    }
+  },
+
   addCategory: async (cat) => {
     const trimmedName = cat.name.trim();
     if (!trimmedName) return;
@@ -574,10 +708,15 @@ export const useUIStore = create<UIState>((set, get) => ({
       return;
     }
 
-    const updated = deduplicateCategories([...get().categories, { ...cat, name: trimmedName }]);
+    // Générer un UUID valide si l'id n'est pas au format UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const catId = uuidRegex.test(cat.id) ? cat.id : (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : cat.id);
+    const newCategoryItem = { ...cat, id: catId, name: trimmedName };
+
+    const updated = deduplicateCategories([...get().categories, newCategoryItem]);
     set({ categories: updated });
 
-    // Sauvegarde locale
+    // Sauvegarde locale immédiate
     const { year, month } = get().activeMonth;
     const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache();
@@ -591,14 +730,17 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (!user) return;
       const { data: newCat } = await supabase
         .from("categories")
-        .insert({ user_id: user.id, name: cat.name, color: cat.color })
+        .insert({ id: catId, user_id: user.id, name: trimmedName, color: cat.color })
         .select()
         .single();
       if (newCat) {
         cat.id = newCat.id;
-        set((state) => ({
-          categories: state.categories.map((c) => (c.name === cat.name ? { ...c, id: newCat.id } : c)),
-        }));
+        const syncedCats = get().categories.map((c) => (c.name === trimmedName ? { ...c, id: newCat.id } : c));
+        set({ categories: syncedCats });
+        if (cache && cache.months[monthKey]) {
+          cache.months[monthKey].categories = syncedCats;
+          saveLocalCache(cache);
+        }
       }
     } catch (err) {
       console.warn("Could not sync category to Supabase", err);

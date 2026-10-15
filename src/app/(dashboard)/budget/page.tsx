@@ -85,6 +85,7 @@ function BudgetAmountInput({
   inputClassName?: string;
   id?: string;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const isFocusedRef = useRef(false);
   const [displayValue, setDisplayValue] = useState<string>(
     value > 0 ? formatThousands(value) : value === 0 ? "0" : ""
@@ -97,7 +98,12 @@ function BudgetAmountInput({
   }, [value]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
+    const input = e.target;
+    const raw = input.value;
+    const oldCursor = input.selectionStart || 0;
+
+    // Calcul du nombre de chiffres présents avant la position du curseur
+    const digitsBefore = raw.slice(0, oldCursor).replace(/[^0-9]/g, "").length;
     const digitsOnly = raw.replace(/[^0-9]/g, "");
 
     if (!digitsOnly) {
@@ -112,45 +118,35 @@ function BudgetAmountInput({
     if (!isNaN(parsed)) {
       onChange(parsed);
     }
-  };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.currentTarget.blur();
-    } else if (e.key === "Backspace") {
-      const input = e.currentTarget;
-      const { selectionStart, selectionEnd } = input;
-      if (
-        selectionStart !== null &&
-        selectionStart === selectionEnd &&
-        selectionStart > 1 &&
-        input.value[selectionStart - 1] === " "
-      ) {
-        e.preventDefault();
-        const before = input.value.slice(0, selectionStart - 2);
-        const after = input.value.slice(selectionStart);
-        const digits = (before + after).replace(/[^0-9]/g, "");
-        const formatted = formatThousands(digits);
-        setDisplayValue(formatted);
-        const parsed = digits ? parseInt(digits, 10) : 0;
-        onChange(parsed);
-        setTimeout(() => {
-          const newPos = Math.max(0, selectionStart - 2);
-          input.setSelectionRange(newPos, newPos);
-        }, 0);
+    // Repositionnement précis du curseur sans aucun saut intempestif
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        let newCursor = 0;
+        let count = 0;
+        while (newCursor < formatted.length && count < digitsBefore) {
+          if (formatted[newCursor] !== " ") count++;
+          newCursor++;
+        }
+        inputRef.current.setSelectionRange(newCursor, newCursor);
       }
-    }
+    });
   };
 
   return (
     <div className={`relative flex items-center ${className}`}>
       <Input
+        ref={inputRef}
         id={id}
         type="text"
         inputMode="numeric"
         value={displayValue}
         onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.currentTarget.blur();
+          }
+        }}
         onFocus={(e) => {
           isFocusedRef.current = true;
           e.target.select();
@@ -184,6 +180,7 @@ function IncomeInput({
   currency: string;
   onCommit: (val: number) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const isFocusedRef = useRef(false);
   const [displayValue, setDisplayValue] = useState<string>(
     initialIncome > 0 ? formatThousands(initialIncome) : ""
@@ -196,7 +193,11 @@ function IncomeInput({
   }, [initialIncome]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
+    const input = e.target;
+    const raw = input.value;
+    const oldCursor = input.selectionStart || 0;
+
+    const digitsBefore = raw.slice(0, oldCursor).replace(/[^0-9]/g, "").length;
     const digitsOnly = raw.replace(/[^0-9]/g, "");
 
     if (!digitsOnly) {
@@ -211,44 +212,33 @@ function IncomeInput({
     if (!isNaN(parsed)) {
       onCommit(parsed);
     }
-  };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.currentTarget.blur();
-    } else if (e.key === "Backspace") {
-      const input = e.currentTarget;
-      const { selectionStart, selectionEnd } = input;
-      if (
-        selectionStart !== null &&
-        selectionStart === selectionEnd &&
-        selectionStart > 1 &&
-        input.value[selectionStart - 1] === " "
-      ) {
-        e.preventDefault();
-        const before = input.value.slice(0, selectionStart - 2);
-        const after = input.value.slice(selectionStart);
-        const digits = (before + after).replace(/[^0-9]/g, "");
-        const formatted = formatThousands(digits);
-        setDisplayValue(formatted);
-        const parsed = digits ? parseInt(digits, 10) : 0;
-        onCommit(parsed);
-        setTimeout(() => {
-          const newPos = Math.max(0, selectionStart - 2);
-          input.setSelectionRange(newPos, newPos);
-        }, 0);
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        let newCursor = 0;
+        let count = 0;
+        while (newCursor < formatted.length && count < digitsBefore) {
+          if (formatted[newCursor] !== " ") count++;
+          newCursor++;
+        }
+        inputRef.current.setSelectionRange(newCursor, newCursor);
       }
-    }
+    });
   };
 
   return (
     <div className="relative flex items-center w-full">
       <Input
+        ref={inputRef}
         type="text"
         inputMode="numeric"
         value={displayValue}
         onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.currentTarget.blur();
+          }
+        }}
         onFocus={(e) => {
           isFocusedRef.current = true;
           e.target.select();
@@ -515,6 +505,8 @@ export default function BudgetPage() {
     income, 
     baseSalary, 
     setIncome, 
+    setSalary,
+    saveBudget,
     categories, 
     addCategory, 
     removeCategory, 
@@ -572,8 +564,9 @@ export default function BudgetPage() {
       return;
     }
 
+    const uuid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
     await addCategory({
-      id: Date.now().toString(),
+      id: uuid,
       name: trimmedName,
       amount: newCatAmount,
       color: newCatColor,
@@ -611,9 +604,10 @@ export default function BudgetPage() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    await saveBudget();
     toast.success("Budget mensuel validé !", {
-      description: `Vos enveloppes pour ${capitalizedActiveMonth} sont enregistrées.`,
+      description: `Vos enveloppes et revenus pour ${capitalizedActiveMonth} sont enregistrés et synchronisés.`,
     });
   };
 
@@ -715,9 +709,9 @@ export default function BudgetPage() {
             <CardContent>
               <div className="flex flex-col gap-2.5">
                 <IncomeInput 
-                  initialIncome={income} 
+                  initialIncome={baseSalary > 0 ? baseSalary : income} 
                   currency={currency} 
-                  onCommit={(val) => setIncome(val)} 
+                  onCommit={(val) => setSalary(val)} 
                 />
                 
                 {income > 0 && (
