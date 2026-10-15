@@ -11,6 +11,7 @@ import {
   formatThousands,
   parseThousands
 } from '../src/lib/utils/budget-calc';
+import { deduplicateCategories } from '../src/lib/utils/budget-calc';
 
 test.describe('Budget Calculation Engine (budget-calc)', () => {
   test('calculates daily budget correctly before payday', () => {
@@ -96,5 +97,20 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
 
     expect(getTotalAdditionalIncome(txs)).toBe(75000);
     expect(getTotalExpenses(txs)).toBe(25000); // 15000 + 10000, NOT counting the 75000 income!
+  });
+
+  test("deduplicates categories and merges duplicates like Déplacement", () => {
+    const raw = [
+      { id: "1", name: "Déplacement", amount: 0, color: "bg-blue-500" },
+      { id: "2", name: "Alimentation", amount: 50000, color: "bg-emerald-500" },
+      { id: "3", name: "déplacement", amount: 20000, color: "bg-blue-500" },
+      { id: "4", name: " Déplacement ", amount: 0, color: "bg-blue-500" },
+    ];
+
+    const result = deduplicateCategories(raw);
+    expect(result.length).toBe(2);
+    const deplacement = result.find((c) => c.name.toLowerCase() === "déplacement");
+    expect(deplacement).toBeDefined();
+    expect(deplacement?.amount).toBe(20000);
   });
 });

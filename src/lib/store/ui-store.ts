@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
+import { deduplicateCategories } from "@/lib/utils/budget-calc";
 
 export type Category = { 
   id: string; 
@@ -106,14 +107,42 @@ function getMonthKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
+export { deduplicateCategories };
+
 function loadLocalCache(): LocalCache | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const cache: LocalCache = JSON.parse(raw);
+    let mutated = false;
     if (!cache.currency || cache.currency === "EUR") {
       cache.currency = "FCFA";
+      mutated = true;
+    }
+    if (cache.months) {
+      for (const k of Object.keys(cache.months)) {
+        const m = cache.months[k];
+        if (m.categories) {
+          const cleanCats = deduplicateCategories(m.categories);
+          if (cleanCats.length !== m.categories.length) {
+            m.categories = cleanCats;
+            mutated = true;
+          }
+        }
+        if (m.transactions) {
+          m.transactions = m.transactions.map((tx) => {
+            const isInc = tx.type === "income" || tx.type === "income_adjustment";
+            if (isInc && (tx.category === "Alimentation" || !tx.category)) {
+              mutated = true;
+              return { ...tx, category: "Revenu", category_id: undefined };
+            }
+            return tx;
+          });
+        }
+      }
+    }
+    if (mutated) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
       } catch {}
@@ -177,12 +206,17 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeMonth: { year, month },
         baseSalary: cachedMonth.baseSalary || 0,
         income: cachedMonth.income || 0,
-        categories: cachedMonth.categories || [],
-        transactions: cachedMonth.transactions || [],
+        categories: deduplicateCategories(cachedMonth.categories || []),
+        transactions: (cachedMonth.transactions || []).map((tx) => {
+          const isInc = tx.type === "income" || tx.type === "income_adjustment";
+          return isInc && (tx.category === "Alimentation" || !tx.category)
+            ? { ...tx, category: "Revenu", category_id: undefined }
+            : tx;
+        }),
       });
     } else {
       // Hériter des catégories existantes avec montant 0 si nouveau mois
-      const defaultCats = curState.categories.map((c) => ({ ...c, amount: 0, allocation_id: undefined }));
+      const defaultCats = deduplicateCategories(curState.categories).map((c) => ({ ...c, amount: 0, allocation_id: undefined }));
       set({
         activeMonth: { year, month },
         baseSalary: 0,
@@ -203,8 +237,13 @@ export const useUIStore = create<UIState>((set, get) => ({
   budget_id: null,
   baseSalary: initialMonthData?.baseSalary || 0,
   income: initialMonthData?.income || 0,
-  categories: initialMonthData?.categories || [],
-  transactions: initialMonthData?.transactions || [],
+  categories: deduplicateCategories(initialMonthData?.categories || []),
+  transactions: (initialMonthData?.transactions || []).map((tx) => {
+    const isInc = tx.type === "income" || tx.type === "income_adjustment";
+    return isInc && (tx.category === "Alimentation" || !tx.category)
+      ? { ...tx, category: "Revenu", category_id: undefined }
+      : tx;
+  }),
   savingsGoals: initialCache?.savingsGoals || [],
 
   initStore: async () => {
@@ -288,16 +327,32 @@ export const useUIStore = create<UIState>((set, get) => ({
           .select("*")
           .eq("monthly_budget_id", budget.id);
 
-        const categoriesMap: Category[] = (allCategories || []).map((cat) => {
+        const rawCategories: Category[] = (allCategories || []).map((cat) => {
           const alloc = allocations?.find((a) => a.category_id === cat.id);
           return {
             id: cat.id,
-            name: cat.name,
+            name: cat.name.trim(),
             color: cat.color || "bg-blue-500",
             amount: alloc ? Number(alloc.allocated_amount) : 0,
             allocation_id: alloc?.id,
           };
         });
+        const categoriesMap: Category[] = deduplicateCategories(rawCategories);
+
+        // Si des catégories en doublon existent dans Supabase, archiver les doublons superflus
+        const seenCatNames = new Set<string>();
+        const redundantCatIds: string[] = [];
+        for (const cat of (allCategories || [])) {
+          const norm = cat.name.trim().toLowerCase();
+          if (seenCatNames.has(norm)) {
+            redundantCatIds.push(cat.id);
+          } else {
+            seenCatNames.add(norm);
+          }
+        }
+        if (redundantCatIds.length > 0) {
+          supabase.from("categories").update({ is_active: false }).in("id", redundantCatIds).then();
+        }
 
         // 5. Transactions
         const { data: txs } = await supabase
@@ -312,12 +367,19 @@ export const useUIStore = create<UIState>((set, get) => ({
             id: tx.id,
             label: tx.description || (isInc ? "Revenu complémentaire" : "Dépense"),
             amount: Number(tx.amount),
-            category: tx.categories?.name || (isInc ? "Revenu" : "Autre (Hors Budget)"),
-            category_id: tx.category_id,
+            category: isInc ? "Revenu" : (tx.categories?.name || "Autre (Hors Budget)"),
+            category_id: isInc ? undefined : tx.category_id,
             date: tx.transaction_date,
             type: isInc ? "income" : "expense",
           };
         });
+
+        // Nettoyer en arrière-plan tout rattachement erroné de catégorie sur des revenus historiques dans Supabase
+        const badIncomeTxs = (txs || []).filter(t => (t.type === "income" || t.type === "income_adjustment") && t.category_id !== null);
+        if (badIncomeTxs.length > 0) {
+          const badIds = badIncomeTxs.map(t => t.id);
+          supabase.from("transactions").update({ category_id: null }).in("id", badIds).then();
+        }
 
         // Calcul du revenu total : Salaire de base + revenus supplémentaires des transactions
         const additionalIncomes = mappedTxs
@@ -503,7 +565,16 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   addCategory: async (cat) => {
-    const updated = [...get().categories, cat];
+    const trimmedName = cat.name.trim();
+    if (!trimmedName) return;
+
+    // Empêcher l ajout de doublon (ex: Déplacement déjà existant)
+    const exists = get().categories.some((c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase());
+    if (exists) {
+      return;
+    }
+
+    const updated = deduplicateCategories([...get().categories, { ...cat, name: trimmedName }]);
     set({ categories: updated });
 
     // Sauvegarde locale

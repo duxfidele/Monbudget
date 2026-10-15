@@ -251,3 +251,29 @@ export function parseThousands(val: string | number | null | undefined): number 
   const clean = val.toString().replace(/[^0-9]/g, "");
   return clean ? parseInt(clean, 10) : 0;
 }
+
+/**
+ * Déduplique les catégories par nom (insensible à la casse)
+ * et préserve les montants alloués si un doublon avait déjà une allocation
+ */
+export function deduplicateCategories<T extends { name: string; amount?: number; allocation_id?: string }>(cats: T[]): T[] {
+  if (!cats || !Array.isArray(cats)) return [];
+  const seen = new Map<string, T>();
+  for (const cat of cats) {
+    if (!cat || !cat.name) continue;
+    const key = cat.name.trim().toLowerCase();
+    if (!key) continue;
+    if (!seen.has(key)) {
+      seen.set(key, { ...cat, name: cat.name.trim() });
+    } else {
+      const existing = seen.get(key)!;
+      if ((!existing.amount || existing.amount === 0) && (cat.amount && cat.amount > 0)) {
+        existing.amount = cat.amount;
+      }
+      if (!existing.allocation_id && cat.allocation_id) {
+        existing.allocation_id = cat.allocation_id;
+      }
+    }
+  }
+  return Array.from(seen.values());
+}

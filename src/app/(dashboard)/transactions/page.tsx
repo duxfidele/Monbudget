@@ -60,16 +60,21 @@ export default function TransactionsPage() {
   });
   const capitalizedMonth = formattedMonth.charAt(0).toUpperCase() + formattedMonth.slice(1);
 
-  // Auto-select category
+  // Liste unique des catégories sans aucun doublon
+  const uniqueCategories = Array.from(
+    new Map(categories.map((c) => [c.name.trim().toLowerCase(), c])).values()
+  );
+
+  // Auto-select category pour les dépenses
   useEffect(() => {
-    if (!newCategory) {
-      if (categories.length > 0) {
-        setNewCategory(categories[0].name);
+    if (!newCategory || !uniqueCategories.some((c) => c.name.toLowerCase() === newCategory.toLowerCase())) {
+      if (uniqueCategories.length > 0) {
+        setNewCategory(uniqueCategories[0].name);
       } else {
         setNewCategory("Autre (Hors Budget)");
       }
     }
-  }, [categories, newCategory]);
+  }, [uniqueCategories, newCategory]);
 
   // Totaux concordants
   const totalIncomes = transactions
@@ -97,7 +102,7 @@ export default function TransactionsPage() {
 
     const assignedCategory = newType === "expense" 
       ? (newCategory || "Autre (Hors Budget)") 
-      : (newCategory.trim() || "Revenu complémentaire");
+      : "Revenu";
 
     // Alerte seuil pour les dépenses
     if (newType === "expense" && assignedCategory !== "Autre (Hors Budget)") {
@@ -154,7 +159,7 @@ export default function TransactionsPage() {
     const rows = transactions.map((tx) => [
       tx.date,
       isIncomeTransaction(tx) ? "Revenu" : "Dépense",
-      tx.category,
+      isIncomeTransaction(tx) ? "Revenu" : (tx.category || "Autre (Hors Budget)"),
       tx.label,
       tx.amount.toString(),
     ]);
@@ -273,30 +278,23 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              {/* Catégorie */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Catégorie</label>
-                {newType === "expense" ? (
+              {/* Catégorie : affichée UNIQUEMENT pour les dépenses */}
+              {newType === "expense" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Catégorie</label>
                   <select 
                     value={newCategory} 
                     onChange={(e) => setNewCategory(e.target.value)}
                     className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A5F]"
                   >
                     <option value="" disabled>Sélectionnez une catégorie</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
+                    {uniqueCategories.map((c) => (
+                      <option key={c.id || c.name} value={c.name}>{c.name}</option>
                     ))}
                     <option value="Autre (Hors Budget)">Autre (Hors Budget)</option>
                   </select>
-                ) : (
-                  <Input 
-                    placeholder="Ex: Salaire d appoint, Prime, Remboursement..." 
-                    value={newCategory} 
-                    onChange={(e) => setNewCategory(e.target.value)} 
-                    className="bg-white rounded-lg"
-                  />
-                )}
-              </div>
+                </div>
+              )}
 
               <Button 
                 onClick={handleAddTransaction} 
@@ -413,7 +411,7 @@ export default function TransactionsPage() {
                         <div className="flex flex-wrap items-center gap-2 mt-0.5">
                           <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{tx.date}</span>
                           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${isInc ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-50 text-slate-600 border border-slate-200"}`}>
-                            {tx.category}
+                            {isInc ? "Revenu" : (tx.category || "Autre (Hors Budget)")}
                           </span>
                         </div>
                       </div>

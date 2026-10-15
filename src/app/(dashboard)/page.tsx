@@ -251,7 +251,9 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-slate-500">{tx.date}</span>
                         <span className="text-xs text-slate-300">•</span>
-                        <span className="text-xs text-slate-500">{tx.category}</span>
+                        <span className={`text-xs ${isIncomeTransaction(tx) ? "text-emerald-600 font-medium" : "text-slate-500"}`}>
+                          {isIncomeTransaction(tx) ? "Revenu" : (tx.category || "Autre (Hors Budget)")}
+                        </span>
                       </div>
                     </div>
                   </div>

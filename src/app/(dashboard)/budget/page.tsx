@@ -566,6 +566,12 @@ export default function BudgetPage() {
       return;
     }
 
+    const alreadyExists = categories.some((c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase());
+    if (alreadyExists) {
+      toast.error(`La catégorie "${trimmedName}" existe déjà dans votre budget.`);
+      return;
+    }
+
     await addCategory({
       id: Date.now().toString(),
       name: trimmedName,
