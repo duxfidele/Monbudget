@@ -205,3 +205,23 @@ export function formatMoney(amount: number, currency: string = "FCFA", locale: s
   if (currency === "USD") return `$${formatted}`;
   return `${formatted} ${currency}`;
 }
+
+/**
+ * Formate un nombre avec séparateurs de milliers pour la saisie (ex: "50 000")
+ */
+export function formatThousands(val: number | string | null | undefined): string {
+  if (val === "" || val === undefined || val === null) return "";
+  const clean = val.toString().replace(/[^0-9]/g, "");
+  if (!clean) return "";
+  return clean.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+/**
+ * Extrait la valeur numérique entière d une chaîne formatée (ex: "50 000" -> 50000)
+ */
+export function parseThousands(val: string | number | null | undefined): number {
+  if (typeof val === "number") return Math.max(0, Math.round(val));
+  if (!val) return 0;
+  const clean = val.toString().replace(/[^0-9]/g, "");
+  return clean ? parseInt(clean, 10) : 0;
+}

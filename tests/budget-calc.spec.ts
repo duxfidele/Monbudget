@@ -4,7 +4,9 @@ import {
   getTotalExpenses, 
   getRemainingToLive, 
   getCategoryProgress, 
-  formatMoney 
+  formatMoney,
+  formatThousands,
+  parseThousands
 } from '../src/lib/utils/budget-calc';
 
 test.describe('Budget Calculation Engine (budget-calc)', () => {
@@ -64,5 +66,13 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
   test('formats currencies properly', () => {
     expect(formatMoney(50000, 'FCFA')).toContain('FCFA');
     expect(formatMoney(200, 'EUR')).toContain('€');
+  });
+  test("formats thousands and parses numeric values correctly", () => {
+    expect(formatThousands(50000)).toBe("50 000");
+    expect(formatThousands(1500000)).toBe("1 500 000");
+    expect(formatThousands("")).toBe("");
+    expect(parseThousands("50 000")).toBe(50000);
+    expect(parseThousands("1 500 000")).toBe(1500000);
+    expect(parseThousands("")).toBe(0);
   });
 });

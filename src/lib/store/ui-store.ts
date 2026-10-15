@@ -39,6 +39,7 @@ interface UIState {
   categories: Category[];
   addCategory: (cat: Category) => Promise<void>;
   removeCategory: (id: string) => Promise<void>;
+  updateCategory: (id: string, updates: Partial<{ name: string; color: string }>) => Promise<void>;
   updateCategoryAmount: (id: string, amount: number) => Promise<void>;
   
   transactions: Transaction[];
@@ -66,6 +67,9 @@ interface UIState {
 
 const currentDate = new Date();
 const supabase = createClient();
+
+const allocationDebounceTimers: Record<string, NodeJS.Timeout> = {};
+let incomeDebounceTimer: NodeJS.Timeout | null = null;
 
 export const useUIStore = create<UIState>((set, get) => ({
   isSidebarOpen: false,
@@ -370,30 +374,39 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setIncome: async (income) => {
-    const budgetId = get().budget_id;
-    if (budgetId) {
-      const { data: existing } = await supabase
-        .from('income_entries')
-        .select('id')
-        .eq('monthly_budget_id', budgetId);
-
-      if (existing && existing.length > 0) {
-        await supabase
-          .from('income_entries')
-          .update({ amount: income, label: 'Salaire principal' })
-          .eq('id', existing[0].id);
-      } else {
-        await supabase
-          .from('income_entries')
-          .insert({
-            monthly_budget_id: budgetId,
-            label: 'Salaire principal',
-            amount: income,
-            received_date: new Date().toISOString().split('T')[0]
-          });
-      }
-    }
+    // 1. Mise à jour locale instantanée (0ms de latence)
     set({ income });
+
+    // 2. Synchronisation Supabase debouncée en arrière-plan
+    if (incomeDebounceTimer) clearTimeout(incomeDebounceTimer);
+    incomeDebounceTimer = setTimeout(async () => {
+      try {
+        const budgetId = get().budget_id;
+        if (!budgetId) return;
+        const { data: existing } = await supabase
+          .from('income_entries')
+          .select('id')
+          .eq('monthly_budget_id', budgetId);
+
+        if (existing && existing.length > 0) {
+          await supabase
+            .from('income_entries')
+            .update({ amount: income, label: 'Salaire principal' })
+            .eq('id', existing[0].id);
+        } else {
+          await supabase
+            .from('income_entries')
+            .insert({
+              monthly_budget_id: budgetId,
+              label: 'Salaire principal',
+              amount: income,
+              received_date: new Date().toISOString().split('T')[0]
+            });
+        }
+      } catch (err) {
+        console.warn("Could not sync income to Supabase:", err);
+      }
+    }, 600);
   },
 
   addCategory: async (cat) => {
@@ -418,36 +431,51 @@ export const useUIStore = create<UIState>((set, get) => ({
     set((state) => ({ categories: state.categories.filter(c => c.id !== id) }));
   },
 
+  updateCategory: async (id, updates) => {
+    set((state) => ({
+      categories: state.categories.map(c => c.id === id ? { ...c, ...updates } : c)
+    }));
+    try {
+      await supabase.from('categories').update(updates).eq('id', id);
+    } catch (err) {
+      console.warn("Could not update category in Supabase:", err);
+    }
+  },
+
   updateCategoryAmount: async (id, amount) => {
-    // 1. Mise à jour optimiste instantanée en mémoire
+    // 1. Mise à jour locale ultra-rapide sans bloquer l interface
     set((state) => ({
       categories: state.categories.map(c => c.id === id ? { ...c, amount } : c)
     }));
 
-    const budgetId = get().budget_id;
-    if (!budgetId) return;
+    // 2. Debounce de la sauvegarde en base pour ne pas saturer lors de la frappe
+    if (allocationDebounceTimers[id]) clearTimeout(allocationDebounceTimers[id]);
+    allocationDebounceTimers[id] = setTimeout(async () => {
+      const budgetId = get().budget_id;
+      if (!budgetId) return;
 
-    const category = get().categories.find(c => c.id === id);
-    if (!category) return;
+      const category = get().categories.find(c => c.id === id);
+      if (!category) return;
 
-    try {
-      if (category.allocation_id) {
-        await supabase.from('budget_allocations').update({ allocated_amount: amount }).eq('id', category.allocation_id);
-      } else {
-        const { data: newAlloc } = await supabase.from('budget_allocations').insert({
-          monthly_budget_id: budgetId,
-          category_id: id,
-          allocated_amount: amount
-        }).select().single();
-        if (newAlloc) {
-          set((state) => ({
-            categories: state.categories.map(c => c.id === id ? { ...c, allocation_id: newAlloc.id } : c)
-          }));
+      try {
+        if (category.allocation_id) {
+          await supabase.from('budget_allocations').update({ allocated_amount: amount }).eq('id', category.allocation_id);
+        } else {
+          const { data: newAlloc } = await supabase.from('budget_allocations').insert({
+            monthly_budget_id: budgetId,
+            category_id: id,
+            allocated_amount: amount
+          }).select().single();
+          if (newAlloc) {
+            set((state) => ({
+              categories: state.categories.map(c => c.id === id ? { ...c, allocation_id: newAlloc.id } : c)
+            }));
+          }
         }
+      } catch (err) {
+        console.warn("Could not sync allocation to Supabase:", err);
       }
-    } catch (err) {
-      console.warn("Could not sync allocation to Supabase:", err);
-    }
+    }, 600);
   },
 
   addTransaction: async (tx) => {

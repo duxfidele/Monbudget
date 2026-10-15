@@ -15,11 +15,21 @@ import {
   Sparkles,
   RefreshCw,
   X,
-  Wallet
+  Wallet,
+  Edit2,
+  Check,
+  Zap,
+  RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore, Category } from "@/lib/store/ui-store";
-import { formatMoney, getSpentByCategory, getCategoryProgress } from "@/lib/utils/budget-calc";
+import { 
+  formatMoney, 
+  getSpentByCategory, 
+  getCategoryProgress,
+  formatThousands,
+  parseThousands
+} from "@/lib/utils/budget-calc";
 import {
   Dialog,
   DialogContent,
@@ -29,21 +39,140 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const COLORS = ["bg-blue-500", "bg-orange-500", "bg-emerald-500", "bg-pink-500", "bg-purple-500", "bg-yellow-500"];
+const COLORS = [
+  "bg-blue-500", 
+  "bg-emerald-500", 
+  "bg-amber-500", 
+  "bg-purple-500", 
+  "bg-pink-500", 
+  "bg-indigo-500",
+  "bg-rose-500",
+  "bg-teal-500"
+];
 
 const DEFAULT_CATEGORIES = [
   { name: "Alimentation", amount: 50000 },
-  { name: "Logement", amount: 100000 },
-  { name: "Transport", amount: 20000 },
-  { name: "Factures & Abonnements", amount: 30000 },
-  { name: "Santé", amount: 15000 },
-  { name: "Loisirs & Sorties", amount: 15000 },
-  { name: "Shopping", amount: 20000 },
+  { name: "Logement & Loyer", amount: 100000 },
+  { name: "Transport & Carburant", amount: 25000 },
+  { name: "Factures (Eau, Électricité, Canal+)", amount: 30000 },
+  { name: "Santé & Pharmacie", amount: 15000 },
+  { name: "Loisirs & Sorties", amount: 20000 },
+  { name: "Épargne & Imprévus", amount: 30000 },
 ];
 
 /**
+ * Composant de saisie numérique ergonomique
+ * - Séparateurs de milliers en temps réel (ex: 50 000)
+ * - Sélection automatique au clic pour remplacer immédiatement
+ * - Backspace intelligent
+ * - Synchronisation locale instantanée (0 lag)
+ */
+function BudgetAmountInput({
+  value,
+  onChange,
+  currency,
+  placeholder = "0",
+  className = "",
+  inputClassName = "",
+  id,
+}: {
+  value: number;
+  onChange: (val: number) => void;
+  currency: string;
+  placeholder?: string;
+  className?: string;
+  inputClassName?: string;
+  id?: string;
+}) {
+  const isFocusedRef = useRef(false);
+  const [displayValue, setDisplayValue] = useState<string>(
+    value > 0 ? formatThousands(value) : value === 0 ? "0" : ""
+  );
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setDisplayValue(value > 0 ? formatThousands(value) : value === 0 ? "0" : "");
+    }
+  }, [value]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const digitsOnly = raw.replace(/[^0-9]/g, "");
+
+    if (!digitsOnly) {
+      setDisplayValue("");
+      onChange(0);
+      return;
+    }
+
+    const formatted = formatThousands(digitsOnly);
+    setDisplayValue(formatted);
+    const parsed = parseInt(digitsOnly, 10);
+    if (!isNaN(parsed)) {
+      onChange(parsed);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.currentTarget.blur();
+    } else if (e.key === "Backspace") {
+      const input = e.currentTarget;
+      const { selectionStart, selectionEnd } = input;
+      if (
+        selectionStart !== null &&
+        selectionStart === selectionEnd &&
+        selectionStart > 1 &&
+        input.value[selectionStart - 1] === " "
+      ) {
+        e.preventDefault();
+        const before = input.value.slice(0, selectionStart - 2);
+        const after = input.value.slice(selectionStart);
+        const digits = (before + after).replace(/[^0-9]/g, "");
+        const formatted = formatThousands(digits);
+        setDisplayValue(formatted);
+        const parsed = digits ? parseInt(digits, 10) : 0;
+        onChange(parsed);
+        setTimeout(() => {
+          const newPos = Math.max(0, selectionStart - 2);
+          input.setSelectionRange(newPos, newPos);
+        }, 0);
+      }
+    }
+  };
+
+  return (
+    <div className={`relative flex items-center ${className}`}>
+      <Input
+        id={id}
+        type="text"
+        inputMode="numeric"
+        value={displayValue}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        onFocus={(e) => {
+          isFocusedRef.current = true;
+          e.target.select();
+        }}
+        onBlur={(e) => {
+          isFocusedRef.current = false;
+          const digits = e.target.value.replace(/[^0-9]/g, "");
+          const parsed = digits ? parseInt(digits, 10) : 0;
+          setDisplayValue(parsed > 0 ? formatThousands(parsed) : "0");
+          onChange(parsed);
+        }}
+        placeholder={placeholder}
+        className={`font-bold pr-14 text-right rounded-lg transition-all focus-visible:ring-[#1E3A5F] ${inputClassName}`}
+      />
+      <span className="absolute right-3 text-xs font-semibold text-slate-400 select-none pointer-events-none">
+        {currency}
+      </span>
+    </div>
+  );
+}
+
+/**
  * Composant de saisie fluide pour le revenu mensuel
- * Utilise un état local pour une réactivité instantanée à la frappe sans lag réseau
  */
 function IncomeInput({
   initialIncome,
@@ -54,139 +183,315 @@ function IncomeInput({
   currency: string;
   onCommit: (val: number) => void;
 }) {
-  const [text, setText] = useState(initialIncome > 0 ? initialIncome.toString() : "");
+  const isFocusedRef = useRef(false);
+  const [displayValue, setDisplayValue] = useState<string>(
+    initialIncome > 0 ? formatThousands(initialIncome) : ""
+  );
 
   useEffect(() => {
-    setText(initialIncome > 0 ? initialIncome.toString() : "");
+    if (!isFocusedRef.current) {
+      setDisplayValue(initialIncome > 0 ? formatThousands(initialIncome) : "");
+    }
   }, [initialIncome]);
 
-  const commit = (valStr: string) => {
-    const cleanNum = Number(valStr.replace(/[^0-9]/g, ""));
-    const finalVal = isNaN(cleanNum) || cleanNum < 0 ? 0 : cleanNum;
-    setText(finalVal > 0 ? finalVal.toString() : "");
-    onCommit(finalVal);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const digitsOnly = raw.replace(/[^0-9]/g, "");
+
+    if (!digitsOnly) {
+      setDisplayValue("");
+      onCommit(0);
+      return;
+    }
+
+    const formatted = formatThousands(digitsOnly);
+    setDisplayValue(formatted);
+    const parsed = parseInt(digitsOnly, 10);
+    if (!isNaN(parsed)) {
+      onCommit(parsed);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.currentTarget.blur();
+    } else if (e.key === "Backspace") {
+      const input = e.currentTarget;
+      const { selectionStart, selectionEnd } = input;
+      if (
+        selectionStart !== null &&
+        selectionStart === selectionEnd &&
+        selectionStart > 1 &&
+        input.value[selectionStart - 1] === " "
+      ) {
+        e.preventDefault();
+        const before = input.value.slice(0, selectionStart - 2);
+        const after = input.value.slice(selectionStart);
+        const digits = (before + after).replace(/[^0-9]/g, "");
+        const formatted = formatThousands(digits);
+        setDisplayValue(formatted);
+        const parsed = digits ? parseInt(digits, 10) : 0;
+        onCommit(parsed);
+        setTimeout(() => {
+          const newPos = Math.max(0, selectionStart - 2);
+          input.setSelectionRange(newPos, newPos);
+        }, 0);
+      }
+    }
   };
 
   return (
     <div className="relative flex items-center w-full">
-      <Input 
+      <Input
         type="text"
         inputMode="numeric"
-        value={text} 
-        onChange={(e) => {
-          const digitsOnly = e.target.value.replace(/[^0-9]/g, "");
-          setText(digitsOnly);
-          // Mise à jour optimiste en direct
-          const n = Number(digitsOnly);
-          if (!isNaN(n)) onCommit(n);
+        value={displayValue}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        onFocus={(e) => {
+          isFocusedRef.current = true;
+          e.target.select();
         }}
-        onBlur={(e) => commit(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            commit((e.target as HTMLInputElement).value);
-            (e.target as HTMLInputElement).blur();
-          }
+        onBlur={(e) => {
+          isFocusedRef.current = false;
+          const digits = e.target.value.replace(/[^0-9]/g, "");
+          const parsed = digits ? parseInt(digits, 10) : 0;
+          setDisplayValue(parsed > 0 ? formatThousands(parsed) : "");
+          onCommit(parsed);
         }}
-        placeholder="Ex: 350000"
-        className="bg-white/10 border-white/20 text-white text-xl md:text-2xl font-black placeholder:text-white/40 focus-visible:ring-white/40 h-12 pr-12 rounded-xl"
+        placeholder="Ex: 350 000"
+        className="bg-white/10 border-white/20 text-white text-xl md:text-2xl font-black placeholder:text-white/40 focus-visible:ring-white/40 h-12 pr-16 rounded-xl"
       />
-      {text && (
-        <button
-          type="button"
-          onClick={() => {
-            setText("");
-            onCommit(0);
-          }}
-          className="absolute right-3 p-1 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition"
-          title="Effacer"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      )}
+      <div className="absolute right-3 flex items-center gap-1.5">
+        <span className="text-white/70 font-bold text-xs select-none">
+          {currency}
+        </span>
+        {displayValue && (
+          <button
+            type="button"
+            onClick={() => {
+              setDisplayValue("");
+              onCommit(0);
+            }}
+            className="p-1 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition"
+            title="Effacer le montant"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 /**
- * Composant de saisie fluide pour chaque enveloppe budgétaire
- * Saisie libre sans remise à zéro intempestive au backspace
+ * Ligne d envelope budgétaire avec saisie ultra fluide, chips rapides et renommage inline
  */
 function CategoryRowInput({
   category,
   currency,
   onUpdateAmount,
+  onUpdateCategory,
   onRemove,
   spent,
+  remainingToAllocate,
 }: {
   category: Category;
   currency: string;
   onUpdateAmount: (id: string, amount: number) => void;
+  onUpdateCategory: (id: string, updates: Partial<{ name: string; color: string }>) => void;
   onRemove: (id: string) => void;
   spent: number;
+  remainingToAllocate: number;
 }) {
-  const [localText, setLocalText] = useState(category.amount > 0 ? category.amount.toString() : "");
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameText, setEditNameText] = useState(category.name);
+  const [showQuickPills, setShowQuickPills] = useState(false);
   const progress = getCategoryProgress(spent, category.amount);
 
-  useEffect(() => {
-    setLocalText(category.amount > 0 ? category.amount.toString() : "");
-  }, [category.amount]);
+  const saveName = () => {
+    const trimmed = editNameText.trim();
+    if (trimmed && trimmed !== category.name) {
+      onUpdateCategory(category.id, { name: trimmed });
+      toast.success(`Catégorie renommée en "${trimmed}"`);
+    }
+    setIsEditingName(false);
+  };
 
-  const commitValue = (valStr: string) => {
-    const num = Number(valStr.replace(/[^0-9]/g, ""));
-    const finalAmount = isNaN(num) || num < 0 ? 0 : num;
-    setLocalText(finalAmount > 0 ? finalAmount.toString() : "");
-    onUpdateAmount(category.id, finalAmount);
+  const handleAddQuickAmount = (increment: number) => {
+    const current = Number(category.amount) || 0;
+    const newAmount = Math.max(0, current + increment);
+    onUpdateAmount(category.id, newAmount);
+  };
+
+  const handleAllocateRemainder = () => {
+    if (remainingToAllocate <= 0) return;
+    const current = Number(category.amount) || 0;
+    const newAmount = current + remainingToAllocate;
+    onUpdateAmount(category.id, newAmount);
+    toast.success(`Reliquat de ${formatMoney(remainingToAllocate, currency)} alloué à ${category.name} !`);
+  };
+
+  const handleResetToZero = () => {
+    onUpdateAmount(category.id, 0);
   };
 
   return (
     <div className="flex flex-col gap-2.5 p-3.5 sm:p-4 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:shadow-xs hover:border-slate-200 transition-all">
-      <div className="flex items-center justify-between gap-3">
-        <div className="font-semibold text-slate-800 text-sm md:text-base flex items-center gap-2.5 truncate">
-          <span className={`w-3 h-3 rounded-full shrink-0 ${category.color || 'bg-blue-500'}`} />
-          <span className="truncate">{category.name}</span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Nom de la catégorie avec renommage inline */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <span className={`w-3.5 h-3.5 rounded-full shrink-0 ${category.color || "bg-blue-500"}`} />
+          
+          {isEditingName ? (
+            <div className="flex items-center gap-1.5 flex-1 max-w-xs">
+              <Input
+                type="text"
+                value={editNameText}
+                onChange={(e) => setEditNameText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveName();
+                  if (e.key === "Escape") {
+                    setEditNameText(category.name);
+                    setIsEditingName(false);
+                  }
+                }}
+                autoFocus
+                className="h-8 text-sm font-semibold rounded-md bg-white border-slate-300"
+              />
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                onClick={saveName} 
+                className="h-7 w-7 text-emerald-600 hover:bg-emerald-50 rounded"
+                title="Enregistrer"
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                onClick={() => {
+                  setEditNameText(category.name);
+                  setIsEditingName(false);
+                }} 
+                className="h-7 w-7 text-slate-400 hover:bg-slate-100 rounded"
+                title="Annuler"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 group truncate">
+              <span 
+                className="font-semibold text-slate-800 text-sm md:text-base truncate cursor-pointer hover:text-[#1E3A5F]"
+                onClick={() => setIsEditingName(true)}
+                title="Cliquer pour renommer"
+              >
+                {category.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsEditingName(true)}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-slate-600 rounded"
+                title="Renommer la catégorie"
+              >
+                <Edit2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
         
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="relative flex items-center">
-            <Input 
-              type="text"
-              inputMode="numeric"
-              value={localText} 
-              onChange={(e) => {
-                const digits = e.target.value.replace(/[^0-9]/g, "");
-                setLocalText(digits);
-                // Mise à jour réactive du calcul
-                const n = Number(digits);
-                if (!isNaN(n)) onUpdateAmount(category.id, n);
-              }}
-              onBlur={(e) => commitValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  commitValue((e.target as HTMLInputElement).value);
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              placeholder="0"
-              className="font-bold text-right h-9 w-32 sm:w-36 md:w-40 bg-white pr-2 text-sm md:text-base border-slate-200 focus-visible:ring-[#1E3A5F] rounded-lg"
-            />
-          </div>
-          <span className="text-slate-500 font-semibold text-xs md:text-sm w-12">{currency}</span>
+        {/* Champ de saisie ergonomique et actions */}
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+          <BudgetAmountInput
+            value={category.amount}
+            onChange={(val) => onUpdateAmount(category.id, val)}
+            currency={currency}
+            className="w-36 sm:w-40 md:w-44"
+            inputClassName="bg-white border-slate-200 h-9 text-sm md:text-base"
+          />
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowQuickPills(!showQuickPills)}
+            className={`h-8 w-8 rounded-lg text-slate-400 hover:text-[#1E3A5F] hover:bg-blue-50 ${showQuickPills ? "bg-blue-50 text-[#1E3A5F]" : ""}`}
+            title="Ajustements rapides (+ / -)"
+          >
+            <Zap className="h-4 w-4" />
+          </Button>
 
           <Button 
             variant="ghost" 
             size="icon" 
             onClick={() => onRemove(category.id)}
-            className="text-slate-400 hover:text-red-600 hover:bg-red-50 h-8 w-8 ml-0.5 rounded-lg"
+            className="text-slate-400 hover:text-red-600 hover:bg-red-50 h-8 w-8 rounded-lg"
             title="Supprimer cette catégorie"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      {/* Barre d ajustements rapides (Chips interactifs) */}
+      {showQuickPills && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-1.5 pb-0.5 border-t border-slate-200/60 text-xs">
+          <span className="text-[11px] font-medium text-slate-400 mr-1">Ajuster :</span>
+          <button
+            type="button"
+            onClick={() => handleAddQuickAmount(5000)}
+            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#1E3A5F] hover:bg-blue-50/50 text-slate-700 font-medium transition"
+          >
+            +5 000
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAddQuickAmount(10000)}
+            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#1E3A5F] hover:bg-blue-50/50 text-slate-700 font-medium transition"
+          >
+            +10 000
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAddQuickAmount(25000)}
+            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#1E3A5F] hover:bg-blue-50/50 text-slate-700 font-medium transition"
+          >
+            +25 000
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAddQuickAmount(50000)}
+            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#1E3A5F] hover:bg-blue-50/50 text-slate-700 font-medium transition"
+          >
+            +50 000
+          </button>
+          {remainingToAllocate > 0 && (
+            <button
+              type="button"
+              onClick={handleAllocateRemainder}
+              className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 font-semibold transition flex items-center gap-1"
+            >
+              <span>+ Reste ({formatThousands(remainingToAllocate)})</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleResetToZero}
+            className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-500 font-medium transition ml-auto flex items-center gap-1"
+            title="Remettre à 0"
+          >
+            <RotateCcw className="h-3 w-3" />
+            <span>0</span>
+          </button>
+        </div>
+      )}
       
+      {/* Jauge et indicateur de dépenses */}
       <div className="flex items-center justify-between text-xs text-slate-500 mt-0.5">
         <span>Dépensé : <strong className="text-slate-700">{formatMoney(spent, currency)}</strong></span>
-        <span className={progress.isOverBudget ? 'text-red-600 font-semibold' : 'text-emerald-600 font-semibold'}>
+        <span className={progress.isOverBudget ? "text-red-600 font-semibold" : "text-emerald-600 font-semibold"}>
           {progress.isOverBudget 
             ? `Dépassement : ${formatMoney(Math.abs(progress.remaining), currency)}`
             : `Disponible : ${formatMoney(progress.remaining, currency)}`
@@ -196,7 +501,7 @@ function CategoryRowInput({
       
       <div className="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden mt-0.5">
         <div 
-          className={`h-full ${progress.isOverBudget ? '!bg-red-500' : category.color || 'bg-blue-500'} rounded-full transition-all duration-300`}
+          className={`h-full ${progress.isOverBudget ? "!bg-red-500" : category.color || "bg-blue-500"} rounded-full transition-all duration-300`}
           style={{ width: `${Math.min(progress.percent, 100)}%` }} 
         />
       </div>
@@ -211,6 +516,7 @@ export default function BudgetPage() {
     categories, 
     addCategory, 
     removeCategory, 
+    updateCategory,
     updateCategoryAmount,
     transactions,
     currency,
@@ -219,7 +525,8 @@ export default function BudgetPage() {
   } = useUIStore();
 
   const [newCatName, setNewCatName] = useState("");
-  const [newCatAmount, setNewCatAmount] = useState("");
+  const [newCatAmount, setNewCatAmount] = useState<number>(0);
+  const [newCatColor, setNewCatColor] = useState(COLORS[0]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
@@ -247,25 +554,23 @@ export default function BudgetPage() {
   const remaining = income - totalAllocated;
 
   const handleAddCategory = async () => {
-    if (!newCatName || !newCatAmount) {
-      toast.error("Veuillez renseigner le nom et le montant de la catégorie.");
-      return;
-    }
-    const cleanAmount = Number(newCatAmount.replace(/[^0-9]/g, ""));
-    if (isNaN(cleanAmount) || cleanAmount < 0) {
-      toast.error("Veuillez entrer un montant valide.");
+    const trimmedName = newCatName.trim();
+    if (!trimmedName) {
+      toast.error("Veuillez renseigner un nom pour la catégorie.");
       return;
     }
 
     await addCategory({
       id: Date.now().toString(),
-      name: newCatName.trim(),
-      amount: cleanAmount,
-      color: COLORS[categories.length % COLORS.length]
+      name: trimmedName,
+      amount: newCatAmount,
+      color: newCatColor,
     });
+
     setNewCatName("");
-    setNewCatAmount("");
-    toast.success(`Catégorie "${newCatName.trim()}" ajoutée !`);
+    setNewCatAmount(0);
+    setNewCatColor(COLORS[(categories.length + 1) % COLORS.length]);
+    toast.success(`Catégorie "${trimmedName}" ajoutée avec succès !`);
   };
 
   const executeDuplication = async () => {
@@ -295,8 +600,8 @@ export default function BudgetPage() {
   };
 
   const handleSave = () => {
-    toast.success("Budget validé !", {
-      description: `Vos enveloppes pour ${capitalizedActiveMonth} sont synchronisées.`,
+    toast.success("Budget mensuel validé !", {
+      description: `Vos enveloppes pour ${capitalizedActiveMonth} sont enregistrées.`,
     });
   };
 
@@ -396,40 +701,47 @@ export default function BudgetPage() {
               <CardDescription className="text-xs text-slate-300">Salaire net + primes prévues pour ce mois</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2.5">
-                  <IncomeInput 
-                    initialIncome={income} 
-                    currency={currency} 
-                    onCommit={(val) => setIncome(val)} 
-                  />
-                </div>
-                <p className="text-[11px] text-slate-300/80">
-                  Tapez votre montant librement, la mise à jour est instantanée.
+              <div className="flex flex-col gap-2.5">
+                <IncomeInput 
+                  initialIncome={income} 
+                  currency={currency} 
+                  onCommit={(val) => setIncome(val)} 
+                />
+                
+                {income > 0 && (
+                  <div className="flex items-center justify-between text-[11px] text-slate-300/90 pt-1">
+                    <span>Moyenne journalière :</span>
+                    <strong className="text-white">
+                      ~{formatMoney(Math.round(income / 30), currency)} / jour
+                    </strong>
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-300/70">
+                  Les chiffres se formatent automatiquement avec des espaces (ex: 350 000).
                 </p>
               </div>
             </CardContent>
           </Card>
 
           {/* Reste à allouer Card */}
-          <Card className={`border-none shadow-sm ${remaining < 0 ? 'bg-red-50 border border-red-200' : remaining === 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-white'}`}>
+          <Card className={`border-none shadow-sm transition-colors ${remaining < 0 ? "bg-red-50 border border-red-200" : remaining === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-white"}`}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-600">Reste à allouer</CardTitle>
             </CardHeader>
             <CardContent>
-              <div suppressHydrationWarning className={`text-3xl font-extrabold ${remaining < 0 ? 'text-red-600' : remaining === 0 ? 'text-emerald-600' : 'text-slate-800'}`}>
+              <div suppressHydrationWarning className={`text-3xl font-extrabold ${remaining < 0 ? "text-red-600" : remaining === 0 ? "text-emerald-600" : "text-slate-800"}`}>
                 {formatMoney(remaining, currency)}
               </div>
 
               {remaining === 0 && (
-                <div className="flex items-center gap-1.5 text-emerald-700 text-xs mt-3 font-medium bg-emerald-100/60 p-2 rounded-lg">
+                <div className="flex items-center gap-1.5 text-emerald-700 text-xs mt-3 font-medium bg-emerald-100/60 p-2.5 rounded-lg">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span>Budget Base Zéro parfait : chaque franc est alloué !</span>
+                  <span>Budget Base Zéro parfait : chaque franc a une affectation précise !</span>
                 </div>
               )}
 
               {remaining > 0 && (
-                <p className="text-xs text-slate-500 mt-2">
+                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
                   Il vous reste ce montant à ventiler dans vos enveloppes ou à verser en épargne.
                 </p>
               )}
@@ -437,21 +749,23 @@ export default function BudgetPage() {
               {remaining < 0 && (
                 <div className="flex items-start gap-1.5 text-red-600 text-xs mt-3 font-medium bg-red-100/70 p-2.5 rounded-lg">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>Déficit ! Vos enveloppes dépassent votre revenu de {formatMoney(Math.abs(remaining), currency)}.</span>
+                  <span>Déficit ! Vos enveloppes dépassent votre revenu de {formatMoney(Math.abs(remaining), currency)}. Réduisez certains plafonds.</span>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Info Duplication banner */}
+          {/* Astuce Ergonomie */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-2">
             <div className="flex items-center gap-1.5 font-semibold text-slate-800">
               <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-              <span>Saisie facile & sans blocage</span>
+              <span>Astuces de saisie ultra rapide</span>
             </div>
-            <p className="leading-relaxed">
-              Vous pouvez taper directement vos chiffres au clavier ou sur mobile. Utilisez la touche <strong>Entrée</strong> ou cliquez en dehors du champ pour valider.
-            </p>
+            <ul className="space-y-1.5 text-slate-500 leading-relaxed list-disc list-inside">
+              <li><strong>Cliquez sur un montant</strong> : la valeur entière se surligne automatiquement pour être remplacée d un seul coup.</li>
+              <li><strong>Bouton éclair ⚡</strong> : affiche les boutons rapides (+5k, +10k, +50k) et le bouton « + Reste » pour allouer le reliquat d un clic.</li>
+              <li><strong>Renommer</strong> : cliquez sur le nom d une enveloppe pour la modifier directement.</li>
+            </ul>
           </div>
         </div>
 
@@ -527,20 +841,25 @@ export default function BudgetPage() {
                     category={cat}
                     currency={currency}
                     spent={spent}
+                    remainingToAllocate={remaining}
                     onUpdateAmount={updateCategoryAmount}
+                    onUpdateCategory={updateCategory}
                     onRemove={removeCategory}
                   />
                 );
               })}
             </div>
 
-            {/* Formulaire d'ajout rapide d'enveloppe */}
+            {/* Formulaire d ajout rapide d enveloppe */}
             <div className="pt-6 border-t mt-6">
-              <h4 className="text-xs uppercase tracking-wider font-bold mb-3 text-slate-500">Ajouter une nouvelle enveloppe</h4>
+              <h4 className="text-xs uppercase tracking-wider font-bold mb-3 text-slate-500 flex items-center gap-1.5">
+                <Plus className="h-4 w-4 text-[#1E3A5F]" />
+                Ajouter une nouvelle enveloppe
+              </h4>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Input 
                   placeholder="Ex: Épargne projet, Imprévus, Cadeaux..." 
-                  className="flex-1 rounded-lg"
+                  className="flex-1 rounded-lg bg-white border-slate-200 text-sm"
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
                   onKeyDown={(e) => {
@@ -548,18 +867,18 @@ export default function BudgetPage() {
                   }}
                 />
                 <div className="flex gap-2">
-                  <Input 
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Montant alloué" 
-                    className="w-36 rounded-lg font-bold text-right"
+                  <BudgetAmountInput
                     value={newCatAmount}
-                    onChange={(e) => setNewCatAmount(e.target.value.replace(/[^0-9]/g, ""))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAddCategory();
-                    }}
+                    onChange={(val) => setNewCatAmount(val)}
+                    currency={currency}
+                    placeholder="Montant alloué"
+                    className="w-36 sm:w-40"
+                    inputClassName="bg-white border-slate-200 h-10 text-sm"
                   />
-                  <Button onClick={handleAddCategory} className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shrink-0 rounded-lg">
+                  <Button 
+                    onClick={handleAddCategory} 
+                    className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shrink-0 rounded-lg h-10 px-4"
+                  >
                     <Plus className="h-4 w-4 mr-1" /> Ajouter
                   </Button>
                 </div>
