@@ -57,7 +57,7 @@ interface UIState {
   alertThreshold: number;
   currency: string;
   payDay: number;
-  updatePreferences: (prefs: { alertThreshold?: number; currency?: string; payDay?: number }) => Promise<void>;
+  updatePreferences: (prefs: { alertThreshold?: number; currency?: string; payDay?: number; fullName?: string }) => Promise<void>;
   updateAlertThreshold: (percent: number) => Promise<void>;
   duplicatePreviousMonth: () => Promise<{ prevMonthName: string; allocationsCount: number; income: number }>;
   isLoading: boolean;
@@ -265,6 +265,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (prefs.alertThreshold !== undefined) updates.alert_threshold_percent = prefs.alertThreshold;
     if (prefs.currency !== undefined) updates.currency = prefs.currency;
     if (prefs.payDay !== undefined) updates.pay_day = prefs.payDay;
+    if (prefs.fullName !== undefined) {
+      updates.full_name = prefs.fullName;
+      try {
+        await supabase.auth.updateUser({ data: { full_name: prefs.fullName } });
+      } catch (err) {
+        console.warn("Could not update auth metadata", err);
+      }
+    }
     await supabase.from('profiles').update(updates).eq('id', user.id);
     set((state) => ({
       alertThreshold: prefs.alertThreshold ?? state.alertThreshold,
