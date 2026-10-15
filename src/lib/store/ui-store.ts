@@ -419,31 +419,35 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   updateCategoryAmount: async (id, amount) => {
+    // 1. Mise à jour optimiste instantanée en mémoire
+    set((state) => ({
+      categories: state.categories.map(c => c.id === id ? { ...c, amount } : c)
+    }));
+
     const budgetId = get().budget_id;
-    if(!budgetId) {
-      alert("Le budget n'est pas chargé. Veuillez patienter ou recharger la page.");
-      throw new Error("Le budget n'a pas pu être chargé. Assurez-vous que votre profil est bien configuré (erreur de base de données).");
-    }
+    if (!budgetId) return;
 
     const category = get().categories.find(c => c.id === id);
     if (!category) return;
 
-    if (category.allocation_id) {
-      await supabase.from('budget_allocations').update({ allocated_amount: amount }).eq('id', category.allocation_id);
-    } else {
-      const { data: newAlloc } = await supabase.from('budget_allocations').insert({
-        monthly_budget_id: budgetId,
-        category_id: id,
-        allocated_amount: amount
-      }).select().single();
-      if(newAlloc) {
-        category.allocation_id = newAlloc.id;
+    try {
+      if (category.allocation_id) {
+        await supabase.from('budget_allocations').update({ allocated_amount: amount }).eq('id', category.allocation_id);
+      } else {
+        const { data: newAlloc } = await supabase.from('budget_allocations').insert({
+          monthly_budget_id: budgetId,
+          category_id: id,
+          allocated_amount: amount
+        }).select().single();
+        if (newAlloc) {
+          set((state) => ({
+            categories: state.categories.map(c => c.id === id ? { ...c, allocation_id: newAlloc.id } : c)
+          }));
+        }
       }
+    } catch (err) {
+      console.warn("Could not sync allocation to Supabase:", err);
     }
-
-    set((state) => ({
-      categories: state.categories.map(c => c.id === id ? { ...c, amount, allocation_id: category.allocation_id } : c)
-    }));
   },
 
   addTransaction: async (tx) => {
