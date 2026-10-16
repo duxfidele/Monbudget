@@ -417,12 +417,44 @@ export const useUIStore = create<UIState>((set, get) => ({
           supabase.from("transactions").update({ category_id: null }).in("id", badIds).then();
         }
 
-        // Calcul du revenu total : Salaire de base + revenus supplémentaires des transactions
-        const additionalIncomes = mappedTxs
+        // FUSION RIGOUREUSE DES TRANSACTIONS : Préserver toutes les transactions locales
+        const currentTxs = get().transactions;
+        const mergedTxsMap = new Map<string, Transaction>();
+        
+        // 1. D'abord les transactions distantes
+        for (const rTx of mappedTxs) {
+          mergedTxsMap.set(rTx.id, rTx);
+        }
+        
+        // 2. Ensuite les transactions locales qui ne sont pas encore dans Supabase
+        for (const lTx of currentTxs) {
+          const alreadyInRemote = mappedTxs.some(
+            (r) => r.id === lTx.id || (r.date === lTx.date && r.amount === lTx.amount && r.label === lTx.label)
+          );
+          if (!alreadyInRemote) {
+            mergedTxsMap.set(lTx.id, lTx);
+            if (budget && user) {
+              const isInc = lTx.type === "income" || lTx.type === "income_adjustment";
+              supabase.from("transactions").insert({
+                monthly_budget_id: budget.id,
+                description: lTx.label,
+                amount: lTx.amount,
+                type: lTx.type,
+                transaction_date: lTx.date || new Date().toISOString().split("T")[0],
+                category_id: isInc ? null : lTx.category_id,
+              }).then();
+            }
+          }
+        }
+
+        const finalTxs = Array.from(mergedTxsMap.values()).sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+
+        // Calcul du revenu total : Salaire de base + revenus supplémentaires des transactions fusionnées
+        const finalAdditionalIncomes = finalTxs
           .filter((t) => t.type === "income")
           .reduce((sum, t) => sum + t.amount, 0);
-
-        const totalIncome = fetchedBaseSalary + additionalIncomes;
 
         // FUSION RIGOUREUSE : Ne JAMAIS écraser les montants saisis localement avec 0
         const currentCats = get().categories;
@@ -460,13 +492,13 @@ export const useUIStore = create<UIState>((set, get) => ({
         // Pour le salaire : préserver la saisie locale si elle est > 0
         const localBaseSalary = get().baseSalary;
         const finalBaseSalary = localBaseSalary > 0 ? localBaseSalary : (fetchedBaseSalary > 0 ? fetchedBaseSalary : 0);
-        const finalIncome = finalBaseSalary + additionalIncomes;
+        const finalIncome = finalBaseSalary + finalAdditionalIncomes;
 
         set({
           baseSalary: finalBaseSalary,
           income: finalIncome,
           categories: finalCats,
-          transactions: mappedTxs,
+          transactions: finalTxs,
         });
 
         // Synchroniser en arrière-plan les allocations locales vers Supabase si elles manquaient

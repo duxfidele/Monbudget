@@ -30,7 +30,7 @@ import {
   Area
 } from "recharts";
 import { useUIStore } from "@/lib/store/ui-store";
-import { formatMoney, getTotalExpenses, getRemainingToLive, getSpentByCategory, isExpenseTransaction, isIncomeTransaction } from "@/lib/utils/budget-calc";
+import { formatMoney, getTotalExpenses, getRemainingToLive, getSpentByCategory, isExpenseTransaction, isIncomeTransaction, getMonthlySavingsContributions } from "@/lib/utils/budget-calc";
 import { createClient } from "@/lib/supabase/client";
 
 const PIE_COLORS = [
@@ -104,18 +104,35 @@ export default function ReportsPage() {
             .reduce((s: number, t: any) => s + Number(t.amount), 0);
 
           // Synchronisation exacte si mois actif
+          let mSavings = Math.max(0, mIncome - mExpenses);
           if (b.year === activeMonth.year && b.month === activeMonth.month) {
             mIncome = income;
             mExpenses = getTotalExpenses(transactions);
+            mSavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
           }
 
           return {
             month: capitalized,
             revenus: mIncome,
             depenses: mExpenses,
-            epargne: Math.max(0, mIncome - mExpenses),
+            epargne: mSavings,
           };
         });
+
+        const hasActiveMonth = budgets.some((b: any) => b.year === activeMonth.year && b.month === activeMonth.month);
+        if (!hasActiveMonth) {
+          const curDate = new Date(activeMonth.year, activeMonth.month - 1, 1);
+          const curLabel = curDate.toLocaleDateString("fr-FR", { month: "short" });
+          const curExpenses = getTotalExpenses(transactions);
+          const curSavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+          mapped.push({
+            month: curLabel.charAt(0).toUpperCase() + curLabel.slice(1),
+            revenus: income,
+            depenses: curExpenses,
+            epargne: curSavings,
+          });
+        }
+
         setHistoryData(mapped);
       } else {
         // Fallback avec le mois courant actif
@@ -138,14 +155,15 @@ export default function ReportsPage() {
     }
   };
 
-  // Calculs actuels pour le mois sélectionné
+  // Calculs actuels pour le mois sélectionné (100% concordants avec Dashboard)
   const currentExpenses = transactions.filter((tx) => tx.type === "expense" || !tx.type);
   const totalExpenses = getTotalExpenses(transactions);
-  const totalSavings = savingsGoals.reduce((sum, g) => sum + g.current, 0);
-  const resteAVivre = getRemainingToLive(income, totalExpenses, 0);
+  const monthlySavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+  const totalSavingsAllTime = savingsGoals.reduce((sum, g) => sum + g.current, 0);
+  const resteAVivre = getRemainingToLive(income, totalExpenses, monthlySavings);
 
-  // Taux financiers
-  const tauxEpargne = income > 0 ? (totalSavings / income) * 100 : 0;
+  // Taux financiers concordants
+  const tauxEpargne = income > 0 ? (monthlySavings / income) * 100 : 0;
   const tauxDepense = income > 0 ? (totalExpenses / income) * 100 : 0;
 
   // Répartition par catégorie strictement concordante
@@ -258,7 +276,7 @@ export default function ReportsPage() {
               />
             </div>
             <p className="text-xs text-slate-500 mt-1.5">
-              Total cumulé : {formatMoney(totalSavings, currency)}
+              Total cumulé : {formatMoney(monthlySavings, currency)}
             </p>
           </CardContent>
         </Card>

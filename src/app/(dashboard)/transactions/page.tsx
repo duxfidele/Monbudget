@@ -14,16 +14,22 @@ import {
   TrendingUp, 
   TrendingDown, 
   Scale,
-  Calendar
+  Calendar,
+  Zap
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
 import { 
   formatMoney, 
   formatThousands, 
   parseThousands, 
-  isIncomeTransaction, 
-  isExpenseTransaction 
+  isIncomeTransaction,
+  isExpenseTransaction,
+  getDailyBudget,
+  getTodayExpenses,
+  getRemainingToLive,
+  getMonthlySavingsContributions
 } from "@/lib/utils/budget-calc";
 import {
   Dialog,
@@ -43,7 +49,10 @@ export default function TransactionsPage() {
     alertThreshold, 
     currency,
     activeMonth,
-    notifications
+    notifications,
+    income,
+    savingsGoals,
+    payDay
   } = useUIStore();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -77,7 +86,7 @@ export default function TransactionsPage() {
     }
   }, [uniqueCategories, newCategory]);
 
-  // Totaux concordants
+  // Totaux concordants et synchronisés avec le Tableau de bord
   const totalIncomes = transactions
     .filter((tx) => isIncomeTransaction(tx))
     .reduce((sum, tx) => sum + tx.amount, 0);
@@ -86,7 +95,22 @@ export default function TransactionsPage() {
     .filter((tx) => isExpenseTransaction(tx))
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const soldeNet = totalIncomes - totalExpenses;
+  const epargne = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+  const reste = getRemainingToLive(income, totalExpenses, epargne);
+  const soldeNet = income - totalExpenses;
+
+  // Dépenses effectuées aujourd'hui (pour déduction automatique)
+  const todayISO = new Date().toISOString().split("T")[0];
+  const todayExpenses = getTodayExpenses(transactions, todayISO);
+
+  const dailyInfo = getDailyBudget({
+    remainingAmount: reste,
+    totalIncome: income,
+    targetPayDay: payDay || 28,
+    currentDate: new Date(),
+    todayExpenses,
+    currency,
+  });
 
   const handleAddTransaction = async () => {
     const cleanLabel = newLabel.trim();
@@ -280,6 +304,17 @@ export default function TransactionsPage() {
                     {currency}
                   </span>
                 </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {newType === "expense" ? (
+                    <span>
+                      💡 Budget journalier restant : <strong className="text-emerald-700">{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</strong>. Cette dépense sera déduite automatiquement.
+                    </span>
+                  ) : (
+                    <span>
+                      💡 Ce revenu s'ajoutera directement aux revenus du mois de {capitalizedMonth}.
+                    </span>
+                  )}
+                </p>
               </div>
 
               {/* Catégorie : affichée UNIQUEMENT pour les dépenses */}
@@ -312,12 +347,38 @@ export default function TransactionsPage() {
         </Dialog>
       </div>
 
-      {/* Cartes KPI Concordantes */}
+      {/* Bandeau d'information du Budget Journalier Conseillé déduit automatiquement */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-[#1E3A5F]/10 via-sky-50 to-blue-50/50 border border-sky-200/80">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-[#1E3A5F] text-white shadow-xs">
+            <Zap className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">Budget Journalier du Jour</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-[#1E3A5F]">Déduit automatiquement</span>
+            </div>
+            <p className="text-sm text-slate-700 mt-0.5">
+              Disponible aujourd'hui : <strong className={dailyInfo.isOverDailyBudget ? "text-amber-700 font-extrabold" : "text-emerald-700 font-extrabold"}>{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</strong>
+              <span className="text-slate-500 text-xs ml-2">
+                (Alloué : {formatMoney(dailyInfo.dailyBudget, currency)}/j | Dépensé aujourd'hui : {formatMoney(dailyInfo.todaySpent, currency)})
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <Link href="/" className="text-xs font-semibold text-[#1E3A5F] hover:underline flex items-center gap-1 shrink-0">
+          <span>Tableau de bord</span>
+          <span>&rarr;</span>
+        </Link>
+      </div>
+
+      {/* Cartes KPI Concordantes avec le Tableau de bord */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Revenus Additionnels
+              Revenus du Mois
             </CardTitle>
             <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
               <TrendingUp className="h-4 w-4" />
@@ -325,10 +386,10 @@ export default function TransactionsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-600">
-              +{formatMoney(totalIncomes, currency)}
+              +{formatMoney(income, currency)}
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Primes, extras et remboursements perçus ce mois
+              Salaire ({formatMoney(income - totalIncomes, currency)}) + Extras (+{formatMoney(totalIncomes, currency)})
             </p>
           </CardContent>
         </Card>
@@ -355,18 +416,18 @@ export default function TransactionsPage() {
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Flux Net des Transactions
+              Reste à Vivre Disponible
             </CardTitle>
-            <div className={`p-2 rounded-lg ${soldeNet >= 0 ? "bg-blue-50 text-[#1E3A5F]" : "bg-red-50 text-red-600"}`}>
+            <div className={`p-2 rounded-lg ${reste >= 0 ? "bg-blue-50 text-[#1E3A5F]" : "bg-red-50 text-red-600"}`}>
               <Scale className="h-4 w-4" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${soldeNet >= 0 ? "text-[#1E3A5F]" : "text-red-600"}`}>
-              {soldeNet >= 0 ? "+" : ""}{formatMoney(soldeNet, currency)}
+            <div className={`text-2xl font-bold ${reste >= 0 ? "text-[#1E3A5F]" : "text-red-600"}`}>
+              {reste >= 0 ? "+" : ""}{formatMoney(reste, currency)}
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Différence entrées / sorties de la période
+              Soit {formatMoney(dailyInfo.dailyBudget, currency)}/j conseillés jusqu'à la paie
             </p>
           </CardContent>
         </Card>

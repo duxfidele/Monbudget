@@ -22,10 +22,17 @@ export interface DailyBudgetOptions {
   totalIncome?: number;
   targetPayDay?: number; // e.g. 28 (day of month)
   currentDate?: Date;
+  todayExpenses?: number; // Total des dépenses enregistrées AUJOURD'HUI
+  currency?: string;
 }
 
 export interface DailyBudgetResult {
-  dailyBudget: number;
+  dailyBudget: number;         // Budget alloué par jour pour aujourd'hui (ex: 10 000 FCFA)
+  todaySpent: number;          // Montant déjà déduit aujourd'hui (ex: 3 000 FCFA)
+  todayRemaining: number;      // Reste disponible aujourd'hui déduit automatiquement (ex: 7 000 FCFA)
+  isOverDailyBudget: boolean;  // Vrai si todaySpent > dailyBudget
+  dailyProgressPercent: number;// % consommé du budget du jour (ex: 30%)
+  futureDailyBudget: number;   // Moyenne conseillée pour les jours suivants si on s'arrête là
   daysRemaining: number;
   nextPayDate: Date;
   isPayDayToday: boolean;
@@ -157,6 +164,8 @@ export function getDailyBudget({
   totalIncome = 0,
   targetPayDay = 28,
   currentDate = new Date(),
+  todayExpenses = 0,
+  currency = "FCFA",
 }: DailyBudgetOptions): DailyBudgetResult {
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth(); // 0 to 11
@@ -189,8 +198,26 @@ export function getDailyBudget({
 
   daysRemaining = Math.max(1, daysRemaining);
 
-  // Calcul du montant journalier
-  const dailyBudget = remainingAmount > 0 ? Math.floor(remainingAmount / daysRemaining) : 0;
+  // Le reste avant les dépenses d'aujourd'hui
+  const startOfDayRemaining = remainingAmount + todayExpenses;
+
+  // Budget alloué pour aujourd'hui (ou montant journalier si pas de dépenses aujourd'hui)
+  const dailyBudget = startOfDayRemaining > 0 
+    ? Math.floor(startOfDayRemaining / daysRemaining) 
+    : (remainingAmount > 0 ? Math.floor(remainingAmount / daysRemaining) : 0);
+
+  // DÉDUCTION AUTOMATIQUE DU BUDGET JOURNALIER AUJOURD'HUI
+  const todaySpent = Math.max(0, todayExpenses);
+  const todayRemaining = dailyBudget - todaySpent;
+  const isOverDailyBudget = todayRemaining < 0;
+  const dailyProgressPercent = dailyBudget > 0 
+    ? Math.min(100, Math.round((todaySpent / dailyBudget) * 100)) 
+    : (todaySpent > 0 ? 100 : 0);
+
+  // Moyenne pour les jours restants après aujourd'hui
+  const futureDailyBudget = (daysRemaining > 1 && remainingAmount > 0)
+    ? Math.floor(remainingAmount / (daysRemaining - 1))
+    : dailyBudget;
 
   // Détermination du statut et du conseil
   let status: "healthy" | "warning" | "critical" = "healthy";
@@ -199,20 +226,30 @@ export function getDailyBudget({
   if (remainingAmount <= 0) {
     status = "critical";
     advice = "Attention ! Votre reste à vivre est épuisé. Évitez toute dépense non essentielle.";
+  } else if (isOverDailyBudget) {
+    status = "warning";
+    advice = `Vigilance : vous avez dépassé votre budget journalier de ${Math.abs(todayRemaining).toLocaleString("fr-FR")} ${currency} aujourd'hui. Vos dépenses des prochains jours s'ajustent automatiquement.`;
+  } else if (todaySpent > 0) {
+    status = dailyProgressPercent > 80 ? "warning" : "healthy";
+    advice = `Il vous reste ${todayRemaining.toLocaleString("fr-FR")} ${currency} disponible pour aujourd'hui (déduit automatiquement de vos dépenses du jour).`;
   } else {
     const percentRemaining = totalIncome > 0 ? (remainingAmount / totalIncome) * 100 : 50;
-    
     if (percentRemaining < 15 || dailyBudget < 1500) {
       status = "warning";
-      advice = `Rythme serré : limitez vos dépenses à ${dailyBudget.toLocaleString("fr-FR")} FCFA/jour pour tenir jusqu'à la paie.`;
+      advice = `Rythme serré : limitez vos dépenses à ${dailyBudget.toLocaleString("fr-FR")} ${currency}/jour pour tenir jusqu'à la paie.`;
     } else {
       status = "healthy";
-      advice = `Allure excellente : vous pouvez dépenser jusqu'à ${dailyBudget.toLocaleString("fr-FR")} FCFA par jour en toute sérénité.`;
+      advice = `Allure excellente : vous pouvez dépenser jusqu'à ${dailyBudget.toLocaleString("fr-FR")} ${currency} aujourd'hui en toute sérénité.`;
     }
   }
 
   return {
     dailyBudget,
+    todaySpent,
+    todayRemaining,
+    isOverDailyBudget,
+    dailyProgressPercent,
+    futureDailyBudget,
     daysRemaining,
     nextPayDate,
     isPayDayToday,
@@ -276,4 +313,43 @@ export function deduplicateCategories<T extends { name: string; amount?: number;
     }
   }
   return Array.from(seen.values());
+}
+
+/**
+ * Calcule le total de l'épargne versée durant un mois spécifique
+ */
+export function getMonthlySavingsContributions(
+  savingsGoals: { contributions?: { amount: number; date?: string }[] }[],
+  year: number,
+  month: number
+): number {
+  if (!savingsGoals || !Array.isArray(savingsGoals)) return 0;
+  let total = 0;
+  for (const goal of savingsGoals) {
+    for (const c of (goal.contributions || [])) {
+      if (!c.date) continue;
+      const parts = c.date.split("-");
+      if (parts.length >= 2) {
+        const cYear = parseInt(parts[0], 10);
+        const cMonth = parseInt(parts[1], 10);
+        if (cYear === year && cMonth === month) {
+          total += Number(c.amount) || 0;
+        }
+      }
+    }
+  }
+  return total;
+}
+
+/**
+ * Calcule les dépenses enregistrées pour aujourd'hui
+ */
+export function getTodayExpenses(
+  transactions: TransactionItem[],
+  todayDateStr?: string
+): number {
+  const targetDate = todayDateStr || new Date().toISOString().split("T")[0];
+  return transactions
+    .filter((tx) => isExpenseTransaction(tx) && tx.date === targetDate)
+    .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
 }

@@ -25,24 +25,32 @@ import {
   formatMoney, 
   getCategoryProgress,
   getSpentByCategory,
-  isIncomeTransaction
+  isIncomeTransaction,
+  getMonthlySavingsContributions,
+  getTodayExpenses
 } from "@/lib/utils/budget-calc";
 
 export default function DashboardPage() {
-  const { income, categories, transactions, savingsGoals, currency, payDay, notifications } = useUIStore();
+  const { income, categories, transactions, savingsGoals, currency, payDay, notifications, activeMonth } = useUIStore();
 
   // 1. Calculs financiers purs et précis via budget-calc
   const depenses = getTotalExpenses(transactions);
-  const epargne = savingsGoals.reduce((sum, goal) => sum + goal.current, 0);
+  const epargne = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
   const reste = getRemainingToLive(income, depenses, epargne);
   const pourcentageDepense = income > 0 ? (depenses / income) * 100 : 0;
 
-  // 2. Calcul du Budget Journalier Conseillé
+  // Dépenses effectuées aujourd'hui (pour déduction automatique)
+  const todayISO = new Date().toISOString().split("T")[0];
+  const todayExpenses = getTodayExpenses(transactions, todayISO);
+
+  // 2. Calcul du Budget Journalier Conseillé déduit automatiquement
   const dailyInfo = getDailyBudget({
     remainingAmount: reste,
     totalIncome: income,
     targetPayDay: payDay || 28,
     currentDate: new Date(),
+    todayExpenses,
+    currency,
   });
 
   // 3. Stats des catégories
@@ -88,27 +96,67 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* HERO CARD : Budget Journalier Conseillé */}
+      {/* HERO CARD : Budget Journalier Conseillé déduit automatiquement */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A5F] via-[#24436E] to-[#152B47] text-white p-6 md:p-8 shadow-xl">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-3">
+          <div className="space-y-4 flex-1">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md border border-white/15 text-blue-200">
               <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-              <span>PILOTAGE QUOTIDIEN DU SALAIRE</span>
+              <span>PILOTAGE QUOTIDIEN DU SALAIRE (DÉDUCTION AUTOMATIQUE)</span>
             </div>
 
             <div>
-              <p className="text-slate-300 text-sm font-medium">Budget journalier conseillé</p>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span suppressHydrationWarning className="text-4xl md:text-5xl font-extrabold tracking-tight text-white">
-                  {formatMoney(dailyInfo.dailyBudget, currency)}
+              <p className="text-slate-300 text-sm font-medium">Budget journalier conseillé pour aujourd'hui</p>
+              <div className="flex flex-wrap items-baseline gap-2.5 mt-1">
+                <span suppressHydrationWarning className={`text-4xl md:text-5xl font-extrabold tracking-tight ${dailyInfo.isOverDailyBudget ? "text-amber-300" : "text-white"}`}>
+                  {formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}
                 </span>
-                <span className="text-slate-300 text-lg font-medium">/ jour</span>
+                <span className="text-slate-300 text-base md:text-lg font-medium">
+                  restant aujourd'hui
+                </span>
+                <span className="text-xs bg-white/10 border border-white/15 px-2.5 py-1 rounded-full text-slate-200">
+                  Alloué : {formatMoney(dailyInfo.dailyBudget, currency)}/j
+                </span>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-slate-300">
+            {/* Jauge de déduction du jour */}
+            <div className="space-y-1.5 max-w-lg">
+              <div className="flex items-center justify-between text-xs text-slate-200">
+                <span className="flex items-center gap-1.5">
+                  <span>Dépensé aujourd'hui :</span>
+                  <strong className="text-white">
+                    {dailyInfo.todaySpent > 0 ? `-${formatMoney(dailyInfo.todaySpent, currency)}` : "0 " + currency}
+                  </strong>
+                  <span className="text-[11px] text-emerald-300 font-semibold">(déduit auto)</span>
+                </span>
+                {dailyInfo.isOverDailyBudget ? (
+                  <span className="text-amber-300 font-bold">
+                    Dépassement : +{formatMoney(Math.abs(dailyInfo.todayRemaining), currency)}
+                  </span>
+                ) : (
+                  <span className="text-emerald-300 font-semibold">
+                    Disponible : {formatMoney(dailyInfo.todayRemaining, currency)}
+                  </span>
+                )}
+              </div>
+
+              <div className="w-full bg-black/30 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/10">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    dailyInfo.isOverDailyBudget 
+                      ? "bg-amber-400" 
+                      : dailyInfo.dailyProgressPercent > 80 
+                        ? "bg-amber-300" 
+                        : "bg-emerald-400"
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(0, dailyInfo.dailyProgressPercent))}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-slate-300 pt-1">
               <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1 rounded-lg">
                 <Calendar className="h-4 w-4 text-sky-300" />
                 {dailyInfo.isPayDayToday ? (
@@ -121,13 +169,13 @@ export default function DashboardPage() {
               </span>
 
               <span className="text-slate-400">•</span>
-              <span>Reste à vivre disponible : <strong className="text-white">{formatMoney(reste, currency)}</strong></span>
+              <span>Reste à vivre du mois : <strong className="text-white">{formatMoney(reste, currency)}</strong></span>
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 md:min-w-[280px] max-w-sm bg-white/5 border border-white/10 backdrop-blur-sm p-4 rounded-xl">
+          <div className="flex flex-col gap-3 md:min-w-[280px] max-w-sm bg-white/5 border border-white/10 backdrop-blur-sm p-4 rounded-xl self-start md:self-center">
             <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Diagnostic</span>
+              <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Diagnostic du jour</span>
               {dailyInfo.status === "healthy" && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   <CheckCircle2 className="h-3 w-3" /> Rythme idéal

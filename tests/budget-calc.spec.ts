@@ -9,7 +9,9 @@ import {
   isExpenseTransaction,
   getTotalAdditionalIncome,
   formatThousands,
-  parseThousands
+  parseThousands,
+  getMonthlySavingsContributions,
+  getTodayExpenses
 } from '../src/lib/utils/budget-calc';
 import { deduplicateCategories } from '../src/lib/utils/budget-calc';
 
@@ -112,5 +114,57 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
     const deplacement = result.find((c) => c.name.toLowerCase() === "déplacement");
     expect(deplacement).toBeDefined();
     expect(deplacement?.amount).toBe(20000);
+  });
+
+  test("automatically deducts today expenses from daily budget", () => {
+    // Before today: 100 000 FCFA remaining, 10 days remaining -> 10 000 FCFA/day
+    // Today spent: 3 000 FCFA
+    // Current remaining: 97 000 FCFA
+    const result = getDailyBudget({
+      remainingAmount: 97000,
+      totalIncome: 300000,
+      targetPayDay: 28,
+      currentDate: new Date("2026-10-18T12:00:00Z"),
+      todayExpenses: 3000,
+    });
+
+    expect(result.dailyBudget).toBe(10000);
+    expect(result.todaySpent).toBe(3000);
+    expect(result.todayRemaining).toBe(7000);
+    expect(result.isOverDailyBudget).toBe(false);
+    expect(result.dailyProgressPercent).toBe(30);
+  });
+
+  test("handles overspending on daily budget", () => {
+    // Daily target 10 000, today spent 14 000
+    const result = getDailyBudget({
+      remainingAmount: 86000,
+      totalIncome: 300000,
+      targetPayDay: 28,
+      currentDate: new Date("2026-10-18T12:00:00Z"),
+      todayExpenses: 14000,
+    });
+
+    expect(result.dailyBudget).toBe(10000);
+    expect(result.todaySpent).toBe(14000);
+    expect(result.todayRemaining).toBe(-4000);
+    expect(result.isOverDailyBudget).toBe(true);
+    expect(result.advice).toContain("dépassé");
+  });
+
+  test("calculates monthly savings contributions only for active month", () => {
+    const goals = [
+      {
+        contributions: [
+          { amount: 50000, date: "2026-10-05" },
+          { amount: 30000, date: "2026-10-12" },
+          { amount: 20000, date: "2026-09-20" }, // Different month!
+        ],
+      },
+    ];
+
+    expect(getMonthlySavingsContributions(goals, 2026, 10)).toBe(80000);
+    expect(getMonthlySavingsContributions(goals, 2026, 9)).toBe(20000);
+    expect(getMonthlySavingsContributions(goals, 2026, 11)).toBe(0);
   });
 });

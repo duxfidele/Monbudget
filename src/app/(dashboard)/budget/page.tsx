@@ -29,7 +29,12 @@ import {
   getCategoryProgress,
   formatThousands,
   parseThousands,
-  isIncomeTransaction
+  isIncomeTransaction,
+  getTotalExpenses,
+  getRemainingToLive,
+  getDailyBudget,
+  getTodayExpenses,
+  getMonthlySavingsContributions
 } from "@/lib/utils/budget-calc";
 import {
   Dialog,
@@ -515,7 +520,9 @@ export default function BudgetPage() {
     transactions,
     currency,
     activeMonth,
-    duplicatePreviousMonth
+    duplicatePreviousMonth,
+    savingsGoals,
+    payDay
   } = useUIStore();
 
   const [newCatName, setNewCatName] = useState("");
@@ -550,6 +557,22 @@ export default function BudgetPage() {
 
   const totalAllocated = categories.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const remaining = income - totalAllocated;
+
+  const depenses = getTotalExpenses(transactions);
+  const epargne = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+  const resteReel = getRemainingToLive(income, depenses, epargne);
+
+  const todayISO = new Date().toISOString().split("T")[0];
+  const todayExpenses = getTodayExpenses(transactions, todayISO);
+
+  const dailyInfo = getDailyBudget({
+    remainingAmount: resteReel,
+    totalIncome: income,
+    targetPayDay: payDay || 28,
+    currentDate: new Date(),
+    todayExpenses,
+    currency,
+  });
 
   const handleAddCategory = async () => {
     const trimmedName = newCatName.trim();
@@ -715,11 +738,19 @@ export default function BudgetPage() {
                 />
                 
                 {income > 0 && (
-                  <div className="flex items-center justify-between text-[11px] text-slate-300/90 pt-1">
-                    <span>Moyenne journalière :</span>
-                    <strong className="text-white">
-                      ~{formatMoney(Math.round(income / 30), currency)} / jour
-                    </strong>
+                  <div className="bg-white/10 p-2.5 rounded-lg border border-white/10 text-xs space-y-1.5 mt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-200">Budget journalier conseillé :</span>
+                      <strong className="text-white">{formatMoney(dailyInfo.dailyBudget, currency)}/j</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-emerald-300 font-semibold text-[11px]">
+                      <span>Disponible aujourd'hui (déduit auto) :</span>
+                      <span>{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-300 text-[11px] pt-1 border-t border-white/10">
+                      <span>Reste à vivre réel en caisse :</span>
+                      <strong className="text-white">{formatMoney(resteReel, currency)}</strong>
+                    </div>
                   </div>
                 )}
                 {additionalIncomes > 0 && (
