@@ -45,11 +45,28 @@ export interface MonthData {
   transactions: Transaction[];
 }
 
+export interface NotificationSettings {
+  budgetAlert: boolean;
+  budgetAlertThreshold: number;
+  payDayReminder: boolean;
+  payDayReminderDays: number;
+  weeklySummary: boolean;
+}
+
+export const defaultNotifications: NotificationSettings = {
+  budgetAlert: true,
+  budgetAlertThreshold: 80,
+  payDayReminder: true,
+  payDayReminderDays: 7,
+  weeklySummary: false,
+};
+
 export interface LocalCache {
   currency: string;
   payDay: number;
   alertThreshold: number;
   fullName?: string;
+  notifications?: NotificationSettings;
   months: Record<string, MonthData>;
   savingsGoals: SavingsGoal[];
 }
@@ -94,7 +111,15 @@ interface UIState {
   alertThreshold: number;
   currency: string;
   payDay: number;
-  updatePreferences: (prefs: { alertThreshold?: number; currency?: string; payDay?: number; fullName?: string }) => Promise<void>;
+  notifications: NotificationSettings;
+  updatePreferences: (prefs: { 
+    alertThreshold?: number; 
+    currency?: string; 
+    payDay?: number; 
+    fullName?: string;
+    notifications?: Partial<NotificationSettings>;
+  }) => Promise<void>;
+  updateNotifications: (notifs: Partial<NotificationSettings>) => Promise<void>;
   updateAlertThreshold: (percent: number) => Promise<void>;
   duplicatePreviousMonth: () => Promise<{ prevMonthName: string; allocationsCount: number; income: number }>;
   isLoading: boolean;
@@ -235,6 +260,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   alertThreshold: initialCache?.alertThreshold ?? 80,
   currency: (initialCache?.currency && initialCache.currency !== "EUR") ? initialCache.currency : "FCFA",
   payDay: initialCache?.payDay ?? 28,
+  notifications: initialCache?.notifications ? { ...defaultNotifications, ...initialCache.notifications } : defaultNotifications,
   isLoading: false,
   budget_id: null,
   baseSalary: initialMonthData?.baseSalary || 0,
@@ -279,11 +305,19 @@ export const useUIStore = create<UIState>((set, get) => ({
         }
         const th = profile.alert_threshold_percent ? Number(profile.alert_threshold_percent) : 80;
         const pd = profile.pay_day ? Number(profile.pay_day) : 28;
-        set({ currency: cur, alertThreshold: th, payDay: pd });
+        
+        // Charger les préférences de notifications
+        const remoteNotifs = profile.notifications || user.user_metadata?.notifications;
+        const finalNotifs = remoteNotifs 
+          ? { ...defaultNotifications, ...remoteNotifs } 
+          : (get().notifications || defaultNotifications);
+
+        set({ currency: cur, alertThreshold: th, payDay: pd, notifications: finalNotifs });
 
         const cache = loadLocalCache();
         if (cache) {
           cache.currency = cur;
+          cache.notifications = finalNotifs;
           saveLocalCache(cache);
         }
       }
@@ -521,11 +555,15 @@ export const useUIStore = create<UIState>((set, get) => ({
     const newCurrency = prefs.currency !== undefined ? (prefs.currency.trim() || "FCFA") : get().currency;
     const newAlert = prefs.alertThreshold ?? get().alertThreshold;
     const newPayDay = prefs.payDay ?? get().payDay;
+    const newNotifications = prefs.notifications 
+      ? { ...get().notifications, ...prefs.notifications }
+      : get().notifications;
 
     set({
       alertThreshold: newAlert,
       currency: newCurrency,
       payDay: newPayDay,
+      notifications: newNotifications,
     });
 
     // Sauvegarde locale instantanée
@@ -533,12 +571,14 @@ export const useUIStore = create<UIState>((set, get) => ({
       currency: newCurrency,
       payDay: newPayDay,
       alertThreshold: newAlert,
+      notifications: newNotifications,
       months: {},
       savingsGoals: get().savingsGoals,
     };
     cache.currency = newCurrency;
     cache.alertThreshold = newAlert;
     cache.payDay = newPayDay;
+    cache.notifications = newNotifications;
     if (prefs.fullName) cache.fullName = prefs.fullName;
     saveLocalCache(cache);
 
@@ -552,12 +592,34 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (prefs.payDay !== undefined) updates.pay_day = prefs.payDay;
       if (prefs.fullName !== undefined) {
         updates.full_name = prefs.fullName;
-        await supabase.auth.updateUser({ data: { full_name: prefs.fullName } });
       }
-      await supabase.from("profiles").update(updates).eq("id", user.id);
+
+      // Synchronisation auth user metadata pour persistance garantie
+      await supabase.auth.updateUser({
+        data: {
+          ...(prefs.fullName ? { full_name: prefs.fullName } : {}),
+          notifications: newNotifications,
+        }
+      });
+
+      // Synchronisation table profiles
+      try {
+        await supabase.from("profiles").update({
+          ...updates,
+          notifications: newNotifications,
+        }).eq("id", user.id);
+      } catch {
+        if (Object.keys(updates).length > 0) {
+          await supabase.from("profiles").update(updates).eq("id", user.id);
+        }
+      }
     } catch (err) {
       console.warn("Could not sync preferences to Supabase", err);
     }
+  },
+
+  updateNotifications: async (notifs) => {
+    await get().updatePreferences({ notifications: notifs });
   },
 
   updateAlertThreshold: async (percent) => {

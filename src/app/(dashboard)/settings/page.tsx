@@ -34,15 +34,25 @@ export default function SettingsPage() {
   const [userId, setUserId] = useState("");
 
   // Preferences from store
-  const { alertThreshold, currency: storeCurrency, payDay: storePayDay, updatePreferences } = useUIStore();
+  const { 
+    alertThreshold, 
+    currency: storeCurrency, 
+    payDay: storePayDay, 
+    notifications: storeNotifications,
+    updatePreferences, 
+    updateNotifications 
+  } = useUIStore();
+
   const [localAlert, setLocalAlert] = useState(80);
   const [localCurrency, setLocalCurrency] = useState("FCFA");
   const [localPayDay, setLocalPayDay] = useState(28);
   const [isSavingPrefs, setIsSavingPrefs] = useState(false);
 
-  // Notifications settings
+  // Notifications settings fonctionnels et persistés
   const [notifBudgetAlert, setNotifBudgetAlert] = useState(true);
+  const [notifBudgetAlertThreshold, setNotifBudgetAlertThreshold] = useState(80);
   const [notifPayDayReminder, setNotifPayDayReminder] = useState(true);
+  const [notifPayDayReminderDays, setNotifPayDayReminderDays] = useState(7);
   const [notifWeeklySummary, setNotifWeeklySummary] = useState(false);
   const [isSavingNotifs, setIsSavingNotifs] = useState(false);
 
@@ -80,7 +90,20 @@ export default function SettingsPage() {
             }
             setLocalCurrency(pCur);
             if (profile.pay_day) setLocalPayDay(Number(profile.pay_day));
-            if (profile.alert_threshold_percent) setLocalAlert(Number(profile.alert_threshold_percent));
+            if (profile.alert_threshold_percent) {
+              setLocalAlert(Number(profile.alert_threshold_percent));
+              setNotifBudgetAlertThreshold(Number(profile.alert_threshold_percent));
+            }
+
+            // Charger les préférences de notifications distantes
+            const remoteNotifs = profile.notifications || user.user_metadata?.notifications;
+            if (remoteNotifs) {
+              if (remoteNotifs.budgetAlert !== undefined) setNotifBudgetAlert(Boolean(remoteNotifs.budgetAlert));
+              if (remoteNotifs.budgetAlertThreshold !== undefined) setNotifBudgetAlertThreshold(Number(remoteNotifs.budgetAlertThreshold));
+              if (remoteNotifs.payDayReminder !== undefined) setNotifPayDayReminder(Boolean(remoteNotifs.payDayReminder));
+              if (remoteNotifs.payDayReminderDays !== undefined) setNotifPayDayReminderDays(Number(remoteNotifs.payDayReminderDays));
+              if (remoteNotifs.weeklySummary !== undefined) setNotifWeeklySummary(Boolean(remoteNotifs.weeklySummary));
+            }
           } else {
             setName(user.user_metadata?.full_name || "");
           }
@@ -98,11 +121,21 @@ export default function SettingsPage() {
 
   // Sync with store when store loads
   useEffect(() => {
-    if (alertThreshold) setLocalAlert(alertThreshold);
+    if (alertThreshold) {
+      setLocalAlert(alertThreshold);
+      setNotifBudgetAlertThreshold(alertThreshold);
+    }
     if (storeCurrency && storeCurrency !== "EUR") setLocalCurrency(storeCurrency);
     else setLocalCurrency("FCFA");
     if (storePayDay) setLocalPayDay(storePayDay);
-  }, [alertThreshold, storeCurrency, storePayDay]);
+    if (storeNotifications) {
+      if (storeNotifications.budgetAlert !== undefined) setNotifBudgetAlert(storeNotifications.budgetAlert);
+      if (storeNotifications.budgetAlertThreshold !== undefined) setNotifBudgetAlertThreshold(storeNotifications.budgetAlertThreshold);
+      if (storeNotifications.payDayReminder !== undefined) setNotifPayDayReminder(storeNotifications.payDayReminder);
+      if (storeNotifications.payDayReminderDays !== undefined) setNotifPayDayReminderDays(storeNotifications.payDayReminderDays);
+      if (storeNotifications.weeklySummary !== undefined) setNotifWeeklySummary(storeNotifications.weeklySummary);
+    }
+  }, [alertThreshold, storeCurrency, storePayDay, storeNotifications]);
 
   const handleLogout = async () => {
     try {
@@ -139,9 +172,25 @@ export default function SettingsPage() {
   const handleSaveNotifications = async () => {
     setIsSavingNotifs(true);
     try {
-      // Stockage local / confirmation des alertes
+      await updateNotifications({
+        budgetAlert: notifBudgetAlert,
+        budgetAlertThreshold: notifBudgetAlertThreshold,
+        payDayReminder: notifPayDayReminder,
+        payDayReminderDays: notifPayDayReminderDays,
+        weeklySummary: notifWeeklySummary,
+      });
+
+      // Synchroniser également le seuil général dans les préférences
+      if (notifBudgetAlertThreshold !== alertThreshold) {
+        await updatePreferences({ alertThreshold: notifBudgetAlertThreshold });
+      }
+
       toast.success("Préférences de notifications enregistrées !", {
-        description: "Vos paramètres d'alerte budgétaire ont été pris en compte.",
+        description: `Alertes de seuil (${notifBudgetAlert ? "Activées à " + notifBudgetAlertThreshold + "%" : "Désactivées"}) | Rappel paie (${notifPayDayReminder ? "Activé à J-" + notifPayDayReminderDays : "Désactivé"}).`,
+      });
+    } catch (e: any) {
+      toast.error("Erreur de sauvegarde", {
+        description: e.message || "Impossible d'enregistrer vos paramètres de notifications.",
       });
     } finally {
       setIsSavingNotifs(false);
@@ -377,60 +426,133 @@ export default function SettingsPage() {
                   Alertes & Notifications In-App
                 </CardTitle>
                 <CardDescription>
-                  Configurez la manière dont MonBudget vous avertit en cas de dérapage de vos dépenses.
+                  Activez, personnalisez et enregistrez la manière dont MonBudget vous avertit en temps réel.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="flex items-start justify-between gap-4 p-3.5 rounded-xl border border-slate-100 bg-slate-50/70">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-slate-800">Alertes de seuil d'enveloppe</p>
-                    <p className="text-xs text-slate-500">
-                      Recevoir un message d'alerte in-app lorsque vous dépassez {localAlert}% d'une enveloppe budgétaire.
-                    </p>
+                {/* 1. Alerte de seuil d'enveloppe */}
+                <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200/80 bg-slate-50/60 transition-all hover:border-slate-300">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-slate-900">Alertes de seuil d'enveloppe</p>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${notifBudgetAlert ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                          {notifBudgetAlert ? "Activé" : "Désactivé"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Affiche un avertissement instantané dès qu'une dépense atteint ou dépasse le seuil défini.
+                      </p>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={notifBudgetAlert} 
+                        onChange={(e) => setNotifBudgetAlert(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1E3A5F]"></div>
+                    </label>
                   </div>
-                  <input 
-                    type="checkbox" 
-                    checked={notifBudgetAlert} 
-                    onChange={(e) => setNotifBudgetAlert(e.target.checked)}
-                    className="h-5 w-5 rounded border-slate-300 text-[#1E3A5F] focus:ring-[#1E3A5F] cursor-pointer mt-0.5"
-                  />
+
+                  {notifBudgetAlert && (
+                    <div className="pt-3 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <span className="text-xs font-semibold text-slate-700">Déclencher l'alerte à :</span>
+                      <div className="flex items-center gap-2">
+                        <select 
+                          value={notifBudgetAlertThreshold} 
+                          onChange={(e) => setNotifBudgetAlertThreshold(Number(e.target.value))}
+                          className="flex h-9 w-32 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+                        >
+                          <option value={50}>50 % du budget</option>
+                          <option value={75}>75 % du budget</option>
+                          <option value={80}>80 % (conseillé)</option>
+                          <option value={90}>90 % du budget</option>
+                          <option value={100}>100 % (épuisé)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex items-start justify-between gap-4 p-3.5 rounded-xl border border-slate-100 bg-slate-50/70">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-slate-800">Rappels avant le jour de paie</p>
-                    <p className="text-xs text-slate-500">
-                      Afficher un rappel de vigilance lorsque vous êtes à moins de 7 jours de votre date de paie (le {localPayDay}).
-                    </p>
+                {/* 2. Rappel avant le jour de paie */}
+                <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200/80 bg-slate-50/60 transition-all hover:border-slate-300">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-slate-900">Rappels avant le jour de paie</p>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${notifPayDayReminder ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                          {notifPayDayReminder ? "Activé" : "Désactivé"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Bannière de vigilance sur le tableau de bord à l'approche de votre versement (le {localPayDay} du mois).
+                      </p>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={notifPayDayReminder} 
+                        onChange={(e) => setNotifPayDayReminder(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1E3A5F]"></div>
+                    </label>
                   </div>
-                  <input 
-                    type="checkbox" 
-                    checked={notifPayDayReminder} 
-                    onChange={(e) => setNotifPayDayReminder(e.target.checked)}
-                    className="h-5 w-5 rounded border-slate-300 text-[#1E3A5F] focus:ring-[#1E3A5F] cursor-pointer mt-0.5"
-                  />
+
+                  {notifPayDayReminder && (
+                    <div className="pt-3 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <span className="text-xs font-semibold text-slate-700">Délai d'anticipation :</span>
+                      <div className="flex items-center gap-2">
+                        <select 
+                          value={notifPayDayReminderDays} 
+                          onChange={(e) => setNotifPayDayReminderDays(Number(e.target.value))}
+                          className="flex h-9 w-40 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+                        >
+                          <option value={3}>3 jours avant</option>
+                          <option value={5}>5 jours avant</option>
+                          <option value={7}>7 jours avant (recommandé)</option>
+                          <option value={10}>10 jours avant</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex items-start justify-between gap-4 p-3.5 rounded-xl border border-slate-100 bg-slate-50/70">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-semibold text-slate-800">Bilan hebdomadaire</p>
-                    <p className="text-xs text-slate-500">
-                      Récapitulatif visuel du rythme des dépenses chaque dimanche soir.
-                    </p>
+                {/* 3. Bilan hebdomadaire */}
+                <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200/80 bg-slate-50/60 transition-all hover:border-slate-300">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-slate-900">Bilan hebdomadaire</p>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${notifWeeklySummary ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                          {notifWeeklySummary ? "Activé" : "Désactivé"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Récapitulatif visuel du rythme des dépenses chaque dimanche soir pour préparer la semaine suivante.
+                      </p>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={notifWeeklySummary} 
+                        onChange={(e) => setNotifWeeklySummary(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1E3A5F]"></div>
+                    </label>
                   </div>
-                  <input 
-                    type="checkbox" 
-                    checked={notifWeeklySummary} 
-                    onChange={(e) => setNotifWeeklySummary(e.target.checked)}
-                    className="h-5 w-5 rounded border-slate-300 text-[#1E3A5F] focus:ring-[#1E3A5F] cursor-pointer mt-0.5"
-                  />
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end pt-2 border-t">
+              <CardFooter className="flex justify-end pt-3 border-t">
                 <Button 
                   onClick={handleSaveNotifications}
                   disabled={isSavingNotifs}
-                  className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white gap-2"
+                  className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white gap-2 shadow-xs"
                 >
                   <Save className="h-4 w-4" />
                   {isSavingNotifs ? "Enregistrement..." : "Enregistrer les notifications"}

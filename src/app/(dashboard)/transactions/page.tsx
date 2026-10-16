@@ -42,7 +42,8 @@ export default function TransactionsPage() {
     categories, 
     alertThreshold, 
     currency,
-    activeMonth 
+    activeMonth,
+    notifications
   } = useUIStore();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -104,17 +105,20 @@ export default function TransactionsPage() {
       ? (newCategory || "Autre (Hors Budget)") 
       : "Revenu";
 
-    // Alerte seuil pour les dépenses
-    if (newType === "expense" && assignedCategory !== "Autre (Hors Budget)") {
+    // Alerte seuil pour les dépenses (si notifications d'alerte activées)
+    const isAlertEnabled = notifications?.budgetAlert !== false;
+    const effectiveThreshold = notifications?.budgetAlertThreshold || alertThreshold || 80;
+
+    if (isAlertEnabled && newType === "expense" && assignedCategory !== "Autre (Hors Budget)") {
       const categoryObj = categories.find((c) => c.name.toLowerCase() === assignedCategory.toLowerCase());
       if (categoryObj && categoryObj.amount > 0) {
         const spentSoFar = transactions
           .filter((tx) => isExpenseTransaction(tx) && tx.category.toLowerCase() === assignedCategory.toLowerCase())
           .reduce((sum, tx) => sum + tx.amount, 0);
         
-        const thresholdValue = categoryObj.amount * ((alertThreshold || 80) / 100);
+        const thresholdValue = categoryObj.amount * (effectiveThreshold / 100);
         if (spentSoFar + amount >= thresholdValue) {
-          toast.warning(`Attention ! Vous avez atteint ${alertThreshold || 80}% du budget "${assignedCategory}" !`, {
+          toast.warning(`Attention ! Vous avez atteint ${effectiveThreshold}% du budget "${assignedCategory}" !`, {
             description: `Le budget alloué était de ${formatMoney(categoryObj.amount, currency)}.`,
             duration: 6000,
           });

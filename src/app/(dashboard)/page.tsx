@@ -29,7 +29,7 @@ import {
 } from "@/lib/utils/budget-calc";
 
 export default function DashboardPage() {
-  const { income, categories, transactions, savingsGoals, currency, payDay } = useUIStore();
+  const { income, categories, transactions, savingsGoals, currency, payDay, notifications } = useUIStore();
 
   // 1. Calculs financiers purs et précis via budget-calc
   const depenses = getTotalExpenses(transactions);
@@ -76,6 +76,17 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Bannière de rappel du jour de paie si activée */}
+      {notifications?.payDayReminder !== false && dailyInfo.daysRemaining <= (notifications?.payDayReminderDays || 7) && !dailyInfo.isPayDayToday && (
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 animate-in fade-in">
+          <Calendar className="h-5 w-5 text-amber-600 shrink-0" />
+          <div className="flex-1 text-xs md:text-sm">
+            <span className="font-bold text-amber-800">Rappel Jour de Paie (J-{dailyInfo.daysRemaining}) : </span>
+            Votre prochain salaire arrive dans {dailyInfo.daysRemaining} {dailyInfo.daysRemaining > 1 ? "jours" : "jour"} (le {payDay || 28}). Gardez le cap avec votre budget journalier de {formatMoney(dailyInfo.dailyBudget, currency)}/jour.
+          </div>
+        </div>
+      )}
 
       {/* HERO CARD : Budget Journalier Conseillé */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A5F] via-[#24436E] to-[#152B47] text-white p-6 md:p-8 shadow-xl">
