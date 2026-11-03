@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { 
   BarChart3, 
   PieChart as PieIcon, 
@@ -13,8 +14,12 @@ import {
   Sparkles,
   ArrowUpRight,
   ArrowDownRight,
-  Award
+  Award,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
+import { toast } from "sonner";
+import { exportMonthlyReportCSV, exportMonthlyReportPDF } from "@/lib/utils/report-export";
 import { 
   ResponsiveContainer, 
   BarChart, 
@@ -206,6 +211,38 @@ export default function ReportsPage() {
   const monthName = activeDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
   const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
+  const handleDownloadPDF = () => {
+    exportMonthlyReportPDF({
+      monthLabel: capitalizedMonth,
+      year: activeMonth.year,
+      month: activeMonth.month,
+      currency,
+      income,
+      incomeEntries,
+      categories,
+      transactions,
+      savingsGoals,
+      debts,
+    });
+    toast.success(`Rapport PDF (${capitalizedMonth}) généré avec succès !`);
+  };
+
+  const handleDownloadCSV = () => {
+    exportMonthlyReportCSV({
+      monthLabel: capitalizedMonth,
+      year: activeMonth.year,
+      month: activeMonth.month,
+      currency,
+      income,
+      incomeEntries,
+      categories,
+      transactions,
+      savingsGoals,
+      debts,
+    });
+    toast.success(`Rapport Excel / CSV (${capitalizedMonth}) téléchargé !`);
+  };
+
   if (!mounted) {
     return (
       <div className="flex flex-col gap-8 pb-12 animate-pulse">
@@ -222,7 +259,7 @@ export default function ReportsPage() {
   return (
     <div className="flex flex-col gap-8 pb-12">
       {/* En-tête */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-[#1E3A5F] mb-1 border border-blue-100">
             <TrendingUp className="h-3.5 w-3.5" />
@@ -234,6 +271,25 @@ export default function ReportsPage() {
           <p className="text-slate-500 mt-1 text-sm md:text-base">
             Comprenez la destination de chaque franc pour optimiser votre épargne ({capitalizedMonth}).
           </p>
+        </div>
+
+        {/* Boutons de Téléchargement des Rapports */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          <Button
+            onClick={handleDownloadPDF}
+            className="bg-[#1E3A5F] hover:bg-[#162d4b] text-white shadow-sm flex-1 sm:flex-initial"
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Télécharger Rapport PDF
+          </Button>
+          <Button
+            onClick={handleDownloadCSV}
+            variant="outline"
+            className="border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-800 flex-1 sm:flex-initial"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+            Exporter Excel (CSV)
+          </Button>
         </div>
       </div>
 

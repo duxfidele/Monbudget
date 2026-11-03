@@ -26,6 +26,8 @@ export type Transaction = {
   category_id?: string; 
   date: string; 
   type: "expense" | "income" | "income_adjustment";
+  linkedDebtId?: string;
+  linkedPaymentId?: string;
 };
 
 export type SavingsContribution = {
@@ -431,11 +433,18 @@ export const useUIStore = create<UIState>((set, get) => ({
 
         const mappedTxs: Transaction[] = (txs || []).map((tx) => {
           const isInc = tx.type === "income" || tx.type === "income_adjustment";
+          const desc = tx.description || (isInc ? "Revenu complémentaire" : "Dépense");
+          const isDebtRepay = desc.startsWith("Remboursement dette :");
+          const isDebtRecover = desc.startsWith("Remboursement reçu :");
           return {
             id: tx.id,
-            label: tx.description || (isInc ? "Revenu complémentaire" : "Dépense"),
+            label: desc,
             amount: Number(tx.amount),
-            category: isInc ? "Revenu" : (tx.categories?.name || "Autre (Hors Budget)"),
+            category: isInc
+              ? isDebtRecover
+                ? "Recouvrement de créance"
+                : tx.income_source || "Revenu"
+              : tx.categories?.name || (isDebtRepay ? "Remboursement de dette" : "Autre (Hors Budget)"),
             category_id: isInc ? undefined : tx.category_id,
             date: tx.transaction_date,
             type: isInc ? "income" : "expense",
@@ -1194,22 +1203,71 @@ export const useUIStore = create<UIState>((set, get) => ({
       newIncome = Math.max(0, newIncome - tx.amount);
     }
 
+    // Si cette transaction provenait d'un remboursement de dette/créance, synchroniser la dette automatiquement
+    let updatedDebts = get().debts;
+    let syncedPaymentIdToRemove: string | null = null;
+    let syncedDebtToUpdate: DebtItem | null = null;
+
+    if (tx) {
+      const isDebtTx =
+        tx.linkedPaymentId ||
+        tx.label.startsWith("Remboursement dette :") ||
+        tx.label.startsWith("Remboursement reçu :");
+      if (isDebtTx) {
+        updatedDebts = get().debts.map((d) => {
+          const matchingPayment = (d.payments || []).find(
+            (p) =>
+              (tx.linkedPaymentId && p.id === tx.linkedPaymentId) ||
+              p.linkedTransactionId === tx.id ||
+              (tx.label.includes(d.personName) && p.amount === tx.amount && p.date === tx.date)
+          );
+          if (!matchingPayment) return d;
+          syncedPaymentIdToRemove = matchingPayment.id;
+          const filteredPayments = (d.payments || []).filter((p) => p.id !== matchingPayment.id);
+          const totalPaid = filteredPayments.reduce((s, p) => s + p.amount, 0);
+          const newRemaining = Math.max(0, d.totalAmount - totalPaid);
+          const newStatus: "pending" | "partial" | "paid" =
+            newRemaining <= 0 ? "paid" : totalPaid > 0 ? "partial" : "pending";
+          const updatedD = {
+            ...d,
+            remainingAmount: newRemaining,
+            status: newStatus,
+            payments: filteredPayments,
+          };
+          syncedDebtToUpdate = updatedD;
+          return updatedD;
+        });
+      }
+    }
+
     set({
       transactions: newTransactions,
       income: newIncome,
+      debts: updatedDebts,
     });
 
     const { year, month } = get().activeMonth;
     const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache();
-    if (cache && cache.months[monthKey]) {
-      cache.months[monthKey].transactions = newTransactions;
-      cache.months[monthKey].income = newIncome;
+    if (cache) {
+      if (cache.months[monthKey]) {
+        cache.months[monthKey].transactions = newTransactions;
+        cache.months[monthKey].income = newIncome;
+      }
+      cache.debts = updatedDebts;
       saveLocalCache(cache);
     }
 
     try {
       await supabase.from("transactions").delete().eq("id", id);
+      if (syncedPaymentIdToRemove && syncedDebtToUpdate) {
+        const dUpd = syncedDebtToUpdate as DebtItem;
+        await supabase.from("debt_payments").delete().eq("id", syncedPaymentIdToRemove);
+        await supabase
+          .from("debts")
+          .update({ remaining_amount: dUpd.remainingAmount, status: dUpd.status })
+          .eq("id", dUpd.id);
+      }
     } catch (err) {
       console.warn("Could not delete transaction from Supabase", err);
     }
@@ -1550,11 +1608,13 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (cleanAmount <= 0) return;
 
     const paymentDate = date || new Date().toISOString().split("T")[0];
+    const txId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tx-${Date.now()}`;
     const paymentItem: DebtPaymentItem = {
       id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
       amount: cleanAmount,
       date: paymentDate,
       notes: notes?.trim() || undefined,
+      linkedTransactionId: txId,
     };
 
     const newRemaining = Math.max(0, debt.remainingAmount - cleanAmount);
@@ -1571,13 +1631,56 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     });
 
-    set({ debts: updatedDebts });
+    // Répercussion automatique sur les Transactions, Revenus/Dépenses et Solde disponible
+    const isReceivable = debt.type === "receivable";
+    const txLabel = isReceivable
+      ? `Remboursement reçu : ${debt.personName}${notes?.trim() ? ` (${notes.trim()})` : ""}`
+      : `Remboursement dette : ${debt.personName}${notes?.trim() ? ` (${notes.trim()})` : ""}`;
 
-    const cache = loadLocalCache();
-    if (cache) {
-      cache.debts = updatedDebts;
-      saveLocalCache(cache);
+    const linkedTx: Transaction = {
+      id: txId,
+      label: txLabel,
+      amount: cleanAmount,
+      category: isReceivable ? "Recouvrement de créance" : "Remboursement de dette",
+      date: paymentDate,
+      type: isReceivable ? "income" : "expense",
+      linkedDebtId: debtId,
+      linkedPaymentId: paymentItem.id,
+    };
+
+    const updatedTransactions = [linkedTx, ...get().transactions];
+    const updatedIncome = isReceivable ? get().income + cleanAmount : get().income;
+
+    set({
+      debts: updatedDebts,
+      transactions: updatedTransactions,
+      income: updatedIncome,
+    });
+
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache() || {
+      currency: get().currency,
+      payDay: get().payDay,
+      alertThreshold: get().alertThreshold,
+      months: {},
+      savingsGoals: get().savingsGoals,
+      debts: updatedDebts,
+    };
+    cache.debts = updatedDebts;
+    if (!cache.months[monthKey]) {
+      cache.months[monthKey] = {
+        baseSalary: get().baseSalary,
+        income: updatedIncome,
+        incomeEntries: get().incomeEntries,
+        categories: get().categories,
+        transactions: updatedTransactions,
+      };
+    } else {
+      cache.months[monthKey].transactions = updatedTransactions;
+      cache.months[monthKey].income = updatedIncome;
     }
+    saveLocalCache(cache);
 
     try {
       const { data: createdPayment } = await supabase
@@ -1593,18 +1696,44 @@ export const useUIStore = create<UIState>((set, get) => ({
 
       if (createdPayment) {
         paymentItem.id = createdPayment.id;
+        linkedTx.linkedPaymentId = createdPayment.id;
       }
 
       await supabase
         .from("debts")
         .update({ remaining_amount: newRemaining, status: newStatus })
         .eq("id", debtId);
+
+      // Synchroniser également la transaction liée dans Supabase
+      const budgetId = get().budget_id;
+      if (budgetId) {
+        const { data: createdTx } = await supabase
+          .from("transactions")
+          .insert({
+            monthly_budget_id: budgetId,
+            category_id: null,
+            amount: cleanAmount,
+            description: txLabel,
+            transaction_date: paymentDate,
+            type: isReceivable ? "income_adjustment" : "expense",
+          })
+          .select()
+          .maybeSingle();
+
+        if (createdTx) {
+          linkedTx.id = createdTx.id;
+          paymentItem.linkedTransactionId = createdTx.id;
+        }
+      }
     } catch (err) {
       console.warn("Could not sync debt payment to Supabase", err);
     }
   },
 
   removeDebtPayment: async (paymentId, debtId) => {
+    const targetDebt = get().debts.find((d) => d.id === debtId);
+    const paymentToRemove = targetDebt?.payments?.find((p) => p.id === paymentId);
+
     const updatedDebts = get().debts.map((d) => {
       if (d.id !== debtId) return d;
       const filtered = (d.payments || []).filter((p) => p.id !== paymentId);
@@ -1620,11 +1749,46 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     });
 
-    set({ debts: updatedDebts });
+    // Supprimer automatiquement la transaction liée et réajuster le revenu / solde
+    let txToRemoveId: string | null = null;
+    const currentTxs = get().transactions;
+    const matchingTx = currentTxs.find(
+      (t) =>
+        t.linkedPaymentId === paymentId ||
+        (paymentToRemove?.linkedTransactionId && t.id === paymentToRemove.linkedTransactionId) ||
+        (targetDebt &&
+          paymentToRemove &&
+          t.amount === paymentToRemove.amount &&
+          t.date === paymentToRemove.date &&
+          t.label.includes(targetDebt.personName))
+    );
 
+    let updatedTransactions = currentTxs;
+    let updatedIncome = get().income;
+
+    if (matchingTx) {
+      txToRemoveId = matchingTx.id;
+      updatedTransactions = currentTxs.filter((t) => t.id !== matchingTx.id);
+      if (matchingTx.type === "income" || matchingTx.type === "income_adjustment") {
+        updatedIncome = Math.max(0, updatedIncome - matchingTx.amount);
+      }
+    }
+
+    set({
+      debts: updatedDebts,
+      transactions: updatedTransactions,
+      income: updatedIncome,
+    });
+
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache();
     if (cache) {
       cache.debts = updatedDebts;
+      if (cache.months[monthKey]) {
+        cache.months[monthKey].transactions = updatedTransactions;
+        cache.months[monthKey].income = updatedIncome;
+      }
       saveLocalCache(cache);
     }
 
@@ -1636,6 +1800,9 @@ export const useUIStore = create<UIState>((set, get) => ({
           .from("debts")
           .update({ remaining_amount: updatedDebt.remainingAmount, status: updatedDebt.status })
           .eq("id", debtId);
+      }
+      if (txToRemoveId) {
+        await supabase.from("transactions").delete().eq("id", txToRemoveId);
       }
     } catch (err) {
       console.warn("Could not delete debt payment from Supabase", err);

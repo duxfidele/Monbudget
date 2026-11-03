@@ -140,8 +140,8 @@ export default function DebtsPage() {
     toast.success(`Remboursement de ${formatMoney(amount, currency)} enregistré !`, {
       description:
         currentSelectedDebt.type === "payable"
-          ? `Versé à ${currentSelectedDebt.personName}.`
-          : `Reçu de ${currentSelectedDebt.personName}.`,
+          ? `Versé à ${currentSelectedDebt.personName} — déduit automatiquement de votre Solde disponible et ajouté aux Transactions.`
+          : `Reçu de ${currentSelectedDebt.personName} — ajouté automatiquement à vos Entrées et à votre Solde disponible.`,
     });
     setIsPaymentOpen(false);
   };

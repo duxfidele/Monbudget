@@ -412,6 +412,7 @@ export interface DebtPaymentItem {
   amount: number;
   date: string;
   notes?: string;
+  linkedTransactionId?: string;
 }
 
 export interface DebtItem {

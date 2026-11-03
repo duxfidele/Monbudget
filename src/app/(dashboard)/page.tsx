@@ -19,9 +19,13 @@ import {
   Target,
   BrainCircuit,
   ArrowDownLeft,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
+import { exportMonthlyReportCSV, exportMonthlyReportPDF } from "@/lib/utils/report-export";
 import { 
   getTotalExpenses, 
   getRemainingToLive, 
@@ -93,17 +97,69 @@ export default function DashboardPage() {
     };
   });
 
+  const activeDate = new Date(activeMonth.year, activeMonth.month - 1, 1);
+  const monthName = activeDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+  const handleDownloadPDF = () => {
+    exportMonthlyReportPDF({
+      monthLabel: capitalizedMonth,
+      year: activeMonth.year,
+      month: activeMonth.month,
+      currency,
+      income,
+      incomeEntries,
+      categories,
+      transactions,
+      savingsGoals,
+      debts,
+    });
+    toast.success(`Rapport PDF (${capitalizedMonth}) généré !`);
+  };
+
+  const handleDownloadCSV = () => {
+    exportMonthlyReportCSV({
+      monthLabel: capitalizedMonth,
+      year: activeMonth.year,
+      month: activeMonth.month,
+      currency,
+      income,
+      incomeEntries,
+      categories,
+      transactions,
+      savingsGoals,
+      debts,
+    });
+    toast.success(`Rapport Excel / CSV (${capitalizedMonth}) téléchargé !`);
+  };
+
   return (
     <div className="flex flex-col gap-6 pb-12">
       {/* En-tête */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">Tableau de bord</h2>
           <p className="text-slate-500 mt-1 text-sm md:text-base">
             Gérez votre salaire au jour le jour pour terminer le mois sereinement.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={handleDownloadPDF}
+            variant="outline"
+            className="border-slate-300 bg-white hover:bg-slate-50 text-slate-800 gap-1.5"
+          >
+            <FileText className="h-4 w-4 text-[#1E3A5F]" />
+            <span>Rapport PDF</span>
+          </Button>
+          <Button
+            onClick={handleDownloadCSV}
+            variant="outline"
+            className="border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-800 gap-1.5"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            <span>Excel (CSV)</span>
+          </Button>
           <Link href="/transactions">
             <Button className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shadow-sm gap-1.5">
               <Plus className="h-4 w-4" />
