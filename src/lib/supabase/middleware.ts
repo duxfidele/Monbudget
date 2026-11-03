@@ -6,9 +6,13 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/login') || 
-                      request.nextUrl.pathname.startsWith('/register') ||
-                      request.nextUrl.pathname.startsWith('/auth/confirm')
+  const pathname = request.nextUrl.pathname
+  const isGuestOnlyAuthRoute = pathname.startsWith('/login') || 
+                               pathname.startsWith('/register') ||
+                               pathname.startsWith('/forgot-password')
+  const isAuthRoute = isGuestOnlyAuthRoute ||
+                      pathname.startsWith('/reset-password') ||
+                      pathname.startsWith('/auth/confirm')
 
   const allCookies = request.cookies.getAll()
   const hasAuthCookie = allCookies.some(c => c.name.startsWith('sb-') && c.name.includes('-auth-token'))
@@ -67,8 +71,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirection des utilisateurs déjà connectés vers le dashboard
-  if (user && isAuthRoute) {
+  // Redirection des utilisateurs déjà connectés vers le dashboard (sauf sur /reset-password et /auth/confirm)
+  if (user && isGuestOnlyAuthRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)

@@ -30,7 +30,16 @@ import {
   Area
 } from "recharts";
 import { useUIStore } from "@/lib/store/ui-store";
-import { formatMoney, getTotalExpenses, getRemainingToLive, getSpentByCategory, isExpenseTransaction, isIncomeTransaction, getMonthlySavingsContributions } from "@/lib/utils/budget-calc";
+import {
+  formatMoney,
+  getTotalExpenses,
+  getRemainingToLive,
+  getSpentByCategory,
+  isExpenseTransaction,
+  isIncomeTransaction,
+  getMonthlySavingsContributions,
+  generateFinancialAIAnalysis,
+} from "@/lib/utils/budget-calc";
 import { createClient } from "@/lib/supabase/client";
 
 const PIE_COLORS = [
@@ -52,7 +61,7 @@ interface MonthlyHistoryItem {
 }
 
 export default function ReportsPage() {
-  const { transactions, categories, income, savingsGoals, currency, activeMonth } = useUIStore();
+  const { transactions, categories, income, incomeEntries, savingsGoals, debts, currency, activeMonth } = useUIStore();
   const [mounted, setMounted] = useState(false);
   const [historyData, setHistoryData] = useState<MonthlyHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -165,6 +174,18 @@ export default function ReportsPage() {
   // Taux financiers concordants
   const tauxEpargne = income > 0 ? (monthlySavings / income) * 100 : 0;
   const tauxDepense = income > 0 ? (totalExpenses / income) * 100 : 0;
+
+  // Intelligence Artificielle Financière (Pilier F)
+  const aiAnalysis = generateFinancialAIAnalysis({
+    income,
+    incomeSourcesCount: Math.max(1, incomeEntries.length),
+    transactions,
+    categories,
+    savingsGoals,
+    debts,
+    monthlySavings,
+    currency,
+  });
 
   // Répartition par catégorie strictement concordante
   const categoryStats = categories.map((cat, idx) => {
@@ -437,31 +458,110 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        {/* Carte de Synthèse & Conseils Salarié */}
+        {/* Carte de Synthèse & Analyse des Habitudes Financières */}
         <Card className="md:col-span-3 border-none shadow-sm bg-gradient-to-br from-[#1E3A5F] to-[#254673] text-white">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg text-white">
-              <Sparkles className="h-5 w-5 text-amber-300" />
-              Conseil Salarié du Mois
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-lg text-white">
+                <Sparkles className="h-5 w-5 text-amber-300" />
+                Diagnostic Habitudes (IA)
+              </CardTitle>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-300/30">
+                Score : {aiAnalysis.healthScore}/100 ({aiAnalysis.healthLabel})
+              </span>
+            </div>
             <CardDescription className="text-slate-200">
-              Bonnes pratiques pour optimiser la fin de mois
+              Répartition de vos habitudes financières sur vos revenus
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm text-slate-200 leading-relaxed">
-            <p>
-              💡 <strong>Règle des 50 / 30 / 20 :</strong> Essayez de dédier 50% de votre salaire aux nécessités (Loyer, Nourriture), 30% aux loisirs et au moins 20% à l'épargne.
-            </p>
-            <div className="p-3 rounded-xl bg-white/10 border border-white/15 text-xs text-slate-100">
-              <strong>Votre bilan :</strong> {tauxDepense > 85 ? (
-                <span>Vos dépenses absorbent plus de 85% de vos revenus. Réduisez les sorties non essentielles pour reconstituer votre fonds d'urgence.</span>
-              ) : (
-                <span>Votre rythme est bien maîtrisé ! Pensez à verser votre excédent vers vos objectifs d'épargne.</span>
-              )}
+          <CardContent className="space-y-3 text-sm text-slate-200 leading-relaxed">
+            <div className="space-y-2.5 text-xs">
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span>Besoins essentiels (cible ≤ 60%)</span>
+                  <span className="font-bold text-white">{aiAnalysis.breakdown.essentialsPercent}%</span>
+                </div>
+                <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-sky-400 h-full rounded-full" style={{ width: `${Math.min(aiAnalysis.breakdown.essentialsPercent, 100)}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span>Famille, Solidarité & Dîmes (cible ≤ 20%)</span>
+                  <span className="font-bold text-white">{aiAnalysis.breakdown.solidarityAndTithePercent}%</span>
+                </div>
+                <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-amber-400 h-full rounded-full" style={{ width: `${Math.min(aiAnalysis.breakdown.solidarityAndTithePercent, 100)}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span>Épargne mensuelle (cible ≥ 10%)</span>
+                  <span className="font-bold text-emerald-300">{aiAnalysis.breakdown.savingsPercent}%</span>
+                </div>
+                <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-emerald-400 h-full rounded-full" style={{ width: `${Math.min(aiAnalysis.breakdown.savingsPercent, 100)}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1">
+                  <span>Loisirs ({aiAnalysis.breakdown.leisurePercent}%) & Ratio Dettes ({aiAnalysis.breakdown.debtRatioPercent}%)</span>
+                  <span className="font-bold text-rose-300">{aiAnalysis.breakdown.debtRatioPercent}% dettes</span>
+                </div>
+                <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-rose-400 h-full rounded-full" style={{ width: `${Math.min(aiAnalysis.breakdown.debtRatioPercent, 100)}%` }} />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Section Complète : Recommandations de l'Intelligence Artificielle Financière (Pilier F) */}
+      <Card className="border border-indigo-100 shadow-sm bg-white">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
+            <Sparkles className="h-5 w-5 text-indigo-600" />
+            Recommandations de l'Intelligence Artificielle Financière
+          </CardTitle>
+          <CardDescription>
+            {aiAnalysis.summary}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2">
+            {aiAnalysis.recommendations.map((rec) => {
+              const badgeColor =
+                rec.priority === "high"
+                  ? "bg-red-50 border-red-200 text-red-900"
+                  : rec.priority === "medium"
+                  ? "bg-amber-50 border-amber-200 text-amber-900"
+                  : "bg-indigo-50 border-indigo-200 text-indigo-900";
+              return (
+                <div
+                  key={rec.id}
+                  className={`p-4 rounded-xl border ${badgeColor} flex flex-col justify-between gap-2`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h4 className="font-bold text-sm">{rec.title}</h4>
+                      <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-white/80">
+                        {rec.category}
+                      </span>
+                    </div>
+                    <p className="text-xs opacity-90 leading-relaxed">{rec.description}</p>
+                  </div>
+                  {rec.actionLabel && (
+                    <div className="pt-2 border-t border-black/5 text-xs font-semibold">
+                      👉 Action conseillée : {rec.actionLabel}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

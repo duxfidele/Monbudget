@@ -8,6 +8,7 @@ import {
   Wallet,
   ArrowRightLeft,
   PiggyBank,
+  HandCoins,
   LineChart,
   Settings,
 } from "lucide-react";
@@ -17,37 +18,43 @@ const routes = [
     label: "Tableau de bord",
     icon: LayoutDashboard,
     href: "/",
-    color: "text-sky-500",
+    color: "text-sky-400",
   },
   {
     label: "Mon Budget",
     icon: Wallet,
     href: "/budget",
-    color: "text-emerald-500",
+    color: "text-emerald-400",
   },
   {
     label: "Transactions",
     icon: ArrowRightLeft,
     href: "/transactions",
-    color: "text-violet-500",
+    color: "text-violet-400",
   },
   {
     label: "Épargne",
     icon: PiggyBank,
     href: "/savings",
-    color: "text-pink-700",
+    color: "text-pink-400",
   },
   {
-    label: "Rapports",
+    label: "Dettes & Créances",
+    icon: HandCoins,
+    href: "/debts",
+    color: "text-amber-400",
+  },
+  {
+    label: "Rapports & IA",
     icon: LineChart,
     href: "/reports",
-    color: "text-orange-700",
+    color: "text-orange-400",
   },
   {
     label: "Paramètres",
     icon: Settings,
     href: "/settings",
-    color: "text-gray-500",
+    color: "text-slate-300",
   },
 ];
 

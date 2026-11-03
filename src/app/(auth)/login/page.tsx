@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet } from "lucide-react";
+import { Wallet, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -15,25 +14,39 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    if (error) {
-      toast.error(error.message);
+      if (error) {
+        const msg =
+          error.message === "Invalid login credentials"
+            ? "Email ou mot de passe incorrect. Si vous n'avez pas encore de compte, cliquez sur « S'inscrire » en bas."
+            : error.message.includes("Email not confirmed")
+            ? "Votre adresse email n'est pas encore confirmée. Vérifiez votre boîte mail."
+            : error.message;
+        setErrorMsg(msg);
+        toast.error(msg);
+        setLoading(false);
+      } else {
+        toast.success("Connexion réussie ! Ouverture de MonBudget...");
+        window.location.href = "/";
+      }
+    } catch (err: any) {
+      const msg = err?.message || "Erreur réseau lors de la connexion.";
+      setErrorMsg(msg);
+      toast.error(msg);
       setLoading(false);
-    } else {
-      toast.success("Connexion réussie !");
-      router.push("/");
-      router.refresh();
     }
   };
 
@@ -49,13 +62,19 @@ export default function LoginPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} method="post" className="space-y-4">
+          {errorMsg && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input 
-              id="email" 
-              type="email" 
-              placeholder="vous@exemple.com" 
+            <Input
+              id="email"
+              type="email"
+              placeholder="vous@exemple.com"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -64,18 +83,20 @@ export default function LoginPage() {
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label htmlFor="password">Mot de passe</Label>
-              <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">Mot de passe oublié ?</Link>
+              <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                Mot de passe oublié ?
+              </Link>
             </div>
-            <Input 
-              id="password" 
-              type="password" 
+            <Input
+              id="password"
+              type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
-            {loading ? "Connexion..." : "Se connecter"}
+            {loading ? "Connexion en cours..." : "Se connecter"}
           </Button>
         </form>
       </CardContent>

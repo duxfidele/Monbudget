@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet } from "lucide-react";
+import { Wallet, AlertCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -17,36 +17,63 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
     if (password !== confirmPassword) {
-      toast.error("Les mots de passe ne correspondent pas.");
+      const msg = "Les mots de passe ne correspondent pas.";
+      setErrorMsg(msg);
+      toast.error(msg);
+      return;
+    }
+
+    if (password.length < 6) {
+      const msg = "Le mot de passe doit contenir au moins 6 caractères.";
+      setErrorMsg(msg);
+      toast.error(msg);
       return;
     }
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/confirm`,
-        data: {
-          full_name: name,
-        }
-      }
-    });
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/confirm`,
+          data: {
+            full_name: name.trim(),
+          },
+        },
+      });
 
-    if (error) {
-      toast.error(error.message);
+      if (error) {
+        setErrorMsg(error.message);
+        toast.error(error.message);
+        setLoading(false);
+      } else if (data?.session) {
+        toast.success("Compte créé et connecté avec succès !");
+        window.location.href = "/";
+      } else {
+        const msg = "Inscription réussie ! Vérifiez votre boîte mail (ou connectez-vous directement).";
+        setSuccessMsg(msg);
+        toast.success(msg);
+        setLoading(false);
+        setTimeout(() => router.push("/login"), 2000);
+      }
+    } catch (err: any) {
+      const msg = err?.message || "Erreur réseau lors de l'inscription.";
+      setErrorMsg(msg);
+      toast.error(msg);
       setLoading(false);
-    } else {
-      toast.success("Inscription réussie ! Vérifiez vos emails (si activé) ou connectez-vous.");
-      router.push("/login");
     }
   };
 
@@ -62,12 +89,24 @@ export default function RegisterPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form onSubmit={handleRegister} method="post" className="space-y-4">
+          {errorMsg && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+          {successMsg && (
+            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />
+              <span>{successMsg}</span>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="name">Nom complet</Label>
-            <Input 
-              id="name" 
-              placeholder="Ex: Jean Dupont" 
+            <Input
+              id="name"
+              placeholder="Ex: Fidèle Atchadé"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -75,10 +114,10 @@ export default function RegisterPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input 
-              id="email" 
-              type="email" 
-              placeholder="vous@exemple.com" 
+            <Input
+              id="email"
+              type="email"
+              placeholder="vous@exemple.com"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -86,9 +125,9 @@ export default function RegisterPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Mot de passe</Label>
-            <Input 
-              id="password" 
-              type="password" 
+            <Input
+              id="password"
+              type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -96,9 +135,9 @@ export default function RegisterPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
-            <Input 
-              id="confirmPassword" 
-              type="password" 
+            <Input
+              id="confirmPassword"
+              type="password"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

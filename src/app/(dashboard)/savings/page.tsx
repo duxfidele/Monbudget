@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useUIStore, SavingsGoal } from "@/lib/store/ui-store";
-import { formatMoney } from "@/lib/utils/budget-calc";
+import { formatMoney, SAVINGS_GOAL_TEMPLATES } from "@/lib/utils/budget-calc";
 import {
   Dialog,
   DialogContent,
@@ -164,10 +164,37 @@ export default function SavingsPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Modèles rapides (Pilier D) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                Projets fréquents (clic rapide)
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {SAVINGS_GOAL_TEMPLATES.map((tpl) => (
+                  <button
+                    key={tpl.name}
+                    type="button"
+                    onClick={() => {
+                      setGoalName(tpl.name);
+                      if (!goalTarget) setGoalTarget(tpl.suggestedTarget.toString());
+                      setGoalColor(tpl.color);
+                    }}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                      goalName === tpl.name
+                        ? "bg-[#1E3A5F] text-white border-[#1E3A5F] font-semibold"
+                        : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+                    }`}
+                  >
+                    {tpl.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Nom du projet</label>
               <Input 
-                placeholder="Ex: Fonds de sécurité (3 mois), Achat moto, Vacances..." 
+                placeholder="Ex: Acheter une moto, Construire une maison, Scolarité..." 
                 value={goalName} 
                 onChange={(e) => setGoalName(e.target.value)}
               />
@@ -558,9 +585,26 @@ export default function SavingsPage() {
               <PiggyBank className="h-8 w-8" />
             </div>
             <h3 className="text-lg font-bold text-slate-800 mb-1">Aucun projet d'épargne pour l'instant</h3>
-            <p className="text-slate-500 text-sm mb-6 max-w-md">
-              Commencez dès aujourd'hui à épargner pour vos imprévus, l'achat d'un bien ou un voyage de rêve.
+            <p className="text-slate-500 text-sm mb-4 max-w-md">
+              Choisissez un objectif concret ci-dessous ou créez votre propre projet d'épargne :
             </p>
+            <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xl">
+              {SAVINGS_GOAL_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.name}
+                  type="button"
+                  onClick={() => {
+                    setGoalName(tpl.name);
+                    setGoalTarget(tpl.suggestedTarget.toString());
+                    setGoalColor(tpl.color);
+                    setIsNewGoalOpen(true);
+                  }}
+                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-[#1E3A5F] border border-slate-200 hover:border-blue-200 transition"
+                >
+                  + {tpl.name}
+                </button>
+              ))}
+            </div>
             <Button onClick={() => setIsNewGoalOpen(true)} className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white gap-2">
               <Plus className="h-4 w-4" />
               <span>Créer mon premier objectif</span>

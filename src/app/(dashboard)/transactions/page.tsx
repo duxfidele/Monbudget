@@ -29,7 +29,9 @@ import {
   getDailyBudget,
   getTodayExpenses,
   getRemainingToLive,
-  getMonthlySavingsContributions
+  getMonthlySavingsContributions,
+  AFRICAN_EXPENSE_CATEGORIES,
+  INCOME_SOURCES
 } from "@/lib/utils/budget-calc";
 import {
   Dialog,
@@ -59,6 +61,7 @@ export default function TransactionsPage() {
   const [newLabel, setNewLabel] = useState("");
   const [newAmountStr, setNewAmountStr] = useState("");
   const [newCategory, setNewCategory] = useState("");
+  const [newIncomeSource, setNewIncomeSource] = useState<string>(INCOME_SOURCES[0]);
   const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [newType, setNewType] = useState<"expense" | "income">("expense");
 
@@ -70,9 +73,18 @@ export default function TransactionsPage() {
   });
   const capitalizedMonth = formattedMonth.charAt(0).toUpperCase() + formattedMonth.slice(1);
 
-  // Liste unique des catégories sans aucun doublon
+  // Liste unique des catégories combinant les catégories utilisateur et les 11 catégories africaines
+  const combinedCats = [
+    ...categories,
+    ...AFRICAN_EXPENSE_CATEGORIES.map((ac, i) => ({
+      id: `african-${i}`,
+      name: ac.name,
+      amount: 0,
+      color: ac.color,
+    })),
+  ];
   const uniqueCategories = Array.from(
-    new Map(categories.map((c) => [c.name.trim().toLowerCase(), c])).values()
+    new Map(combinedCats.map((c) => [c.name.trim().toLowerCase(), c])).values()
   );
 
   // Auto-select category pour les dépenses
@@ -126,8 +138,11 @@ export default function TransactionsPage() {
     }
 
     const assignedCategory = newType === "expense" 
-      ? (newCategory || "Autre (Hors Budget)") 
-      : "Revenu";
+      ? (newCategory || "Autres dépenses") 
+      : (newIncomeSource || "Revenu");
+    const finalLabel = newType === "income" && !cleanLabel.toLowerCase().includes(newIncomeSource.toLowerCase())
+      ? `${newIncomeSource} — ${cleanLabel}`
+      : cleanLabel;
 
     // Alerte seuil pour les dépenses (si notifications d'alerte activées)
     const isAlertEnabled = notifications?.budgetAlert !== false;
@@ -153,7 +168,7 @@ export default function TransactionsPage() {
     try {
       await addTransaction({
         id: Date.now().toString(),
-        label: cleanLabel,
+        label: finalLabel,
         amount: amount,
         category: assignedCategory,
         date: newDate,
@@ -317,10 +332,12 @@ export default function TransactionsPage() {
                 </p>
               </div>
 
-              {/* Catégorie : affichée UNIQUEMENT pour les dépenses */}
-              {newType === "expense" && (
+              {/* Catégorie (Dépenses) ou Source de revenu (Revenus) */}
+              {newType === "expense" ? (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Catégorie</label>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                    Catégorie de dépense
+                  </label>
                   <select 
                     value={newCategory} 
                     onChange={(e) => setNewCategory(e.target.value)}
@@ -330,7 +347,21 @@ export default function TransactionsPage() {
                     {uniqueCategories.map((c) => (
                       <option key={c.id || c.name} value={c.name}>{c.name}</option>
                     ))}
-                    <option value="Autre (Hors Budget)">Autre (Hors Budget)</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                    Source de revenu
+                  </label>
+                  <select 
+                    value={newIncomeSource} 
+                    onChange={(e) => setNewIncomeSource(e.target.value)}
+                    className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A5F]"
+                  >
+                    {INCOME_SOURCES.map((src) => (
+                      <option key={src} value={src}>{src}</option>
+                    ))}
                   </select>
                 </div>
               )}

@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
-import { deduplicateCategories } from "@/lib/utils/budget-calc";
+import { deduplicateCategories, DebtItem, DebtPaymentItem, IncomeSourceType } from "@/lib/utils/budget-calc";
+
+export type IncomeSourceEntry = {
+  id: string;
+  label: string;
+  sourceType: IncomeSourceType | string;
+  amount: number;
+  date?: string;
+};
 
 export type Category = { 
   id: string; 
@@ -41,6 +49,7 @@ export type SavingsGoal = {
 export interface MonthData {
   baseSalary: number;
   income: number;
+  incomeEntries?: IncomeSourceEntry[];
   categories: Category[];
   transactions: Transaction[];
 }
@@ -69,6 +78,7 @@ export interface LocalCache {
   notifications?: NotificationSettings;
   months: Record<string, MonthData>;
   savingsGoals: SavingsGoal[];
+  debts?: DebtItem[];
 }
 
 interface UIState {
@@ -85,8 +95,11 @@ interface UIState {
   budget_id: string | null;
   baseSalary: number;
   income: number;
+  incomeEntries: IncomeSourceEntry[];
   setIncome: (income: number) => Promise<void>;
   setSalary: (salary: number) => Promise<void>;
+  addIncomeEntry: (entry: { label: string; sourceType: string; amount: number; date?: string }) => Promise<void>;
+  removeIncomeEntry: (id: string) => Promise<void>;
   saveBudget: () => Promise<void>;
   
   categories: Category[];
@@ -106,6 +119,19 @@ interface UIState {
   addSavingsContribution: (goalId: string, amount: number, notes?: string, date?: string) => Promise<void>;
   removeSavingsContribution: (contributionId: string, goalId: string) => Promise<void>;
   addSavingsAmount: (id: string, amount: number) => Promise<void>;
+
+  debts: DebtItem[];
+  addDebt: (debt: {
+    type: "payable" | "receivable";
+    personName: string;
+    phone?: string;
+    totalAmount: number;
+    dueDate?: string;
+    notes?: string;
+  }) => Promise<void>;
+  removeDebt: (id: string) => Promise<void>;
+  addDebtPayment: (debtId: string, amount: number, notes?: string, date?: string) => Promise<void>;
+  removeDebtPayment: (paymentId: string, debtId: string) => Promise<void>;
 
   // Preferences & Init
   alertThreshold: number;
@@ -143,7 +169,7 @@ function loadLocalCache(): LocalCache | null {
     if (!raw) return null;
     const cache: LocalCache = JSON.parse(raw);
     let mutated = false;
-    if (!cache.currency || cache.currency === "EUR") {
+    if (!cache.currency) {
       cache.currency = "FCFA";
       mutated = true;
     }
@@ -219,9 +245,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     cache.months[curKey] = {
       baseSalary: curState.baseSalary,
       income: curState.income,
+      incomeEntries: curState.incomeEntries,
       categories: curState.categories,
       transactions: curState.transactions,
     };
+    cache.debts = curState.debts;
     saveLocalCache(cache);
 
     // 2. Préparer le nouveau mois
@@ -233,6 +261,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeMonth: { year, month },
         baseSalary: cachedMonth.baseSalary || 0,
         income: cachedMonth.income || 0,
+        incomeEntries: cachedMonth.incomeEntries || [],
         categories: deduplicateCategories(cachedMonth.categories || []),
         transactions: (cachedMonth.transactions || []).map((tx) => {
           const isInc = tx.type === "income" || tx.type === "income_adjustment";
@@ -248,6 +277,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         activeMonth: { year, month },
         baseSalary: 0,
         income: 0,
+        incomeEntries: [],
         categories: defaultCats,
         transactions: [],
       });
@@ -258,13 +288,14 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   alertThreshold: initialCache?.alertThreshold ?? 80,
-  currency: (initialCache?.currency && initialCache.currency !== "EUR") ? initialCache.currency : "FCFA",
+  currency: initialCache?.currency || "FCFA",
   payDay: initialCache?.payDay ?? 28,
   notifications: initialCache?.notifications ? { ...defaultNotifications, ...initialCache.notifications } : defaultNotifications,
   isLoading: false,
   budget_id: null,
   baseSalary: initialMonthData?.baseSalary || 0,
   income: initialMonthData?.income || 0,
+  incomeEntries: initialMonthData?.incomeEntries || [],
   categories: deduplicateCategories(initialMonthData?.categories || []),
   transactions: (initialMonthData?.transactions || []).map((tx) => {
     const isInc = tx.type === "income" || tx.type === "income_adjustment";
@@ -273,6 +304,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       : tx;
   }),
   savingsGoals: initialCache?.savingsGoals || [],
+  debts: initialCache?.debts || [],
 
   initStore: async () => {
     try {
@@ -294,15 +326,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         });
         set({ currency: "FCFA", alertThreshold: 80, payDay: 28 });
       } else {
-        let cur = profile.currency && profile.currency.trim() ? profile.currency : "FCFA";
-        if (cur === "EUR") {
-          cur = "FCFA";
-          try {
-            await supabase.from("profiles").update({ currency: "FCFA" }).eq("id", user.id);
-          } catch (e) {
-            console.warn("Could not migrate profile currency to FCFA", e);
-          }
-        }
+        const cur = profile.currency && profile.currency.trim() ? profile.currency.trim() : "FCFA";
         const th = profile.alert_threshold_percent ? Number(profile.alert_threshold_percent) : 80;
         const pd = profile.pay_day ? Number(profile.pay_day) : 28;
         
@@ -343,13 +367,21 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (budget) {
         set({ budget_id: budget.id });
 
-        // 3. Revenus de base (salaire)
+        // 3. Revenus de base (multi-sources)
         const { data: incomes } = await supabase
           .from("income_entries")
           .select("*")
           .eq("monthly_budget_id", budget.id);
 
-        const fetchedBaseSalary = incomes?.reduce((sum, inc) => sum + Number(inc.amount), 0) || 0;
+        const remoteIncomeEntries: IncomeSourceEntry[] = (incomes || []).map((inc) => ({
+          id: inc.id,
+          label: inc.label || "Salaire principal",
+          sourceType: inc.source_type || "Salaire",
+          amount: Number(inc.amount) || 0,
+          date: inc.received_date || undefined,
+        }));
+
+        const fetchedBaseSalary = remoteIncomeEntries.reduce((sum, inc) => sum + inc.amount, 0);
 
         // 4. Catégories & Allocations
         const { data: allCategories } = await supabase
@@ -489,14 +521,24 @@ export const useUIStore = create<UIState>((set, get) => ({
 
         const finalCats = mergedCats.length > 0 ? deduplicateCategories(mergedCats) : currentCats;
 
-        // Pour le salaire : préserver la saisie locale si elle est > 0
+        // Pour le salaire & entrées de revenus : préserver la saisie locale si elle est > 0
         const localBaseSalary = get().baseSalary;
+        const localIncomeEntries = get().incomeEntries;
+        const finalIncomeEntries =
+          remoteIncomeEntries.length > 0
+            ? remoteIncomeEntries
+            : localIncomeEntries.length > 0
+            ? localIncomeEntries
+            : localBaseSalary > 0
+            ? [{ id: "local-salary", label: "Salaire principal", sourceType: "Salaire", amount: localBaseSalary }]
+            : [];
         const finalBaseSalary = localBaseSalary > 0 ? localBaseSalary : (fetchedBaseSalary > 0 ? fetchedBaseSalary : 0);
         const finalIncome = finalBaseSalary + finalAdditionalIncomes;
 
         set({
           baseSalary: finalBaseSalary,
           income: finalIncome,
+          incomeEntries: finalIncomeEntries,
           categories: finalCats,
           transactions: finalTxs,
         });
@@ -538,8 +580,9 @@ export const useUIStore = create<UIState>((set, get) => ({
         cache.months[monthKey] = {
           baseSalary: finalBaseSalary,
           income: finalIncome,
+          incomeEntries: finalIncomeEntries,
           categories: finalCats,
-          transactions: mappedTxs,
+          transactions: finalTxs,
         };
         saveLocalCache(cache);
       }
@@ -577,6 +620,55 @@ export const useUIStore = create<UIState>((set, get) => ({
           };
         });
         set({ savingsGoals: mappedGoals });
+      }
+
+      // 7. Dettes & Créances
+      try {
+        const { data: remoteDebts } = await supabase
+          .from("debts")
+          .select("*, debt_payments(*)")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (remoteDebts && remoteDebts.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mappedDebts: DebtItem[] = remoteDebts.map((d: any) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const payments: DebtPaymentItem[] = (d.debt_payments || []).map((p: any) => ({
+              id: p.id,
+              amount: Number(p.amount),
+              date: p.payment_date,
+              notes: p.notes || undefined,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            const sumPaid = payments.reduce((s, p) => s + p.amount, 0);
+            const totalAmt = Number(d.total_amount) || 0;
+            const remainingAmt = payments.length > 0 ? Math.max(0, totalAmt - sumPaid) : Number(d.remaining_amount ?? totalAmt);
+
+            return {
+              id: d.id,
+              type: (d.type === "receivable" ? "receivable" : "payable") as "payable" | "receivable",
+              personName: d.person_name,
+              phone: d.phone || undefined,
+              totalAmount: totalAmt,
+              remainingAmount: remainingAmt,
+              dueDate: d.due_date || undefined,
+              status: remainingAmt <= 0 ? "paid" : sumPaid > 0 ? "partial" : (d.status || "pending"),
+              notes: d.notes || undefined,
+              payments,
+              createdAt: d.created_at,
+            };
+          });
+          set({ debts: mappedDebts });
+          const cache = loadLocalCache();
+          if (cache) {
+            cache.debts = mappedDebts;
+            saveLocalCache(cache);
+          }
+        }
+      } catch {
+        // La table debts peut ne pas encore être créée sur Supabase ; on garde les dettes locales
       }
     } catch (e) {
       console.warn("Notice: Offline or local mode active", e);
@@ -722,6 +814,123 @@ export const useUIStore = create<UIState>((set, get) => ({
   setIncome: async (income) => {
     // Si l'utilisateur saisit directement un revenu, on le traite comme son salaire principal
     await get().setSalary(income);
+  },
+
+  addIncomeEntry: async (entry) => {
+    const cleanAmount = Math.max(0, Number(entry.amount) || 0);
+    if (cleanAmount <= 0) return;
+
+    const newItem: IncomeSourceEntry = {
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      label: entry.label.trim() || entry.sourceType || "Revenu",
+      sourceType: entry.sourceType || "Salaire",
+      amount: cleanAmount,
+      date: entry.date || new Date().toISOString().split("T")[0],
+    };
+
+    const currentEntries = get().incomeEntries;
+    // Si aucune entrée mais baseSalary > 0, convertir d'abord baseSalary en entrée initiale
+    const baseEntries: IncomeSourceEntry[] =
+      currentEntries.length === 0 && get().baseSalary > 0
+        ? [{ id: "initial-salary", label: "Salaire principal", sourceType: "Salaire", amount: get().baseSalary }]
+        : currentEntries;
+
+    const updatedEntries = [...baseEntries, newItem];
+    const newBaseSalary = updatedEntries.reduce((sum, item) => sum + item.amount, 0);
+    const additionalIncomes = get().transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+    const totalIncome = newBaseSalary + additionalIncomes;
+
+    set({
+      incomeEntries: updatedEntries,
+      baseSalary: newBaseSalary,
+      income: totalIncome,
+    });
+
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache() || {
+      currency: get().currency,
+      payDay: get().payDay,
+      alertThreshold: get().alertThreshold,
+      months: {},
+      savingsGoals: get().savingsGoals,
+      debts: get().debts,
+    };
+    cache.months[monthKey] = {
+      baseSalary: newBaseSalary,
+      income: totalIncome,
+      incomeEntries: updatedEntries,
+      categories: get().categories,
+      transactions: get().transactions,
+    };
+    saveLocalCache(cache);
+
+    try {
+      const budgetId = get().budget_id;
+      if (!budgetId) return;
+      const { data: created } = await supabase
+        .from("income_entries")
+        .insert({
+          monthly_budget_id: budgetId,
+          label: newItem.label,
+          source_type: newItem.sourceType,
+          amount: newItem.amount,
+          received_date: newItem.date,
+        })
+        .select()
+        .maybeSingle();
+
+      if (created) {
+        newItem.id = created.id;
+      }
+    } catch {
+      // Fallback sans source_type si la colonne n'est pas encore créée
+      try {
+        const budgetId = get().budget_id;
+        if (!budgetId) return;
+        await supabase.from("income_entries").insert({
+          monthly_budget_id: budgetId,
+          label: `${newItem.sourceType} - ${newItem.label}`,
+          amount: newItem.amount,
+          received_date: newItem.date,
+        });
+      } catch (e) {
+        console.warn("Could not sync income entry to Supabase", e);
+      }
+    }
+  },
+
+  removeIncomeEntry: async (id) => {
+    const updatedEntries = get().incomeEntries.filter((e) => e.id !== id);
+    const newBaseSalary = updatedEntries.reduce((sum, item) => sum + item.amount, 0);
+    const additionalIncomes = get().transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+    const totalIncome = newBaseSalary + additionalIncomes;
+
+    set({
+      incomeEntries: updatedEntries,
+      baseSalary: newBaseSalary,
+      income: totalIncome,
+    });
+
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache();
+    if (cache && cache.months[monthKey]) {
+      cache.months[monthKey].incomeEntries = updatedEntries;
+      cache.months[monthKey].baseSalary = newBaseSalary;
+      cache.months[monthKey].income = totalIncome;
+      saveLocalCache(cache);
+    }
+
+    try {
+      await supabase.from("income_entries").delete().eq("id", id);
+    } catch (err) {
+      console.warn("Could not delete income entry from Supabase", err);
+    }
   },
 
   saveBudget: async () => {
@@ -1241,6 +1450,13 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     try {
       await supabase.from("savings_contributions").delete().eq("id", contributionId);
+      const updatedGoal = updatedGoals.find((g) => g.id === goalId);
+      if (updatedGoal) {
+        await supabase
+          .from("savings_goals")
+          .update({ current_amount: updatedGoal.current, status: updatedGoal.status })
+          .eq("id", goalId);
+      }
     } catch (err) {
       console.warn("Could not delete savings contribution from Supabase", err);
     }
@@ -1248,5 +1464,181 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addSavingsAmount: async (id, amount) => {
     await get().addSavingsContribution(id, amount);
+  },
+
+  addDebt: async (debt) => {
+    const cleanAmount = Math.max(0, Number(debt.totalAmount) || 0);
+    if (!debt.personName.trim() || cleanAmount <= 0) return;
+
+    const newDebt: DebtItem = {
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      type: debt.type,
+      personName: debt.personName.trim(),
+      phone: debt.phone?.trim() || undefined,
+      totalAmount: cleanAmount,
+      remainingAmount: cleanAmount,
+      dueDate: debt.dueDate || undefined,
+      status: "pending",
+      notes: debt.notes?.trim() || undefined,
+      payments: [],
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedDebts = [newDebt, ...get().debts];
+    set({ debts: updatedDebts });
+
+    const cache = loadLocalCache() || {
+      currency: get().currency,
+      payDay: get().payDay,
+      alertThreshold: get().alertThreshold,
+      months: {},
+      savingsGoals: get().savingsGoals,
+      debts: updatedDebts,
+    };
+    cache.debts = updatedDebts;
+    saveLocalCache(cache);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: created } = await supabase
+        .from("debts")
+        .insert({
+          user_id: user.id,
+          type: newDebt.type,
+          person_name: newDebt.personName,
+          phone: newDebt.phone || null,
+          total_amount: newDebt.totalAmount,
+          remaining_amount: newDebt.remainingAmount,
+          due_date: newDebt.dueDate || null,
+          status: "pending",
+          notes: newDebt.notes || null,
+        })
+        .select()
+        .maybeSingle();
+
+      if (created) {
+        newDebt.id = created.id;
+      }
+    } catch (err) {
+      console.warn("Could not sync debt to Supabase", err);
+    }
+  },
+
+  removeDebt: async (id) => {
+    const updatedDebts = get().debts.filter((d) => d.id !== id);
+    set({ debts: updatedDebts });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.debts = updatedDebts;
+      saveLocalCache(cache);
+    }
+
+    try {
+      await supabase.from("debts").delete().eq("id", id);
+    } catch (err) {
+      console.warn("Could not delete debt from Supabase", err);
+    }
+  },
+
+  addDebtPayment: async (debtId, amount, notes, date) => {
+    const debt = get().debts.find((d) => d.id === debtId);
+    if (!debt) return;
+
+    const cleanAmount = Math.max(0, Number(amount) || 0);
+    if (cleanAmount <= 0) return;
+
+    const paymentDate = date || new Date().toISOString().split("T")[0];
+    const paymentItem: DebtPaymentItem = {
+      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      amount: cleanAmount,
+      date: paymentDate,
+      notes: notes?.trim() || undefined,
+    };
+
+    const newRemaining = Math.max(0, debt.remainingAmount - cleanAmount);
+    const newStatus: "pending" | "partial" | "paid" =
+      newRemaining <= 0 ? "paid" : newRemaining < debt.totalAmount ? "partial" : "pending";
+
+    const updatedDebts = get().debts.map((d) => {
+      if (d.id !== debtId) return d;
+      return {
+        ...d,
+        remainingAmount: newRemaining,
+        status: newStatus,
+        payments: [paymentItem, ...(d.payments || [])],
+      };
+    });
+
+    set({ debts: updatedDebts });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.debts = updatedDebts;
+      saveLocalCache(cache);
+    }
+
+    try {
+      const { data: createdPayment } = await supabase
+        .from("debt_payments")
+        .insert({
+          debt_id: debtId,
+          amount: cleanAmount,
+          payment_date: paymentDate,
+          notes: notes?.trim() || null,
+        })
+        .select()
+        .maybeSingle();
+
+      if (createdPayment) {
+        paymentItem.id = createdPayment.id;
+      }
+
+      await supabase
+        .from("debts")
+        .update({ remaining_amount: newRemaining, status: newStatus })
+        .eq("id", debtId);
+    } catch (err) {
+      console.warn("Could not sync debt payment to Supabase", err);
+    }
+  },
+
+  removeDebtPayment: async (paymentId, debtId) => {
+    const updatedDebts = get().debts.map((d) => {
+      if (d.id !== debtId) return d;
+      const filtered = (d.payments || []).filter((p) => p.id !== paymentId);
+      const totalPaid = filtered.reduce((s, p) => s + p.amount, 0);
+      const newRemaining = Math.max(0, d.totalAmount - totalPaid);
+      const newStatus: "pending" | "partial" | "paid" =
+        newRemaining <= 0 ? "paid" : totalPaid > 0 ? "partial" : "pending";
+      return {
+        ...d,
+        remainingAmount: newRemaining,
+        status: newStatus,
+        payments: filtered,
+      };
+    });
+
+    set({ debts: updatedDebts });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.debts = updatedDebts;
+      saveLocalCache(cache);
+    }
+
+    try {
+      await supabase.from("debt_payments").delete().eq("id", paymentId);
+      const updatedDebt = updatedDebts.find((d) => d.id === debtId);
+      if (updatedDebt) {
+        await supabase
+          .from("debts")
+          .update({ remaining_amount: updatedDebt.remainingAmount, status: updatedDebt.status })
+          .eq("id", debtId);
+      }
+    } catch (err) {
+      console.warn("Could not delete debt payment from Supabase", err);
+    }
   },
 }));

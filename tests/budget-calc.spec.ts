@@ -11,7 +11,14 @@ import {
   formatThousands,
   parseThousands,
   getMonthlySavingsContributions,
-  getTodayExpenses
+  getTodayExpenses,
+  getTotalPayableDebts,
+  getTotalReceivableDebts,
+  getDebtAlerts,
+  generateFinancialAIAnalysis,
+  INCOME_SOURCES,
+  AFRICAN_EXPENSE_CATEGORIES,
+  SAVINGS_GOAL_TEMPLATES,
 } from '../src/lib/utils/budget-calc';
 import { deduplicateCategories } from '../src/lib/utils/budget-calc';
 
@@ -72,6 +79,7 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
   test('formats currencies properly', () => {
     expect(formatMoney(50000, 'FCFA')).toContain('FCFA');
     expect(formatMoney(200, 'EUR')).toContain('€');
+    expect(formatMoney(150, 'USD')).toContain('$');
   });
   test("formats thousands and parses numeric values correctly", () => {
     expect(formatThousands(50000)).toBe("50 000");
@@ -166,5 +174,87 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
     expect(getMonthlySavingsContributions(goals, 2026, 10)).toBe(80000);
     expect(getMonthlySavingsContributions(goals, 2026, 9)).toBe(20000);
     expect(getMonthlySavingsContributions(goals, 2026, 11)).toBe(0);
+  });
+
+  test("calculates payable and receivable debts and alerts accurately", () => {
+    const debts = [
+      {
+        id: "d1",
+        personName: "Oncle Koffi",
+        type: "payable" as const,
+        totalAmount: 100000,
+        remainingAmount: 40000,
+        dueDate: "2026-10-10",
+        status: "partial" as const,
+        payments: [],
+      },
+      {
+        id: "d2",
+        personName: "Client Yao",
+        type: "receivable" as const,
+        totalAmount: 50000,
+        remainingAmount: 50000,
+        dueDate: "2026-10-17",
+        status: "pending" as const,
+        payments: [],
+      },
+      {
+        id: "d3",
+        personName: "Soldé",
+        type: "payable" as const,
+        totalAmount: 25000,
+        remainingAmount: 0,
+        dueDate: "2026-10-01",
+        status: "paid" as const,
+        payments: [],
+      },
+    ];
+
+    expect(getTotalPayableDebts(debts)).toBe(40000);
+    expect(getTotalReceivableDebts(debts)).toBe(50000);
+
+    const alerts = getDebtAlerts(debts, new Date("2026-10-15T12:00:00Z"));
+    expect(alerts.length).toBe(2);
+    expect(alerts[0].urgency).toBe("overdue");
+    expect(alerts[0].debt.personName).toBe("Oncle Koffi");
+    expect(alerts[1].urgency).toBe("soon");
+    expect(alerts[1].debt.personName).toBe("Client Yao");
+  });
+
+  test("generates Financial AI analysis and recommendations for African context", () => {
+    expect(INCOME_SOURCES.length).toBe(6);
+    expect(AFRICAN_EXPENSE_CATEGORIES.length).toBe(11);
+    expect(SAVINGS_GOAL_TEMPLATES.length).toBe(5);
+
+    const analysis = generateFinancialAIAnalysis({
+      income: 300000,
+      incomeSourcesCount: 1,
+      transactions: [
+        { amount: 90000, category: "Loyer", type: "expense" },
+        { amount: 60000, category: "Alimentation", type: "expense" },
+        { amount: 45000, category: "Famille et solidarité", type: "expense" },
+        { amount: 30000, category: "Dîmes et offrandes", type: "expense" },
+      ],
+      categories: [
+        { name: "Loyer", amount: 90000 },
+        { name: "Alimentation", amount: 60000 },
+        { name: "Famille et solidarité", amount: 30000 },
+        { name: "Dîmes et offrandes", amount: 30000 },
+      ],
+      savingsGoals: [
+        {
+          name: "Acheter une moto",
+          target: 600000,
+          current: 50000,
+        },
+      ],
+      debts: [],
+      monthlySavings: 35000,
+      currency: "FCFA",
+    });
+
+    expect(analysis.healthScore).toBeGreaterThan(0);
+    expect(analysis.breakdown.solidarityAndTithePercent).toBe(25); // (45k+30k)/300k = 25%
+    expect(analysis.recommendations.length).toBeGreaterThan(0);
   });
 });

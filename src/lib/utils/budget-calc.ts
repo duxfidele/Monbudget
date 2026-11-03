@@ -265,7 +265,7 @@ export function formatMoney(amount: number, currency: string = "FCFA", locale: s
   const safeCurrency = currency && currency.trim() ? currency.trim() : "FCFA";
   const formatted = Math.round(amount || 0).toLocaleString(locale);
   if (safeCurrency === "EUR") return `${formatted} €`;
-  if (safeCurrency === "USD") return `${formatted}`;
+  if (safeCurrency === "USD") return `${formatted} $`;
   return `${formatted} ${safeCurrency}`;
 }
 
@@ -352,4 +352,460 @@ export function getTodayExpenses(
   return transactions
     .filter((tx) => isExpenseTransaction(tx) && tx.date === targetDate)
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+}
+
+/**
+ * ============================================================================
+ * B. RÉFÉRENTIEL DES SOURCES DE REVENUS
+ * ============================================================================
+ */
+export const INCOME_SOURCES = [
+  "Salaire",
+  "Commerce",
+  "Activités secondaires",
+  "Prestations de services",
+  "Loyers",
+  "Autres revenus",
+] as const;
+
+export type IncomeSourceType = (typeof INCOME_SOURCES)[number];
+
+/**
+ * ============================================================================
+ * C. CATÉGORIES DE DÉPENSES ADAPTÉES À LA RÉALITÉ AFRICAINE
+ * ============================================================================
+ */
+export const AFRICAN_EXPENSE_CATEGORIES = [
+  { name: "Alimentation", amount: 60000, color: "bg-emerald-500" },
+  { name: "Loyer", amount: 80000, color: "bg-blue-500" },
+  { name: "Transport", amount: 30000, color: "bg-amber-500" },
+  { name: "Santé", amount: 15000, color: "bg-rose-500" },
+  { name: "Scolarité", amount: 35000, color: "bg-indigo-500" },
+  { name: "Électricité et eau", amount: 25000, color: "bg-cyan-500" },
+  { name: "Communication et Internet", amount: 15000, color: "bg-sky-500" },
+  { name: "Famille et solidarité", amount: 25000, color: "bg-purple-500" },
+  { name: "Dîmes et offrandes", amount: 30000, color: "bg-teal-500" },
+  { name: "Loisirs", amount: 15000, color: "bg-pink-500" },
+  { name: "Autres dépenses", amount: 15000, color: "bg-slate-500" },
+] as const;
+
+/**
+ * ============================================================================
+ * D. MODÈLES D'OBJECTIFS D'ÉPARGNE CONCRETS
+ * ============================================================================
+ */
+export const SAVINGS_GOAL_TEMPLATES = [
+  { name: "Acheter une moto", suggestedTarget: 650000, color: "bg-blue-600" },
+  { name: "Construire une maison", suggestedTarget: 5000000, color: "bg-emerald-600" },
+  { name: "Préparer les frais de scolarité", suggestedTarget: 350000, color: "bg-purple-600" },
+  { name: "Constituer un fonds d'urgence", suggestedTarget: 500000, color: "bg-amber-600" },
+  { name: "Préparer un voyage", suggestedTarget: 400000, color: "bg-cyan-600" },
+] as const;
+
+/**
+ * ============================================================================
+ * E. GESTION DES DETTES & CRÉANCES
+ * ============================================================================
+ */
+export interface DebtPaymentItem {
+  id: string;
+  amount: number;
+  date: string;
+  notes?: string;
+}
+
+export interface DebtItem {
+  id: string;
+  type: "payable" | "receivable"; // payable = dette à rembourser | receivable = dette à récupérer (créance)
+  personName: string;
+  phone?: string;
+  totalAmount: number;
+  remainingAmount: number;
+  dueDate?: string;
+  status: "pending" | "partial" | "paid";
+  notes?: string;
+  payments: DebtPaymentItem[];
+  createdAt?: string;
+}
+
+export interface DebtAlertItem {
+  debt: DebtItem;
+  daysUntilDue: number; // négatif si en retard, 0 si aujourd'hui, positif si à venir
+  urgency: "overdue" | "today" | "soon";
+  message: string;
+}
+
+/**
+ * Total des dettes restant à rembourser par l'utilisateur ("Personnes auxquelles je dois")
+ */
+export function getTotalPayableDebts(debts: DebtItem[]): number {
+  if (!debts || !Array.isArray(debts)) return 0;
+  return debts
+    .filter((d) => d.type === "payable" && d.status !== "paid" && d.remainingAmount > 0)
+    .reduce((sum, d) => sum + (Number(d.remainingAmount) || 0), 0);
+}
+
+/**
+ * Total des créances restant à récupérer par l'utilisateur ("Personnes qui me doivent")
+ */
+export function getTotalReceivableDebts(debts: DebtItem[]): number {
+  if (!debts || !Array.isArray(debts)) return 0;
+  return debts
+    .filter((d) => d.type === "receivable" && d.status !== "paid" && d.remainingAmount > 0)
+    .reduce((sum, d) => sum + (Number(d.remainingAmount) || 0), 0);
+}
+
+/**
+ * Détecte les dettes et créances arrivant à échéance ou en retard
+ */
+export function getDebtAlerts(
+  debts: DebtItem[],
+  currentDate: Date = new Date(),
+  warningDays: number = 7,
+  currency: string = "FCFA"
+): DebtAlertItem[] {
+  if (!debts || !Array.isArray(debts)) return [];
+  const todayMidnight = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth(),
+    currentDate.getDate()
+  ).getTime();
+
+  const alerts: DebtAlertItem[] = [];
+
+  for (const debt of debts) {
+    if (debt.status === "paid" || debt.remainingAmount <= 0 || !debt.dueDate) continue;
+    const parts = debt.dueDate.split("-");
+    if (parts.length < 3) continue;
+    const dueMidnight = new Date(
+      parseInt(parts[0], 10),
+      parseInt(parts[1], 10) - 1,
+      parseInt(parts[2], 10)
+    ).getTime();
+
+    const diffDays = Math.round((dueMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+    const formattedRemaining = formatMoney(debt.remainingAmount, currency);
+
+    if (diffDays < 0) {
+      alerts.push({
+        debt,
+        daysUntilDue: diffDays,
+        urgency: "overdue",
+        message:
+          debt.type === "payable"
+            ? `Retard de ${Math.abs(diffDays)} j : Vous devez ${formattedRemaining} à ${debt.personName}.`
+            : `Retard de ${Math.abs(diffDays)} j : ${debt.personName} vous doit ${formattedRemaining}. Pensez à relancer.`,
+      });
+    } else if (diffDays === 0) {
+      alerts.push({
+        debt,
+        daysUntilDue: 0,
+        urgency: "today",
+        message:
+          debt.type === "payable"
+            ? `Échéance aujourd'hui : Remboursement de ${formattedRemaining} à ${debt.personName}.`
+            : `Échéance aujourd'hui : ${debt.personName} doit vous rembourser ${formattedRemaining}.`,
+      });
+    } else if (diffDays <= warningDays) {
+      alerts.push({
+        debt,
+        daysUntilDue: diffDays,
+        urgency: "soon",
+        message:
+          debt.type === "payable"
+            ? `Dans ${diffDays} j : Échéance de ${formattedRemaining} envers ${debt.personName}.`
+            : `Dans ${diffDays} j : ${debt.personName} doit vous verser ${formattedRemaining}.`,
+      });
+    }
+  }
+
+  return alerts.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
+}
+
+/**
+ * ============================================================================
+ * F. MOTEUR D'INTELLIGENCE ARTIFICIELLE FINANCIÈRE
+ * ============================================================================
+ */
+export interface AIRecommendation {
+  id: string;
+  priority: "high" | "medium" | "low";
+  category: "budget" | "savings" | "debt" | "income" | "solidarity";
+  title: string;
+  description: string;
+  actionLabel?: string;
+  actionHref?: string;
+}
+
+export interface FinancialAIAnalysis {
+  healthScore: number; // 0 - 100
+  healthLabel: "Excellente" | "Bonne" | "À surveiller" | "Critique";
+  summary: string;
+  recommendations: AIRecommendation[];
+  breakdown: {
+    essentialsPercent: number;
+    solidarityAndTithePercent: number;
+    leisurePercent: number;
+    savingsPercent: number;
+    debtRatioPercent: number;
+  };
+}
+
+export function generateFinancialAIAnalysis({
+  income,
+  incomeSourcesCount = 1,
+  categories,
+  transactions,
+  savingsGoals,
+  debts,
+  monthlySavings = 0,
+  currency = "FCFA",
+  currentDate = new Date(),
+}: {
+  income: number;
+  incomeSourcesCount?: number;
+  categories: CategoryItem[];
+  transactions: TransactionItem[];
+  savingsGoals: { name: string; target: number; current: number; status?: string }[];
+  debts: DebtItem[];
+  monthlySavings?: number;
+  currency?: string;
+  currentDate?: Date;
+}): FinancialAIAnalysis {
+  const totalExpenses = getTotalExpenses(transactions);
+  const remaining = getRemainingToLive(income, totalExpenses, monthlySavings);
+  const payableDebts = getTotalPayableDebts(debts);
+  const receivableDebts = getTotalReceivableDebts(debts);
+  const debtAlerts = getDebtAlerts(debts, currentDate, 7, currency);
+  const overBudgetCats = getOverBudgetCategories(categories, transactions, 80);
+
+  // Calcul des grandes masses de dépenses (Réalité africaine)
+  const essentialNames = [
+    "alimentation",
+    "loyer",
+    "logement & loyer",
+    "transport",
+    "transport & carburant",
+    "santé",
+    "santé & pharmacie",
+    "scolarité",
+    "électricité et eau",
+    "factures (eau, électricité, canal+)",
+    "communication et internet",
+  ];
+  const solidarityNames = ["famille et solidarité", "dîmes et offrandes"];
+  const leisureNames = ["loisirs", "loisirs & sorties"];
+
+  let essentialsSpent = 0;
+  let solidaritySpent = 0;
+  let leisureSpent = 0;
+
+  for (const tx of transactions) {
+    if (!isExpenseTransaction(tx)) continue;
+    const catNorm = (tx.category || "").trim().toLowerCase();
+    const amt = Number(tx.amount) || 0;
+    if (essentialNames.includes(catNorm)) {
+      essentialsSpent += amt;
+    } else if (solidarityNames.includes(catNorm)) {
+      solidaritySpent += amt;
+    } else if (leisureNames.includes(catNorm)) {
+      leisureSpent += amt;
+    } else {
+      essentialsSpent += amt * 0.5;
+    }
+  }
+
+  const essentialsPercent = income > 0 ? Math.round((essentialsSpent / income) * 100) : 0;
+  const solidarityAndTithePercent = income > 0 ? Math.round((solidaritySpent / income) * 100) : 0;
+  const leisurePercent = income > 0 ? Math.round((leisureSpent / income) * 100) : 0;
+  const savingsPercent = income > 0 ? Math.round((monthlySavings / income) * 100) : 0;
+  const debtRatioPercent = income > 0 ? Math.round((payableDebts / income) * 100) : payableDebts > 0 ? 100 : 0;
+
+  // Calcul du Score de Santé Financière sur 100
+  let score = 70;
+  if (income <= 0) {
+    score = 40;
+  } else {
+    // 1. Solde disponible
+    if (remaining < 0) score -= 25;
+    else if (remaining / income >= 0.15) score += 10;
+
+    // 2. Épargne
+    if (savingsPercent >= 15) score += 12;
+    else if (savingsPercent >= 5) score += 5;
+    else if (savingsGoals.length === 0) score -= 8;
+
+    // 3. Endettement
+    if (debtRatioPercent > 50) score -= 20;
+    else if (debtRatioPercent > 25) score -= 10;
+    else if (payableDebts === 0) score += 8;
+
+    // 4. Respect des enveloppes
+    const strictlyOver = overBudgetCats.filter((c) => c.isOverBudget);
+    score -= strictlyOver.length * 5;
+
+    // 5. Diversification des revenus
+    if (incomeSourcesCount >= 2) score += 5;
+  }
+
+  const healthScore = Math.max(10, Math.min(100, Math.round(score)));
+  const healthLabel: FinancialAIAnalysis["healthLabel"] =
+    healthScore >= 80
+      ? "Excellente"
+      : healthScore >= 60
+      ? "Bonne"
+      : healthScore >= 40
+      ? "À surveiller"
+      : "Critique";
+
+  const recommendations: AIRecommendation[] = [];
+
+  // Recommandation 1 : Alertes dettes urgentes
+  const overduePayables = debtAlerts.filter((a) => a.debt.type === "payable" && a.urgency === "overdue");
+  const overdueReceivables = debtAlerts.filter((a) => a.debt.type === "receivable" && a.urgency === "overdue");
+
+  if (overduePayables.length > 0) {
+    recommendations.push({
+      id: "debt-overdue-payable",
+      priority: "high",
+      category: "debt",
+      title: `${overduePayables.length} dette(s) à rembourser en retard`,
+      description: `${overduePayables[0].message} Priorisez un remboursement partiel ou total pour préserver votre crédibilité financière.`,
+      actionLabel: "Gérer mes dettes",
+      actionHref: "/debts",
+    });
+  }
+
+  if (overdueReceivables.length > 0) {
+    recommendations.push({
+      id: "debt-overdue-receivable",
+      priority: "high",
+      category: "debt",
+      title: `Créances à récupérer (${formatMoney(receivableDebts, currency)})`,
+      description: `${overdueReceivables[0].message} Relancer vos débiteurs augmentera immédiatement votre trésorerie disponible.`,
+      actionLabel: "Voir les créances",
+      actionHref: "/debts",
+    });
+  }
+
+  // Recommandation 2 : Dépassement de budget ou déficit
+  if (remaining < 0) {
+    recommendations.push({
+      id: "budget-deficit",
+      priority: "high",
+      category: "budget",
+      title: "Alerte : Déficit mensuel détecté",
+      description: `Vos sorties dépassent vos revenus de ${formatMoney(Math.abs(remaining), currency)}. Suspendez les dépenses non essentielles (Loisirs, Autres) jusqu'à la prochaine entrée.`,
+      actionLabel: "Ajuster mon budget",
+      actionHref: "/budget",
+    });
+  } else if (overBudgetCats.length > 0) {
+    const worst = overBudgetCats[0];
+    recommendations.push({
+      id: "category-overbudget",
+      priority: worst.isOverBudget ? "high" : "medium",
+      category: "budget",
+      title: `Enveloppe "${worst.name}" sous tension (${worst.percent}%)`,
+      description: worst.isOverBudget
+        ? `Vous avez dépassé le plafond de "${worst.name}" de ${formatMoney(Math.abs(worst.remaining), currency)}. Rééquilibrez avec une enveloppe moins consommée.`
+        : `Vous avez déjà consommé ${worst.percent}% du budget "${worst.name}". Ralentissez sur ce poste pour finir le mois sereinement.`,
+      actionLabel: "Voir les enveloppes",
+      actionHref: "/budget",
+    });
+  }
+
+  // Recommandation 3 : Solidarité & Dîmes
+  if (income > 0 && solidarityAndTithePercent > 25) {
+    recommendations.push({
+      id: "solidarity-balance",
+      priority: "medium",
+      category: "solidarity",
+      title: `Poids élevé de Solidarité & Dîmes (${solidarityAndTithePercent}% du revenu)`,
+      description: `Votre générosité est admirable (${formatMoney(solidaritySpent, currency)}), mais elle dépasse 25% de vos revenus. Fixez une enveloppe mensuelle dédiée aux imprévus familiaux pour protéger votre épargne.`,
+      actionLabel: "Plafonner l'enveloppe",
+      actionHref: "/budget",
+    });
+  }
+
+  // Recommandation 4 : Épargne & Fonds d'urgence
+  const hasEmergencyFund = savingsGoals.some((g) =>
+    g.name.toLowerCase().includes("urgence") || g.name.toLowerCase().includes("sécurité")
+  );
+  if (!hasEmergencyFund) {
+    recommendations.push({
+      id: "savings-emergency",
+      priority: "medium",
+      category: "savings",
+      title: "Constituez un Fonds d'urgence",
+      description:
+        "En Afrique, les imprévus (santé, famille, pannes) sont fréquents. Créez un objectif « Constituer un fonds d'urgence » équivalent à 3 mois de dépenses vitales.",
+      actionLabel: "Créer ce fonds",
+      actionHref: "/savings",
+    });
+  } else if (income > 0 && savingsPercent < 10 && remaining > 0) {
+    const suggestedSaving = Math.max(5000, Math.round((income * 0.1 - monthlySavings) / 1000) * 1000);
+    recommendations.push({
+      id: "savings-boost",
+      priority: "medium",
+      category: "savings",
+      title: `Augmentez votre taux d'épargne (${savingsPercent}% actuellement)`,
+      description: `Il vous reste ${formatMoney(remaining, currency)} disponibles ce mois-ci. Mettez de côté au moins ${formatMoney(Math.min(suggestedSaving, remaining), currency)} vers vos projets (moto, maison, scolarité).`,
+      actionLabel: "Épargner maintenant",
+      actionHref: "/savings",
+    });
+  }
+
+  // Recommandation 5 : Diversification des revenus
+  if (incomeSourcesCount <= 1 && income > 0) {
+    recommendations.push({
+      id: "income-diversification",
+      priority: "low",
+      category: "income",
+      title: "Développez une seconde source de revenus",
+      description:
+        "Dépendre d'une seule entrée vous expose aux imprévus. Pensez à déclarer ou lancer une activité secondaire (commerce, prestation de services, loyers) pour accélérer vos projets.",
+      actionLabel: "Gérer mes revenus",
+      actionHref: "/budget",
+    });
+  }
+
+  // Recommandation 6 : Ratio d'endettement
+  if (payableDebts > 0 && overduePayables.length === 0) {
+    recommendations.push({
+      id: "debt-repayment-plan",
+      priority: debtRatioPercent > 35 ? "high" : "low",
+      category: "debt",
+      title: `Plan d'apurement des dettes (${formatMoney(payableDebts, currency)})`,
+      description: `Vos dettes représentent ${debtRatioPercent}% de vos revenus mensuels. Affectez au moins 15% de votre solde disponible chaque mois pour réduire ce passif.`,
+      actionLabel: "Suivre mes remboursements",
+      actionHref: "/debts",
+    });
+  }
+
+  // Synthèse globale
+  let summary = "";
+  if (income <= 0) {
+    summary =
+      "Commencez par renseigner vos sources de revenus du mois (Salaire, Commerce, Prestations...) pour activer le diagnostic IA complet.";
+  } else if (healthScore >= 80) {
+    summary = `Excellente maîtrise financière (${healthScore}/100) ! Votre solde est positif (${formatMoney(remaining, currency)}) et vos charges sont bien contenues.`;
+  } else if (healthScore >= 60) {
+    summary = `Bonne gestion globale (${healthScore}/100), avec un solde disponible de ${formatMoney(remaining, currency)}. Suivez les recommandations ci-dessous pour renforcer votre épargne.`;
+  } else {
+    summary = `Votre équilibre financier demande de la vigilance (${healthScore}/100). Priorisez la maîtrise des enveloppes en dépassement et le suivi de vos échéances de dettes.`;
+  }
+
+  return {
+    healthScore,
+    healthLabel,
+    summary,
+    recommendations,
+    breakdown: {
+      essentialsPercent,
+      solidarityAndTithePercent,
+      leisurePercent,
+      savingsPercent,
+      debtRatioPercent,
+    },
+  };
 }

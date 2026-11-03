@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Wallet, ArrowRightLeft, PiggyBank } from "lucide-react";
+import { LayoutDashboard, Wallet, ArrowRightLeft, PiggyBank, HandCoins } from "lucide-react";
 
 const routes = [
   {
@@ -30,6 +30,12 @@ const routes = [
     href: "/savings",
     color: "text-pink-700",
   },
+  {
+    label: "Dettes",
+    icon: HandCoins,
+    href: "/debts",
+    color: "text-amber-600",
+  },
 ];
 
 export const BottomNav = () => {
@@ -37,7 +43,7 @@ export const BottomNav = () => {
 
   return (
     <div className="fixed bottom-0 left-0 z-50 w-full h-16 bg-white border-t border-slate-200 md:hidden pb-safe">
-      <div className="grid h-full max-w-lg grid-cols-4 mx-auto font-medium">
+      <div className="grid h-full max-w-lg grid-cols-5 mx-auto font-medium">
         {routes.map((route) => {
           const isActive = pathname === route.href;
           return (

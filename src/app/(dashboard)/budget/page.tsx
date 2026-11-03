@@ -34,7 +34,9 @@ import {
   getRemainingToLive,
   getDailyBudget,
   getTodayExpenses,
-  getMonthlySavingsContributions
+  getMonthlySavingsContributions,
+  AFRICAN_EXPENSE_CATEGORIES,
+  INCOME_SOURCES
 } from "@/lib/utils/budget-calc";
 import {
   Dialog,
@@ -56,15 +58,7 @@ const COLORS = [
   "bg-teal-500"
 ];
 
-const DEFAULT_CATEGORIES = [
-  { name: "Alimentation", amount: 50000 },
-  { name: "Logement & Loyer", amount: 100000 },
-  { name: "Transport & Carburant", amount: 25000 },
-  { name: "Factures (Eau, Électricité, Canal+)", amount: 30000 },
-  { name: "Santé & Pharmacie", amount: 15000 },
-  { name: "Loisirs & Sorties", amount: 20000 },
-  { name: "Épargne & Imprévus", amount: 30000 },
-];
+const DEFAULT_CATEGORIES = AFRICAN_EXPENSE_CATEGORIES;
 
 /**
  * Composant de saisie numérique ergonomique
@@ -509,8 +503,10 @@ export default function BudgetPage() {
   const { 
     income, 
     baseSalary, 
-    setIncome, 
+    incomeEntries,
     setSalary,
+    addIncomeEntry,
+    removeIncomeEntry,
     saveBudget,
     categories, 
     addCategory, 
@@ -531,6 +527,12 @@ export default function BudgetPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+
+  // Nouvel ajout de source de revenu (Pilier B)
+  const [incomeSourceType, setIncomeSourceType] = useState<string>(INCOME_SOURCES[0]);
+  const [incomeLabel, setIncomeLabel] = useState("");
+  const [incomeAmount, setIncomeAmount] = useState<number>(0);
+  const [showAddIncomeForm, setShowAddIncomeForm] = useState(false);
 
   // Mois actif formaté
   const activeDate = new Date(activeMonth.year, activeMonth.month - 1, 1);
@@ -720,22 +722,143 @@ export default function BudgetPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Résumé & Pilotage */}
         <div className="lg:col-span-1 space-y-5">
-          {/* Revenu Card avec saisie fluide */}
+          {/* Revenu Card avec multi-sources (Pilier B) */}
           <Card className="border-none shadow-md bg-gradient-to-br from-[#1E3A5F] to-[#2B4E7E] text-white">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
-                <Wallet className="h-4 w-4 text-emerald-300" />
-                Revenu mensuel à répartir
-              </CardTitle>
-              <CardDescription className="text-xs text-slate-300">Salaire net + primes prévues pour ce mois</CardDescription>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-emerald-300" />
+                  Sources de Revenus du Mois
+                </CardTitle>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowAddIncomeForm(!showAddIncomeForm)}
+                  className="h-7 px-2.5 text-xs bg-white/15 hover:bg-white/25 text-white rounded-lg gap-1"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Ajouter une source</span>
+                </Button>
+              </div>
+              <CardDescription className="text-xs text-slate-300">
+                Salaire, Commerce, Activités secondaires, Prestations, Loyers...
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col gap-2.5">
-                <IncomeInput 
-                  initialIncome={baseSalary > 0 ? baseSalary : income} 
-                  currency={currency} 
-                  onCommit={(val) => setSalary(val)} 
-                />
+              <div className="flex flex-col gap-3">
+                <div>
+                  <span className="text-[11px] uppercase tracking-wider text-slate-300 font-semibold block mb-1">
+                    Revenu principal ou total déclaré
+                  </span>
+                  <IncomeInput 
+                    initialIncome={baseSalary > 0 ? baseSalary : income} 
+                    currency={currency} 
+                    onCommit={(val) => setSalary(val)} 
+                  />
+                </div>
+
+                {/* Formulaire d'ajout d'une source de revenu spécifique */}
+                {showAddIncomeForm && (
+                  <div className="p-3 rounded-xl bg-white/10 border border-white/20 space-y-2.5 animate-in fade-in">
+                    <div className="text-xs font-semibold text-emerald-300">
+                      Nouvelle source de revenu
+                    </div>
+                    <select
+                      value={incomeSourceType}
+                      onChange={(e) => setIncomeSourceType(e.target.value)}
+                      className="flex h-9 w-full rounded-lg bg-slate-900/70 border border-white/20 px-2.5 text-xs text-white focus:outline-none"
+                    >
+                      {INCOME_SOURCES.map((src) => (
+                        <option key={src} value={src} className="bg-slate-900 text-white">
+                          {src}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      placeholder="Précision (ex: Boutique, Chantier, Loyer studio...)"
+                      value={incomeLabel}
+                      onChange={(e) => setIncomeLabel(e.target.value)}
+                      className="h-9 text-xs bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                    />
+                    <BudgetAmountInput
+                      value={incomeAmount}
+                      onChange={(val) => setIncomeAmount(val)}
+                      currency={currency}
+                      placeholder="Montant"
+                      inputClassName="bg-white/10 border-white/20 text-white h-9 text-xs"
+                    />
+                    <div className="flex justify-end gap-2 pt-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowAddIncomeForm(false)}
+                        className="h-8 text-xs text-slate-300 hover:text-white hover:bg-white/10"
+                      >
+                        Annuler
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={async () => {
+                          if (incomeAmount <= 0) {
+                            toast.error("Veuillez saisir un montant supérieur à 0.");
+                            return;
+                          }
+                          await addIncomeEntry({
+                            sourceType: incomeSourceType,
+                            label: incomeLabel.trim() || incomeSourceType,
+                            amount: incomeAmount,
+                          });
+                          setIncomeLabel("");
+                          setIncomeAmount(0);
+                          setShowAddIncomeForm(false);
+                          toast.success(`Source "${incomeSourceType}" ajoutée à vos revenus !`);
+                        }}
+                        className="h-8 text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
+                      >
+                        Ajouter ce revenu
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Liste des sources de revenus enregistrées */}
+                {incomeEntries && incomeEntries.length > 0 && (
+                  <div className="space-y-1.5 bg-black/20 p-2.5 rounded-xl border border-white/10">
+                    <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">
+                      Détail des sources ({incomeEntries.length})
+                    </div>
+                    {incomeEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-none"
+                      >
+                        <div className="truncate pr-2">
+                          <span className="font-semibold text-emerald-300">{entry.sourceType}</span>
+                          {entry.label && entry.label !== entry.sourceType && (
+                            <span className="text-slate-300"> • {entry.label}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <strong className="text-white">{formatMoney(entry.amount, currency)}</strong>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              removeIncomeEntry(entry.id);
+                              toast.info("Source de revenu retirée.");
+                            }}
+                            className="text-slate-400 hover:text-red-300 p-0.5"
+                            title="Supprimer cette source"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 
                 {income > 0 && (
                   <div className="bg-white/10 p-2.5 rounded-lg border border-white/10 text-xs space-y-1.5 mt-1">
@@ -748,7 +871,7 @@ export default function BudgetPage() {
                       <span>{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</span>
                     </div>
                     <div className="flex items-center justify-between text-slate-300 text-[11px] pt-1 border-t border-white/10">
-                      <span>Reste à vivre réel en caisse :</span>
+                      <span>Solde disponible en caisse :</span>
                       <strong className="text-white">{formatMoney(resteReel, currency)}</strong>
                     </div>
                   </div>
@@ -756,18 +879,15 @@ export default function BudgetPage() {
                 {additionalIncomes > 0 && (
                   <div className="text-[11px] bg-white/10 p-2 rounded-lg text-slate-200 space-y-0.5 border border-white/10">
                     <div className="flex justify-between">
-                      <span className="text-slate-300">Salaire budgété :</span>
+                      <span className="text-slate-300">Revenus fixes / déclarés :</span>
                       <strong>{formatMoney(baseSalary, currency)}</strong>
                     </div>
                     <div className="flex justify-between text-emerald-300">
-                      <span>Revenus complémentaires :</span>
+                      <span>Entrées additionnelles (Transactions) :</span>
                       <strong>+{formatMoney(additionalIncomes, currency)}</strong>
                     </div>
                   </div>
                 )}
-                <p className="text-[11px] text-slate-300/70">
-                  Les chiffres se formatent automatiquement avec des espaces (ex: 350 000).
-                </p>
               </div>
             </CardContent>
           </Card>
@@ -818,16 +938,59 @@ export default function BudgetPage() {
           </div>
         </div>
 
-        {/* Répartition par Catégorie */}
+        {/* Répartition par Catégorie (Pilier C) */}
         <Card className="lg:col-span-2 border-none shadow-sm bg-white">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <CardTitle className="text-lg">Enveloppes Budgétaires</CardTitle>
-                <CardDescription>Plafonds de dépenses prévus par catégorie pour {capitalizedActiveMonth}.</CardDescription>
+                <CardTitle className="text-lg">Enveloppes Budgétaires (Réalité Africaine)</CardTitle>
+                <CardDescription>
+                  Alimentation, Loyer, Transport, Santé, Scolarité, Électricité & eau, Solidarité, Dîmes...
+                </CardDescription>
               </div>
-              <div className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">
-                Total alloué : {formatMoney(totalAllocated, currency)}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGenerating}
+                  onClick={async () => {
+                    if (isGenerating) return;
+                    setIsGenerating(true);
+                    try {
+                      let addedCount = 0;
+                      for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
+                        const cat = DEFAULT_CATEGORIES[i];
+                        const exists = categories.some(
+                          (c) => c.name.trim().toLowerCase() === cat.name.toLowerCase()
+                        );
+                        if (!exists) {
+                          await addCategory({
+                            id: Date.now().toString() + i,
+                            name: cat.name,
+                            amount: cat.amount,
+                            color: cat.color || COLORS[i % COLORS.length],
+                          });
+                          addedCount++;
+                        }
+                      }
+                      if (addedCount > 0) {
+                        toast.success(`${addedCount} catégorie(s) africaine(s) ajoutée(s) !`);
+                      } else {
+                        toast.info("Toutes les 11 catégories africaines sont déjà présentes.");
+                      }
+                    } finally {
+                      setIsGenerating(false);
+                    }
+                  }}
+                  className="h-8 text-xs border-blue-200 text-[#1E3A5F] hover:bg-blue-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1 text-amber-500" />
+                  {isGenerating ? "Ajout..." : "11 Catégories Africaines"}
+                </Button>
+                <div className="text-xs font-semibold px-2.5 py-1.5 rounded-md bg-slate-100 text-slate-700">
+                  Total alloué : {formatMoney(totalAllocated, currency)}
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -839,7 +1002,7 @@ export default function BudgetPage() {
                 </div>
                 <h3 className="text-lg font-semibold text-slate-800 mb-1">Aucune enveloppe définie pour ce mois</h3>
                 <p className="text-slate-500 text-sm mb-6 max-w-md">
-                  Gagnez du temps en dupliquant le mois précédent ou chargez notre modèle standard de catégories pour salariés.
+                  Gagnez du temps en dupliquant le mois précédent ou chargez les 11 catégories adaptées à la réalité africaine (Alimentation, Loyer, Transport, Santé, Scolarité, Électricité et eau, Communication et Internet, Famille et solidarité, Dîmes et offrandes, Loisirs, Autres dépenses).
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   <Button 
@@ -864,17 +1027,17 @@ export default function BudgetPage() {
                             id: Date.now().toString() + i,
                             name: cat.name,
                             amount: cat.amount,
-                            color: COLORS[i % COLORS.length]
+                            color: cat.color || COLORS[i % COLORS.length]
                           });
                         }
-                        toast.success("Catégories par défaut générées !");
+                        toast.success("Les 11 catégories africaines ont été générées !");
                       } finally {
                         setIsGenerating(false);
                       }
                     }}
                     className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
                   >
-                    {isGenerating ? "Création en cours..." : "Générer les catégories standards"}
+                    {isGenerating ? "Création en cours..." : "Charger les 11 catégories africaines"}
                   </Button>
                 </div>
               </div>

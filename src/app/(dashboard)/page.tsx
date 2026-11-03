@@ -14,7 +14,11 @@ import {
   Sparkles,
   AlertTriangle,
   CheckCircle2,
-  Plus
+  Plus,
+  HandCoins,
+  Target,
+  BrainCircuit,
+  ArrowDownLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/lib/store/ui-store";
@@ -27,17 +31,41 @@ import {
   getSpentByCategory,
   isIncomeTransaction,
   getMonthlySavingsContributions,
-  getTodayExpenses
+  getTodayExpenses,
+  getTotalPayableDebts,
+  getTotalReceivableDebts,
+  getDebtAlerts,
+  generateFinancialAIAnalysis
 } from "@/lib/utils/budget-calc";
 
 export default function DashboardPage() {
-  const { income, categories, transactions, savingsGoals, currency, payDay, notifications, activeMonth } = useUIStore();
+  const { income, incomeEntries, categories, transactions, savingsGoals, debts, currency, payDay, notifications, activeMonth } = useUIStore();
 
   // 1. Calculs financiers purs et précis via budget-calc
   const depenses = getTotalExpenses(transactions);
-  const epargne = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
-  const reste = getRemainingToLive(income, depenses, epargne);
+  const epargneMois = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+  const epargneConstituee = savingsGoals.reduce((sum, g) => sum + g.current, 0);
+  const totalTargetSavings = savingsGoals.reduce((sum, g) => sum + g.target, 0);
+  const globalGoalsProgress = totalTargetSavings > 0 ? Math.round((epargneConstituee / totalTargetSavings) * 100) : 0;
+  const reste = getRemainingToLive(income, depenses, epargneMois);
   const pourcentageDepense = income > 0 ? (depenses / income) * 100 : 0;
+
+  // Dettes & Créances (Pilier A & E)
+  const dettesARembourser = getTotalPayableDebts(debts);
+  const dettesARecuperer = getTotalReceivableDebts(debts);
+  const debtAlerts = getDebtAlerts(debts, new Date(), 7, currency);
+
+  // Intelligence Artificielle Financière (Pilier F)
+  const aiAnalysis = generateFinancialAIAnalysis({
+    income,
+    incomeSourcesCount: Math.max(1, incomeEntries?.length || 1),
+    categories,
+    transactions,
+    savingsGoals,
+    debts,
+    monthlySavings: epargneMois,
+    currency,
+  });
 
   // Dépenses effectuées aujourd'hui (pour déduction automatique)
   const todayISO = new Date().toISOString().split("T")[0];
@@ -207,8 +235,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* KPI Cards : Les 6 Indicateurs Financiers Clés (Pilier A) */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* 1. Revenus du mois */}
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-slate-500">Revenus du Mois</CardTitle>
@@ -220,13 +249,18 @@ export default function DashboardPage() {
             <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
               {formatMoney(income, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Salaire & revenus déclarés</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {incomeEntries && incomeEntries.length > 1
+                ? `${incomeEntries.length} sources de revenus actives`
+                : "Salaire & revenus déclarés"}
+            </p>
           </CardContent>
         </Card>
         
+        {/* 2. Dépenses du mois */}
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Dépenses Réalisées</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-500">Dépenses du Mois</CardTitle>
             <div className="p-2 bg-red-100 rounded-lg">
               <TrendingDown className="h-4 w-4 text-red-600" />
             </div>
@@ -241,13 +275,14 @@ export default function DashboardPage() {
                 style={{ width: `${Math.min(pourcentageDepense, 100)}%` }} 
               />
             </div>
-            <p className="text-xs text-slate-400 mt-1">{Math.round(pourcentageDepense)}% du salaire dépensé</p>
+            <p className="text-xs text-slate-400 mt-1">{Math.round(pourcentageDepense)}% des revenus consommés</p>
           </CardContent>
         </Card>
 
+        {/* 3. Solde disponible */}
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Reste à Vivre</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-500">Solde Disponible</CardTitle>
             <div className="p-2 bg-sky-100 rounded-lg">
               <Receipt className="h-4 w-4 text-sky-600" />
             </div>
@@ -257,25 +292,195 @@ export default function DashboardPage() {
               {formatMoney(reste, currency)}
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              {reste >= 0 ? "Disponible pour le mois" : "Déficit constaté"}
+              {reste >= 0 ? "Reste en caisse pour le mois" : "Déficit constaté"}
             </p>
           </CardContent>
         </Card>
 
+        {/* 4. Épargne constituée */}
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Épargne Mise de Côté</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-500">Épargne Constituée</CardTitle>
             <div className="p-2 bg-amber-100 rounded-lg">
               <PiggyBank className="h-4 w-4 text-amber-600" />
             </div>
           </CardHeader>
           <CardContent>
             <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
-              {formatMoney(epargne, currency)}
+              {formatMoney(epargneConstituee > 0 ? epargneConstituee : epargneMois, currency)}
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Sur {savingsGoals.length} {savingsGoals.length > 1 ? "objectifs actifs" : "objectif actif"}
+              +{formatMoney(epargneMois, currency)} ce mois • {savingsGoals.length} objectif(s)
             </p>
+          </CardContent>
+        </Card>
+
+        {/* 5. Dettes à rembourser */}
+        <Link href="/debts" className="block group">
+          <Card className="border-none shadow-sm bg-white group-hover:shadow-md transition-shadow h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">Dettes à Rembourser</CardTitle>
+              <div className="p-2 bg-rose-100 rounded-lg">
+                <HandCoins className="h-4 w-4 text-rose-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div suppressHydrationWarning className="text-2xl font-bold text-rose-600">
+                {formatMoney(dettesARembourser, currency)}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {debts.filter((d) => d.type === "payable" && d.remainingAmount > 0).length} personne(s) à rembourser &rarr;
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        {/* 6. Dettes à récupérer */}
+        <Link href="/debts" className="block group">
+          <Card className="border-none shadow-sm bg-white group-hover:shadow-md transition-shadow h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">Dettes à Récupérer</CardTitle>
+              <div className="p-2 bg-teal-100 rounded-lg">
+                <ArrowDownLeft className="h-4 w-4 text-teal-600" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div suppressHydrationWarning className="text-2xl font-bold text-teal-700">
+                {formatMoney(dettesARecuperer, currency)}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {debts.filter((d) => d.type === "receivable" && d.remainingAmount > 0).length} personne(s) qui me doivent &rarr;
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      {/* 7. Progression des Objectifs Financiers & Intelligence Artificielle Financière (Piliers A, D, F) */}
+      <div className="grid gap-6 lg:grid-cols-7">
+        {/* Progression des objectifs financiers */}
+        <Card className="lg:col-span-3 border-none shadow-sm bg-white">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                  <Target className="h-5 w-5 text-emerald-600" />
+                  Progression des Objectifs
+                </CardTitle>
+                <CardDescription>
+                  Avancement global : {globalGoalsProgress}% ({formatMoney(epargneConstituee, currency)})
+                </CardDescription>
+              </div>
+              <Link href="/savings">
+                <Button variant="ghost" size="sm" className="text-blue-600 font-medium text-xs">
+                  Gérer &rarr;
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {savingsGoals.slice(0, 4).map((goal) => {
+              const pct = goal.target > 0 ? Math.min(100, Math.round((goal.current / goal.target) * 100)) : 0;
+              return (
+                <div key={goal.id} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs sm:text-sm">
+                    <span className="font-semibold text-slate-800 truncate">{goal.name}</span>
+                    <span className="text-xs font-bold text-slate-700 shrink-0">
+                      {formatMoney(goal.current, currency)}{" "}
+                      <span className="text-slate-400 font-normal">/ {formatMoney(goal.target, currency)} ({pct}%)</span>
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${goal.color || "bg-emerald-600"}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            {savingsGoals.length === 0 && (
+              <div className="text-center py-6 text-slate-500 text-xs space-y-2">
+                <p>Aucun objectif financier configuré (Moto, Maison, Scolarité, Urgence...).</p>
+                <Link href="/savings">
+                  <Button size="sm" variant="outline" className="mt-1 text-xs">
+                    + Définir un objectif
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Intelligence Artificielle Financière */}
+        <Card className="lg:col-span-4 border-none shadow-sm bg-gradient-to-br from-slate-900 via-[#1E3A5F] to-slate-900 text-white">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-400/20 text-amber-300">
+                  <BrainCircuit className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base md:text-lg text-white">
+                    Intelligence Artificielle Financière
+                  </CardTitle>
+                  <CardDescription className="text-xs text-slate-300">
+                    Analyse de vos habitudes et recommandations sur mesure
+                  </CardDescription>
+                </div>
+              </div>
+              <div className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-bold text-emerald-300">
+                Santé : {aiAnalysis.healthScore}/100 ({aiAnalysis.healthLabel})
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-slate-200 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/10">
+              {aiAnalysis.summary}
+            </p>
+            <div className="space-y-2">
+              {aiAnalysis.recommendations.slice(0, 3).map((rec) => (
+                <div
+                  key={rec.id}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-white/10 border border-white/10"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          rec.priority === "high"
+                            ? "bg-rose-400"
+                            : rec.priority === "medium"
+                            ? "bg-amber-300"
+                            : "bg-sky-300"
+                        }`}
+                      />
+                      <span className="text-xs font-bold text-white">{rec.title}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-snug">{rec.description}</p>
+                  </div>
+                  {rec.actionHref && (
+                    <Link href={rec.actionHref} className="shrink-0 self-end sm:self-center">
+                      <Button
+                        size="sm"
+                         variant="secondary"
+                        className="h-7 text-[11px] bg-white text-[#1E3A5F] hover:bg-slate-100 font-semibold"
+                      >
+                        {rec.actionLabel || "Agir"}
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </div>
+            {debtAlerts.length > 0 && (
+              <div className="text-[11px] text-amber-300 flex items-center justify-between pt-1">
+                <span>🔔 {debtAlerts.length} alerte(s) d&apos;échéance de dette active(s)</span>
+                <Link href="/debts" className="underline hover:text-white">
+                  Voir les échéances &rarr;
+                </Link>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
