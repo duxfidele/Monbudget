@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,10 @@ import {
   Edit2,
   Check,
   Zap,
-  RotateCcw
+  RotateCcw,
+  HandCoins,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore, Category } from "@/lib/store/ui-store";
@@ -35,6 +39,8 @@ import {
   getDailyBudget,
   getTodayExpenses,
   getMonthlySavingsContributions,
+  getTotalPayableDebts,
+  getTotalReceivableDebts,
   AFRICAN_EXPENSE_CATEGORIES,
   INCOME_SOURCES
 } from "@/lib/utils/budget-calc";
@@ -518,6 +524,7 @@ export default function BudgetPage() {
     activeMonth,
     duplicatePreviousMonth,
     savingsGoals,
+    debts,
     payDay
   } = useUIStore();
 
@@ -563,6 +570,51 @@ export default function BudgetPage() {
   const depenses = getTotalExpenses(transactions);
   const epargne = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
   const resteReel = getRemainingToLive(income, depenses, epargne);
+
+  // Liaison directe avec Dettes & Créances
+  const totalPayableDebts = getTotalPayableDebts(debts);
+  const totalReceivableDebts = getTotalReceivableDebts(debts);
+  const repaidThisMonth = getSpentByCategory(transactions, "Remboursement de dette");
+  const recoveredThisMonth = transactions
+    .filter(
+      (tx) =>
+        isIncomeTransaction(tx) &&
+        (tx.category === "Recouvrement de créance" || tx.label.startsWith("Remboursement reçu :"))
+    )
+    .reduce((sum, tx) => sum + tx.amount, 0);
+  const debtEnvelope = categories.find(
+    (c) => c.name.trim().toLowerCase() === "remboursement de dette"
+  );
+
+  const handleBudgetizeDebtEnvelope = async () => {
+    const suggestedAmount =
+      totalPayableDebts > 0
+        ? remaining > 0
+          ? Math.min(totalPayableDebts, remaining)
+          : totalPayableDebts
+        : 25000;
+
+    if (debtEnvelope) {
+      await updateCategoryAmount(debtEnvelope.id, suggestedAmount);
+      toast.success(
+        `Enveloppe « Remboursement de dette » ajustée à ${formatMoney(suggestedAmount, currency)} !`
+      );
+    } else {
+      const uuid =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Date.now().toString();
+      await addCategory({
+        id: uuid,
+        name: "Remboursement de dette",
+        amount: suggestedAmount,
+        color: "bg-rose-500",
+      });
+      toast.success(
+        `Enveloppe « Remboursement de dette » (${formatMoney(suggestedAmount, currency)}) créée dans votre budget !`
+      );
+    }
+  };
 
   const todayISO = new Date().toISOString().split("T")[0];
   const todayExpenses = getTodayExpenses(transactions, todayISO);
@@ -921,6 +973,74 @@ export default function BudgetPage() {
                   <span>Déficit ! Vos enveloppes dépassent votre revenu de {formatMoney(Math.abs(remaining), currency)}. Réduisez certains plafonds.</span>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Carte Liaison directe Dettes & Créances <-> Mon Budget */}
+          <Card className="border border-amber-200/80 shadow-sm bg-gradient-to-br from-amber-50/70 via-white to-rose-50/40">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <HandCoins className="h-4 w-4 text-amber-600" />
+                  Lien Dettes & Créances
+                </CardTitle>
+                <Link
+                  href="/debts"
+                  className="text-xs font-semibold text-[#1E3A5F] hover:underline flex items-center gap-1"
+                >
+                  <span>Gérer</span>
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+              <CardDescription className="text-xs text-slate-500">
+                Synchronisation automatique avec votre budget du mois
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs">
+              <div className="p-2.5 rounded-lg bg-rose-50/80 border border-rose-100 space-y-1">
+                <div className="flex items-center justify-between text-rose-900">
+                  <span className="flex items-center gap-1 font-medium">
+                    <ArrowUpRight className="h-3.5 w-3.5 text-rose-600" />
+                    Dettes restant à payer :
+                  </span>
+                  <strong className="font-bold">{formatMoney(totalPayableDebts, currency)}</strong>
+                </div>
+                <div className="flex items-center justify-between text-slate-600 text-[11px]">
+                  <span>Remboursé ce mois-ci :</span>
+                  <strong className="text-rose-700">{formatMoney(repaidThisMonth, currency)}</strong>
+                </div>
+                {debtEnvelope ? (
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-rose-200/60 text-slate-700">
+                    <span>Enveloppe prévue :</span>
+                    <strong>{formatMoney(debtEnvelope.amount, currency)}</strong>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleBudgetizeDebtEnvelope}
+                    className="w-full mt-1.5 h-7 text-[11px] border-rose-200 bg-white hover:bg-rose-50 text-rose-700 font-semibold"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Créer l&apos;enveloppe « Remboursement de dette »
+                  </Button>
+                )}
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-100 space-y-1">
+                <div className="flex items-center justify-between text-emerald-900">
+                  <span className="flex items-center gap-1 font-medium">
+                    <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600" />
+                    Créances à récupérer :
+                  </span>
+                  <strong className="font-bold">{formatMoney(totalReceivableDebts, currency)}</strong>
+                </div>
+                <div className="flex items-center justify-between text-slate-600 text-[11px]">
+                  <span>Encaissé ce mois (+ Revenu) :</span>
+                  <strong className="text-emerald-700">+{formatMoney(recoveredThisMonth, currency)}</strong>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

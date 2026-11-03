@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,8 @@ import {
   PlusCircle,
   Scale,
   User,
+  Wallet,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
@@ -29,6 +32,10 @@ import {
   getTotalPayableDebts,
   getTotalReceivableDebts,
   getDebtAlerts,
+  getTotalExpenses,
+  getRemainingToLive,
+  getMonthlySavingsContributions,
+  getSpentByCategory,
   DebtItem,
 } from "@/lib/utils/budget-calc";
 import {
@@ -41,7 +48,19 @@ import {
 } from "@/components/ui/dialog";
 
 export default function DebtsPage() {
-  const { debts, addDebt, removeDebt, addDebtPayment, removeDebtPayment, currency } = useUIStore();
+  const {
+    debts,
+    addDebt,
+    removeDebt,
+    addDebtPayment,
+    removeDebtPayment,
+    currency,
+    income,
+    transactions,
+    categories,
+    savingsGoals,
+    activeMonth,
+  } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<"payable" | "receivable">("payable");
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -67,6 +86,15 @@ export default function DebtsPage() {
   const totalReceivable = getTotalReceivableDebts(debts);
   const netDebtPosition = totalReceivable - totalPayable;
   const alerts = getDebtAlerts(debts, new Date(), 7, currency);
+
+  // Liaison directe avec Mon Budget
+  const totalExpenses = getTotalExpenses(transactions);
+  const monthlySavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+  const availableBalance = getRemainingToLive(income, totalExpenses, monthlySavings);
+  const debtEnvelope = categories.find(
+    (c) => c.name.trim().toLowerCase() === "remboursement de dette"
+  );
+  const repaidThisMonth = getSpentByCategory(transactions, "Remboursement de dette");
 
   const filteredDebts = debts.filter((d) => d.type === activeTab);
 
@@ -626,6 +654,40 @@ export default function DebtsPage() {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Bandeau de liaison directe avec Mon Budget */}
+      <div className="p-4 rounded-xl bg-gradient-to-r from-[#1E3A5F]/5 via-blue-50/70 to-emerald-50/60 border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-slate-700">
+          <div className="flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-[#1E3A5F]" />
+            <span>Solde disponible (Mon Budget) :</span>
+            <strong className={availableBalance < 0 ? "text-red-600" : "text-emerald-700"}>
+              {formatMoney(availableBalance, currency)}
+            </strong>
+          </div>
+          <span className="hidden sm:inline text-slate-300">|</span>
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-rose-600" />
+            <span>Remboursé ce mois-ci :</span>
+            <strong className="text-rose-700">{formatMoney(repaidThisMonth, currency)}</strong>
+            {debtEnvelope && (
+              <span className="text-xs text-slate-500">
+                (sur {formatMoney(debtEnvelope.amount, currency)} budgétisés)
+              </span>
+            )}
+          </div>
+        </div>
+        <Link href="/budget">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-blue-200 bg-white hover:bg-blue-50 text-[#1E3A5F] text-xs h-8 gap-1.5"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            <span>Voir dans Mon Budget</span>
+          </Button>
+        </Link>
       </div>
 
       {/* Onglets de bascule : Dettes à rembourser vs Dettes à récupérer */}
