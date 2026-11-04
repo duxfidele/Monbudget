@@ -278,16 +278,16 @@ export function getDailyBudget({
   const startOfDayRemaining = remainingAmount + todayExpenses;
 
   // Budget alloué pour aujourd'hui (ou montant journalier si pas de dépenses aujourd'hui)
-  const dailyBudget = startOfDayRemaining > 0 
-    ? Math.floor(startOfDayRemaining / daysRemaining) 
+  const dailyBudget = startOfDayRemaining > 0
+    ? Math.floor(startOfDayRemaining / daysRemaining)
     : (remainingAmount > 0 ? Math.floor(remainingAmount / daysRemaining) : 0);
 
   // DÉDUCTION AUTOMATIQUE DU BUDGET JOURNALIER AUJOURD'HUI
   const todaySpent = Math.max(0, todayExpenses);
   const todayRemaining = dailyBudget - todaySpent;
   const isOverDailyBudget = todayRemaining < 0;
-  const dailyProgressPercent = dailyBudget > 0 
-    ? Math.min(100, Math.round((todaySpent / dailyBudget) * 100)) 
+  const dailyProgressPercent = dailyBudget > 0
+    ? Math.min(100, Math.round((todaySpent / dailyBudget) * 100))
     : (todaySpent > 0 ? 100 : 0);
 
   // Moyenne pour les jours restants après aujourd'hui
@@ -622,10 +622,10 @@ export interface AIRecommendation {
   actionLabel?: string;
   actionHref?: string;
   correctiveActionType?:
-    | "align_overbudget"
-    | "fit_envelopes_to_balance"
-    | "sync_unplanned_savings"
-    | "create_emergency_fund";
+  | "align_overbudget"
+  | "fit_envelopes_to_balance"
+  | "sync_unplanned_savings"
+  | "create_emergency_fund";
   correctivePayload?: {
     categoryName?: string;
     targetAmount?: number;
@@ -869,10 +869,10 @@ export function generateFinancialAIAnalysis({
     healthScore >= 80
       ? "Excellente"
       : healthScore >= 60
-      ? "Bonne"
-      : healthScore >= 40
-      ? "À surveiller"
-      : "Critique";
+        ? "Bonne"
+        : healthScore >= 40
+          ? "À surveiller"
+          : "Critique";
 
   // ==========================================================================
   // CONSTATS MULTI-PAGES (FINDINGS) BASÉS SUR LA RÉALITÉ IMMÉDIATE
