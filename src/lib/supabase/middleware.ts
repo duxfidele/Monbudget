@@ -7,19 +7,21 @@ export async function updateSession(request: NextRequest) {
   })
 
   const pathname = request.nextUrl.pathname
+  const isHomePage = pathname === '/'
   const isGuestOnlyAuthRoute = pathname.startsWith('/login') || 
                                pathname.startsWith('/register') ||
                                pathname.startsWith('/forgot-password')
   const isAuthRoute = isGuestOnlyAuthRoute ||
                       pathname.startsWith('/reset-password') ||
                       pathname.startsWith('/auth/confirm')
+  const isPublicRoute = isHomePage || isAuthRoute
 
   const allCookies = request.cookies.getAll()
   const hasAuthCookie = allCookies.some(c => c.name.startsWith('sb-') && c.name.includes('-auth-token'))
 
   // Fast-path: Si aucun cookie Supabase n'est présent, résolution instantanée (0ms)
   if (!hasAuthCookie) {
-    if (isAuthRoute) {
+    if (isPublicRoute) {
       return supabaseResponse
     }
     const url = request.nextUrl.clone()
@@ -65,7 +67,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Protection des routes privées
-  if (!user && !isAuthRoute) {
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
@@ -74,7 +76,7 @@ export async function updateSession(request: NextRequest) {
   // Redirection des utilisateurs déjà connectés vers le dashboard (sauf sur /reset-password et /auth/confirm)
   if (user && isGuestOnlyAuthRoute) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 

@@ -397,7 +397,7 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        <Link href="/" className="text-xs font-semibold text-[#1E3A5F] hover:underline flex items-center gap-1 shrink-0">
+        <Link href="/dashboard" className="text-xs font-semibold text-[#1E3A5F] hover:underline flex items-center gap-1 shrink-0">
           <span>Tableau de bord</span>
           <span>&rarr;</span>
         </Link>

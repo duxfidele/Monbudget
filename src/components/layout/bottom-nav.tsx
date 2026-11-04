@@ -9,7 +9,7 @@ const routes = [
   {
     label: "Accueil",
     icon: LayoutDashboard,
-    href: "/",
+    href: "/dashboard",
     color: "text-sky-500",
   },
   {

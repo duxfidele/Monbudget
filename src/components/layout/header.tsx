@@ -24,7 +24,7 @@ export const Header = () => {
           <Menu className="h-6 w-6 text-[#1E3A5F]" />
         </Button>
 
-        <Link href="/" className="flex items-center ml-0.5">
+        <Link href="/dashboard" className="flex items-center ml-0.5">
           <div className="relative w-8 h-8 mr-2 flex items-center justify-center bg-[#1E3A5F] rounded-lg shadow-xs">
             <span className="text-white font-bold text-sm">MB</span>
           </div>

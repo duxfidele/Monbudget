@@ -40,7 +40,7 @@ export default function LoginPage() {
         setLoading(false);
       } else {
         toast.success("Connexion réussie ! Ouverture de MonBudget...");
-        window.location.href = "/";
+        window.location.href = "/dashboard";
       }
     } catch (err: any) {
       const msg = err?.message || "Erreur réseau lors de la connexion.";

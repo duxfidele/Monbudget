@@ -18,7 +18,7 @@ const routes = [
   {
     label: "Tableau de bord",
     icon: LayoutDashboard,
-    href: "/",
+    href: "/dashboard",
     color: "text-sky-400",
   },
   {
@@ -72,7 +72,7 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
     <div className="space-y-4 py-4 flex flex-col h-full bg-[#1E3A5F] text-white">
       <div className="px-3 py-2 flex-1">
         <Link 
-          href="/" 
+          href="/dashboard" 
           onClick={onNavigate}
           className="flex items-center pl-3 mb-10 transition-opacity hover:opacity-90"
         >
