@@ -76,9 +76,18 @@ export function getTotalAdditionalIncome(transactions: TransactionItem[]): numbe
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
 }
 
+/**
+ * Vérifie si une transaction est un versement d'épargne (déjà comptabilisé dans l'épargne mensuelle)
+ */
+export function isSavingsTransaction(tx: TransactionItem & { label?: string }): boolean {
+  const cat = (tx.category || "").trim().toLowerCase();
+  const lbl = (tx.label || "").trim().toLowerCase();
+  return cat === "épargne" || cat === "epargne" || lbl.startsWith("épargne :");
+}
+
 export function getTotalExpenses(transactions: TransactionItem[]): number {
   return transactions
-    .filter((tx) => isExpenseTransaction(tx))
+    .filter((tx) => isExpenseTransaction(tx) && !isSavingsTransaction(tx))
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
 }
 
@@ -350,7 +359,7 @@ export function getTodayExpenses(
 ): number {
   const targetDate = todayDateStr || new Date().toISOString().split("T")[0];
   return transactions
-    .filter((tx) => isExpenseTransaction(tx) && tx.date === targetDate)
+    .filter((tx) => isExpenseTransaction(tx) && !isSavingsTransaction(tx) && tx.date === targetDate)
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
 }
 

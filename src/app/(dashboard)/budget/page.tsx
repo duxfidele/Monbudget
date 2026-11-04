@@ -24,6 +24,7 @@ import {
   HandCoins,
   ArrowUpRight,
   ArrowDownLeft,
+  PiggyBank,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore, Category } from "@/lib/store/ui-store";
@@ -585,6 +586,38 @@ export default function BudgetPage() {
   const debtEnvelope = categories.find(
     (c) => c.name.trim().toLowerCase() === "remboursement de dette"
   );
+  const savingsEnvelope = categories.find(
+    (c) => c.name.trim().toLowerCase() === "épargne"
+  );
+  const totalSavingsAccumulated = savingsGoals.reduce((sum, g) => sum + (Number(g.current) || 0), 0);
+
+  const handleBudgetizeSavingsEnvelope = async () => {
+    const suggestedAmount =
+      income > 0
+        ? Math.max(10000, Math.round((income * 0.1) / 1000) * 1000)
+        : 25000;
+
+    if (savingsEnvelope) {
+      await updateCategoryAmount(savingsEnvelope.id, suggestedAmount);
+      toast.success(
+        `Enveloppe « Épargne » ajustée à ${formatMoney(suggestedAmount, currency)} !`
+      );
+    } else {
+      const uuid =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Date.now().toString();
+      await addCategory({
+        id: uuid,
+        name: "Épargne",
+        amount: suggestedAmount,
+        color: "bg-emerald-600",
+      });
+      toast.success(
+        `Enveloppe « Épargne » (${formatMoney(suggestedAmount, currency)}) créée dans votre budget !`
+      );
+    }
+  };
 
   const handleBudgetizeDebtEnvelope = async () => {
     const suggestedAmount =
@@ -1040,6 +1073,57 @@ export default function BudgetPage() {
                   <span>Encaissé ce mois (+ Revenu) :</span>
                   <strong className="text-emerald-700">+{formatMoney(recoveredThisMonth, currency)}</strong>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Carte Liaison directe Épargne & Objectifs <-> Mon Budget */}
+          <Card className="border border-emerald-200/80 shadow-sm bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <PiggyBank className="h-4 w-4 text-emerald-600" />
+                  Lien Épargne & Objectifs
+                </CardTitle>
+                <Link
+                  href="/savings"
+                  className="text-xs font-semibold text-[#1E3A5F] hover:underline flex items-center gap-1"
+                >
+                  <span>Voir objectifs</span>
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+              <CardDescription className="text-xs text-slate-500">
+                Synchronisé avec vos versements d&apos;épargne et vos transactions
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2.5 text-xs">
+              <div className="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-100 space-y-1">
+                <div className="flex items-center justify-between text-emerald-900">
+                  <span className="font-medium">Épargné ce mois-ci :</span>
+                  <strong className="font-bold">{formatMoney(epargne, currency)}</strong>
+                </div>
+                <div className="flex items-center justify-between text-slate-600 text-[11px]">
+                  <span>Cumul total des objectifs ({savingsGoals.length}) :</span>
+                  <strong className="text-emerald-700">{formatMoney(totalSavingsAccumulated, currency)}</strong>
+                </div>
+                {savingsEnvelope ? (
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-emerald-200/60 text-slate-700">
+                    <span>Enveloppe Épargne prévue :</span>
+                    <strong>{formatMoney(savingsEnvelope.amount, currency)}</strong>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleBudgetizeSavingsEnvelope}
+                    className="w-full mt-1.5 h-7 text-[11px] border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700 font-semibold"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Créer l&apos;enveloppe « Épargne » (10%)
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

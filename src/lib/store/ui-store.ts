@@ -28,6 +28,8 @@ export type Transaction = {
   type: "expense" | "income" | "income_adjustment";
   linkedDebtId?: string;
   linkedPaymentId?: string;
+  linkedSavingsGoalId?: string;
+  linkedContributionId?: string;
 };
 
 export type SavingsContribution = {
@@ -35,6 +37,7 @@ export type SavingsContribution = {
   amount: number;
   date: string;
   notes?: string;
+  linkedTransactionId?: string;
 };
 
 export type SavingsGoal = {
@@ -436,6 +439,7 @@ export const useUIStore = create<UIState>((set, get) => ({
           const desc = tx.description || (isInc ? "Revenu complémentaire" : "Dépense");
           const isDebtRepay = desc.startsWith("Remboursement dette :");
           const isDebtRecover = desc.startsWith("Remboursement reçu :");
+          const isSavingsTx = desc.startsWith("Épargne :");
           return {
             id: tx.id,
             label: desc,
@@ -444,7 +448,12 @@ export const useUIStore = create<UIState>((set, get) => ({
               ? isDebtRecover
                 ? "Recouvrement de créance"
                 : tx.income_source || "Revenu"
-              : tx.categories?.name || (isDebtRepay ? "Remboursement de dette" : "Autre (Hors Budget)"),
+              : tx.categories?.name ||
+                (isDebtRepay
+                  ? "Remboursement de dette"
+                  : isSavingsTx
+                  ? "Épargne"
+                  : "Autre (Hors Budget)"),
             category_id: isInc ? undefined : tx.category_id,
             date: tx.transaction_date,
             type: isInc ? "income" : "expense",
@@ -1140,11 +1149,33 @@ export const useUIStore = create<UIState>((set, get) => ({
   addTransaction: async (tx) => {
     const isInc = tx.type === "income" || tx.type === "income_adjustment";
     const normalizedType: "income" | "expense" = isInc ? "income" : "expense";
+    const assignedCatName = (tx.category || (isInc ? "Revenu" : "Autre (Hors Budget)")).trim();
     const transactionItem: Transaction = {
       ...tx,
       type: normalizedType,
-      category: tx.category || (isInc ? "Revenu" : "Autre (Hors Budget)"),
+      category: assignedCatName,
     };
+
+    // Si c'est une dépense sur une catégorie qui n'est pas encore dans Mon Budget, l'ajouter automatiquement à Mon Budget
+    let updatedCategories = get().categories;
+    if (!isInc && assignedCatName && assignedCatName !== "Autre (Hors Budget)") {
+      const catExists = updatedCategories.some(
+        (c) => c.name.trim().toLowerCase() === assignedCatName.toLowerCase()
+      );
+      if (!catExists) {
+        const newCatId =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `cat-${Date.now()}`;
+        const newCat: Category = {
+          id: newCatId,
+          name: assignedCatName,
+          amount: 0,
+          color: assignedCatName.toLowerCase() === "épargne" ? "bg-emerald-600" : "bg-blue-500",
+        };
+        updatedCategories = deduplicateCategories([...updatedCategories, newCat]);
+      }
+    }
 
     const newTransactions = [transactionItem, ...get().transactions];
     const newIncome = isInc ? get().income + tx.amount : get().income;
@@ -1152,6 +1183,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({
       transactions: newTransactions,
       income: newIncome,
+      categories: updatedCategories,
     });
 
     // Sauvegarde locale instantanée
@@ -1161,6 +1193,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (cache && cache.months[monthKey]) {
       cache.months[monthKey].transactions = newTransactions;
       cache.months[monthKey].income = newIncome;
+      cache.months[monthKey].categories = updatedCategories;
       saveLocalCache(cache);
     }
 
@@ -1238,6 +1271,82 @@ export const useUIStore = create<UIState>((set, get) => ({
           return updatedD;
         });
       }
+      // Si cette transaction provenait d'un versement d'épargne, synchroniser automatiquement l'objectif d'épargne
+      const isSavingsTx =
+        tx.linkedContributionId ||
+        tx.label.startsWith("Épargne :") ||
+        tx.category.trim().toLowerCase() === "épargne";
+      let updatedGoals = get().savingsGoals;
+      let syncedContribIdToRemove: string | null = null;
+      let syncedGoalToUpdate: SavingsGoal | null = null;
+
+      if (isSavingsTx) {
+        updatedGoals = get().savingsGoals.map((g) => {
+          const matchingContrib = (g.contributions || []).find(
+            (c) =>
+              (tx.linkedContributionId && c.id === tx.linkedContributionId) ||
+              c.linkedTransactionId === tx.id ||
+              (tx.label.includes(g.name) && c.amount === tx.amount && c.date === tx.date)
+          );
+          if (!matchingContrib) return g;
+          syncedContribIdToRemove = matchingContrib.id;
+          const filteredContribs = (g.contributions || []).filter((c) => c.id !== matchingContrib.id);
+          const newCurrent = filteredContribs.reduce((s, c) => s + c.amount, 0);
+          const newStatus: "active" | "completed" | "paused" =
+            newCurrent >= g.target ? "completed" : "active";
+          const updatedG: SavingsGoal = {
+            ...g,
+            current: newCurrent,
+            status: newStatus,
+            contributions: filteredContribs,
+          };
+          syncedGoalToUpdate = updatedG;
+          return updatedG;
+        });
+      }
+
+      set({
+        transactions: newTransactions,
+        income: newIncome,
+        debts: updatedDebts,
+        savingsGoals: updatedGoals,
+      });
+
+      const { year, month } = get().activeMonth;
+      const monthKey = getMonthKey(year, month);
+      const cache = loadLocalCache();
+      if (cache) {
+        if (cache.months[monthKey]) {
+          cache.months[monthKey].transactions = newTransactions;
+          cache.months[monthKey].income = newIncome;
+        }
+        cache.debts = updatedDebts;
+        cache.savingsGoals = updatedGoals;
+        saveLocalCache(cache);
+      }
+
+      try {
+        await supabase.from("transactions").delete().eq("id", id);
+        if (syncedPaymentIdToRemove && syncedDebtToUpdate) {
+          const dUpd = syncedDebtToUpdate as DebtItem;
+          await supabase.from("debt_payments").delete().eq("id", syncedPaymentIdToRemove);
+          await supabase
+            .from("debts")
+            .update({ remaining_amount: dUpd.remainingAmount, status: dUpd.status })
+            .eq("id", dUpd.id);
+        }
+        if (syncedContribIdToRemove && syncedGoalToUpdate) {
+          const gUpd = syncedGoalToUpdate as SavingsGoal;
+          await supabase.from("savings_contributions").delete().eq("id", syncedContribIdToRemove);
+          await supabase
+            .from("savings_goals")
+            .update({ current_amount: gUpd.current, status: gUpd.status })
+            .eq("id", gUpd.id);
+        }
+      } catch (err) {
+        console.warn("Could not delete transaction from Supabase", err);
+      }
+      return;
     }
 
     set({
@@ -1438,11 +1547,16 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (!goal) return;
 
     const contributionDate = date || new Date().toISOString().split("T")[0];
+    const txId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `tx-sav-${Date.now()}`;
     const contribItem: SavingsContribution = {
       id: Date.now().toString(),
       amount,
       date: contributionDate,
       notes: notes || undefined,
+      linkedTransactionId: txId,
     };
 
     const newCurrent = goal.current + amount;
@@ -1456,11 +1570,34 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     });
 
-    set({ savingsGoals: updatedGoals });
+    // Créer automatiquement la transaction liée pour que Transactions et Mon Budget soient synchronisés
+    const txLabel = `Épargne : ${goal.name}${notes?.trim() ? ` (${notes.trim()})` : ""}`;
+    const linkedTx: Transaction = {
+      id: txId,
+      label: txLabel,
+      amount,
+      category: "Épargne",
+      date: contributionDate,
+      type: "expense",
+      linkedSavingsGoalId: goalId,
+      linkedContributionId: contribItem.id,
+    };
 
+    const updatedTransactions = [linkedTx, ...get().transactions];
+
+    set({
+      savingsGoals: updatedGoals,
+      transactions: updatedTransactions,
+    });
+
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache();
     if (cache) {
       cache.savingsGoals = updatedGoals;
+      if (cache.months[monthKey]) {
+        cache.months[monthKey].transactions = updatedTransactions;
+      }
       saveLocalCache(cache);
     }
 
@@ -1478,14 +1615,39 @@ export const useUIStore = create<UIState>((set, get) => ({
 
       if (newContrib) {
         contribItem.id = newContrib.id;
+        linkedTx.linkedContributionId = newContrib.id;
       }
       await supabase.from("savings_goals").update({ current_amount: newCurrent }).eq("id", goalId);
+
+      const budgetId = get().budget_id;
+      if (budgetId) {
+        const { data: createdTx } = await supabase
+          .from("transactions")
+          .insert({
+            monthly_budget_id: budgetId,
+            category_id: null,
+            amount,
+            description: txLabel,
+            transaction_date: contributionDate,
+            type: "expense",
+          })
+          .select()
+          .maybeSingle();
+
+        if (createdTx) {
+          linkedTx.id = createdTx.id;
+          contribItem.linkedTransactionId = createdTx.id;
+        }
+      }
     } catch (err) {
       console.warn("Could not sync savings contribution to Supabase", err);
     }
   },
 
   removeSavingsContribution: async (contributionId, goalId) => {
+    const targetGoal = get().savingsGoals.find((g) => g.id === goalId);
+    const contribToRemove = targetGoal?.contributions?.find((c) => c.id === contributionId);
+
     const updatedGoals = get().savingsGoals.map((g) => {
       if (g.id !== goalId) return g;
       const filtered = (g.contributions || []).filter((c) => c.id !== contributionId);
@@ -1498,11 +1660,40 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     });
 
-    set({ savingsGoals: updatedGoals });
+    // Supprimer automatiquement la transaction liée dans Transactions
+    let txToRemoveId: string | null = null;
+    const currentTxs = get().transactions;
+    const matchingTx = currentTxs.find(
+      (t) =>
+        t.linkedContributionId === contributionId ||
+        (contribToRemove?.linkedTransactionId && t.id === contribToRemove.linkedTransactionId) ||
+        (targetGoal &&
+          contribToRemove &&
+          t.amount === contribToRemove.amount &&
+          t.date === contribToRemove.date &&
+          t.label.includes(targetGoal.name))
+    );
 
+    const updatedTransactions = matchingTx
+      ? currentTxs.filter((t) => t.id !== matchingTx.id)
+      : currentTxs;
+    if (matchingTx) {
+      txToRemoveId = matchingTx.id;
+    }
+
+    set({
+      savingsGoals: updatedGoals,
+      transactions: updatedTransactions,
+    });
+
+    const { year, month } = get().activeMonth;
+    const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache();
     if (cache) {
       cache.savingsGoals = updatedGoals;
+      if (cache.months[monthKey]) {
+        cache.months[monthKey].transactions = updatedTransactions;
+      }
       saveLocalCache(cache);
     }
 
@@ -1514,6 +1705,9 @@ export const useUIStore = create<UIState>((set, get) => ({
           .from("savings_goals")
           .update({ current_amount: updatedGoal.current, status: updatedGoal.status })
           .eq("id", goalId);
+      }
+      if (txToRemoveId) {
+        await supabase.from("transactions").delete().eq("id", txToRemoveId);
       }
     } catch (err) {
       console.warn("Could not delete savings contribution from Supabase", err);

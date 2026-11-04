@@ -28,6 +28,7 @@ import {
   isExpenseTransaction,
   getDailyBudget,
   getTodayExpenses,
+  getTotalExpenses,
   getRemainingToLive,
   getMonthlySavingsContributions,
   AFRICAN_EXPENSE_CATEGORIES,
@@ -103,9 +104,7 @@ export default function TransactionsPage() {
     .filter((tx) => isIncomeTransaction(tx))
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const totalExpenses = transactions
-    .filter((tx) => isExpenseTransaction(tx))
-    .reduce((sum, tx) => sum + tx.amount, 0);
+  const totalExpenses = getTotalExpenses(transactions);
 
   const epargne = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
   const reste = getRemainingToLive(income, totalExpenses, epargne);
