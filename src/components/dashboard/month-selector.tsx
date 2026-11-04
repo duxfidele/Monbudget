@@ -42,27 +42,27 @@ export function MonthSelector() {
   };
 
   return (
-    <div className="inline-flex items-center gap-1.5 bg-white border border-slate-200/80 rounded-xl p-1 shadow-xs">
+    <div className="inline-flex items-center gap-0.5 sm:gap-1.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl p-1 shadow-xs transition-colors">
       <Button
         variant="ghost"
         size="icon"
         onClick={handlePrev}
-        className="h-8 w-8 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
+        className="h-7 w-7 sm:h-8 sm:w-8 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
         title="Mois précédent"
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
 
-      <div className="flex items-center gap-1.5 px-2.5 py-1 text-sm font-semibold text-slate-800 select-none">
-        <Calendar className="h-4 w-4 text-[#1E3A5F]" />
-        <span>{capitalizedMonth}</span>
+      <div className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 select-none">
+        <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#1E3A5F] dark:text-sky-400 shrink-0" />
+        <span className="truncate max-w-[110px] sm:max-w-none">{capitalizedMonth}</span>
       </div>
 
       <Button
         variant="ghost"
         size="icon"
         onClick={handleNext}
-        className="h-8 w-8 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
+        className="h-7 w-7 sm:h-8 sm:w-8 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
         title="Mois suivant"
       >
         <ChevronRight className="h-4 w-4" />
@@ -73,7 +73,7 @@ export function MonthSelector() {
           variant="outline"
           size="sm"
           onClick={handleResetToCurrent}
-          className="h-7 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 px-2 ml-1 rounded-lg"
+          className="h-7 text-[11px] sm:text-xs text-blue-600 dark:text-sky-400 border-blue-200 dark:border-sky-500/30 hover:bg-blue-50 dark:hover:bg-sky-500/10 px-1.5 sm:px-2 ml-0.5 sm:ml-1 rounded-lg"
         >
           Ce mois
         </Button>

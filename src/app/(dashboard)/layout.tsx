@@ -19,11 +19,11 @@ export default function DashboardLayout({
       {/* Menu Latéral Mobile Coulissant (déclenché par les 3 traits en haut à gauche) */}
       <MobileSidebar />
 
-      <main className="md:pl-72 h-full bg-slate-50 flex flex-col min-h-screen">
-        <div className="h-[70px] md:h-[80px] shrink-0 sticky top-0 z-[40] bg-slate-50/80 backdrop-blur-sm">
+      <main className="md:pl-72 h-full bg-slate-50 dark:bg-[#071324] flex flex-col min-h-screen transition-colors">
+        <div className="h-[70px] md:h-[80px] shrink-0 sticky top-0 z-[40] bg-slate-50/80 dark:bg-[#071324]/80 backdrop-blur-sm">
           <Header />
         </div>
-        <div className="p-4 md:p-8 pb-24 md:pb-8 flex-1">{children}</div>
+        <div className="p-3 sm:p-4 md:p-8 pb-24 md:pb-8 flex-1">{children}</div>
       </main>
       <BottomNav />
       <StoreInitializer />

@@ -42,7 +42,7 @@ export const BottomNav = () => {
   const pathname = usePathname();
 
   return (
-    <div className="fixed bottom-0 left-0 z-50 w-full h-16 bg-white border-t border-slate-200 md:hidden pb-safe">
+    <div className="fixed bottom-0 left-0 z-50 w-full h-16 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 md:hidden pb-safe transition-colors">
       <div className="grid h-full max-w-lg grid-cols-5 mx-auto font-medium">
         {routes.map((route) => {
           const isActive = pathname === route.href;
@@ -50,18 +50,18 @@ export const BottomNav = () => {
             <Link
               key={route.href}
               href={route.href}
-              className="inline-flex flex-col items-center justify-center px-1 hover:bg-slate-50 group transition-colors"
+              className="inline-flex flex-col items-center justify-center px-1 hover:bg-slate-50 dark:hover:bg-slate-800/60 group transition-colors"
             >
               <route.icon
                 className={cn(
                   "w-5 h-5 mb-1 transition-all",
-                  isActive ? route.color : "text-slate-500 group-hover:text-slate-800"
+                  isActive ? route.color : "text-slate-400 dark:text-slate-500 group-hover:text-slate-800 dark:group-hover:text-slate-200"
                 )}
               />
               <span
                 className={cn(
                   "text-[10px] leading-tight transition-colors",
-                  isActive ? "text-slate-900 font-bold" : "text-slate-500 group-hover:text-slate-800"
+                  isActive ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200"
                 )}
               >
                 {route.label}

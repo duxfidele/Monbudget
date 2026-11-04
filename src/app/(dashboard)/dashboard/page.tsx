@@ -47,6 +47,8 @@ export default function DashboardPage() {
 
   // 1. Calculs financiers purs et précis via budget-calc
   const depenses = getTotalExpenses(transactions);
+  const depensesPrevues = categories.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+  const resteAAllouer = income - depensesPrevues;
   const epargneMois = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
   const epargneConstituee = savingsGoals.reduce((sum, g) => sum + g.current, 0);
   const totalTargetSavings = savingsGoals.reduce((sum, g) => sum + g.target, 0);
@@ -139,30 +141,30 @@ export default function DashboardPage() {
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
         <div>
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">Tableau de bord</h2>
-          <p className="text-slate-500 mt-1 text-sm md:text-base">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Tableau de bord</h2>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm md:text-base">
             Gérez votre salaire au jour le jour pour terminer le mois sereinement.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <Button
             onClick={handleDownloadPDF}
             variant="outline"
-            className="border-slate-300 bg-white hover:bg-slate-50 text-slate-800 gap-1.5"
+            className="flex-1 sm:flex-none border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 gap-1.5 text-xs sm:text-sm h-9"
           >
-            <FileText className="h-4 w-4 text-[#1E3A5F]" />
+            <FileText className="h-4 w-4 text-[#1E3A5F] dark:text-sky-400" />
             <span>Rapport PDF</span>
           </Button>
           <Button
             onClick={handleDownloadCSV}
             variant="outline"
-            className="border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-800 gap-1.5"
+            className="flex-1 sm:flex-none border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/30 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 gap-1.5 text-xs sm:text-sm h-9"
           >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             <span>Excel (CSV)</span>
           </Button>
-          <Link href="/transactions">
-            <Button className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shadow-sm gap-1.5">
+          <Link href="/transactions" className="w-full sm:w-auto">
+            <Button className="w-full sm:w-auto bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shadow-sm gap-1.5 text-xs sm:text-sm h-9">
               <Plus className="h-4 w-4" />
               <span>Ajouter une dépense</span>
             </Button>
@@ -294,18 +296,18 @@ export default function DashboardPage() {
       {/* KPI Cards : Les 6 Indicateurs Financiers Clés (Pilier A) */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* 1. Revenus du mois */}
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Revenus du Mois</CardTitle>
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <Wallet className="h-4 w-4 text-emerald-600" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Revenus du Mois</CardTitle>
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg">
+              <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
+            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {formatMoney(income, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {incomeEntries && incomeEntries.length > 1
                 ? `${incomeEntries.length} sources de revenus actives`
                 : "Salaire & revenus déclarés"}
@@ -313,59 +315,67 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* 2. Dépenses du mois */}
-        <Card className="border-none shadow-sm bg-white">
+        {/* 2. Dépenses du mois & Budget Prévu */}
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Dépenses du Mois</CardTitle>
-            <div className="p-2 bg-red-100 rounded-lg">
-              <TrendingDown className="h-4 w-4 text-red-600" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Dépenses Réalisées</CardTitle>
+            <div className="p-2 bg-red-100 dark:bg-red-950/60 rounded-lg">
+              <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
+            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {formatMoney(depenses, currency)}
             </div>
-            <div className="w-full bg-slate-100 h-1.5 mt-3 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-3 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${pourcentageDepense > 90 ? 'bg-red-500' : 'bg-blue-600'}`}
                 style={{ width: `${Math.min(pourcentageDepense, 100)}%` }}
               />
             </div>
-            <p className="text-xs text-slate-400 mt-1">{Math.round(pourcentageDepense)}% des revenus consommés</p>
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2">
+              <span>{Math.round(pourcentageDepense)}% des revenus</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                Prévu : {formatMoney(depensesPrevues, currency)}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
-        {/* 3. Solde disponible */}
-        <Card className="border-none shadow-sm bg-white">
+        {/* 3. Solde disponible & Reste à allouer */}
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Solde Disponible</CardTitle>
-            <div className="p-2 bg-sky-100 rounded-lg">
-              <Receipt className="h-4 w-4 text-sky-600" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Solde Disponible</CardTitle>
+            <div className="p-2 bg-sky-100 dark:bg-sky-950/60 rounded-lg">
+              <Receipt className="h-4 w-4 text-sky-600 dark:text-sky-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div suppressHydrationWarning className={`text-2xl font-bold ${reste < 0 ? 'text-red-600' : 'text-slate-800'}`}>
+            <div suppressHydrationWarning className={`text-2xl font-bold ${reste < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
               {formatMoney(reste, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {reste >= 0 ? "Reste en caisse pour le mois" : "Déficit constaté"}
-            </p>
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2">
+              <span>{reste >= 0 ? "Reste en caisse" : "Déficit constaté"}</span>
+              <span className={`font-semibold ${resteAAllouer < 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                À allouer : {formatMoney(resteAAllouer, currency)}
+              </span>
+            </div>
           </CardContent>
         </Card>
 
         {/* 4. Épargne constituée */}
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Épargne Constituée</CardTitle>
-            <div className="p-2 bg-amber-100 rounded-lg">
-              <PiggyBank className="h-4 w-4 text-amber-600" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Épargne Constituée</CardTitle>
+            <div className="p-2 bg-amber-100 dark:bg-amber-950/60 rounded-lg">
+              <PiggyBank className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
+            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {formatMoney(epargneConstituee > 0 ? epargneConstituee : epargneMois, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               +{formatMoney(epargneMois, currency)} ce mois • {savingsGoals.length} objectif(s)
             </p>
           </CardContent>
@@ -373,18 +383,18 @@ export default function DashboardPage() {
 
         {/* 5. Dettes à rembourser */}
         <Link href="/debts" className="block group">
-          <Card className="border-none shadow-sm bg-white group-hover:shadow-md transition-shadow h-full">
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 group-hover:shadow-md transition-shadow h-full">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">Dettes à Rembourser</CardTitle>
-              <div className="p-2 bg-rose-100 rounded-lg">
-                <HandCoins className="h-4 w-4 text-rose-600" />
+              <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Dettes à Rembourser</CardTitle>
+              <div className="p-2 bg-rose-100 dark:bg-rose-950/60 rounded-lg">
+                <HandCoins className="h-4 w-4 text-rose-600 dark:text-rose-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div suppressHydrationWarning className="text-2xl font-bold text-rose-600">
+              <div suppressHydrationWarning className="text-2xl font-bold text-rose-600 dark:text-rose-400">
                 {formatMoney(dettesARembourser, currency)}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 {debts.filter((d) => d.type === "payable" && d.remainingAmount > 0).length} personne(s) à rembourser &rarr;
               </p>
             </CardContent>
@@ -393,18 +403,18 @@ export default function DashboardPage() {
 
         {/* 6. Dettes à récupérer */}
         <Link href="/debts" className="block group">
-          <Card className="border-none shadow-sm bg-white group-hover:shadow-md transition-shadow h-full">
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 group-hover:shadow-md transition-shadow h-full">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">Dettes à Récupérer</CardTitle>
-              <div className="p-2 bg-teal-100 rounded-lg">
-                <ArrowDownLeft className="h-4 w-4 text-teal-600" />
+              <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Dettes à Récupérer</CardTitle>
+              <div className="p-2 bg-teal-100 dark:bg-teal-950/60 rounded-lg">
+                <ArrowDownLeft className="h-4 w-4 text-teal-600 dark:text-teal-400" />
               </div>
             </CardHeader>
             <CardContent>
-              <div suppressHydrationWarning className="text-2xl font-bold text-teal-700">
+              <div suppressHydrationWarning className="text-2xl font-bold text-teal-700 dark:text-teal-300">
                 {formatMoney(dettesARecuperer, currency)}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 {debts.filter((d) => d.type === "receivable" && d.remainingAmount > 0).length} personne(s) qui me doivent &rarr;
               </p>
             </CardContent>
@@ -415,20 +425,20 @@ export default function DashboardPage() {
       {/* 7. Progression des Objectifs Financiers & Intelligence Artificielle Financière (Piliers A, D, F) */}
       <div className="grid gap-6 lg:grid-cols-7">
         {/* Progression des objectifs financiers */}
-        <Card className="lg:col-span-3 border-none shadow-sm bg-white">
+        <Card className="lg:col-span-3 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <Target className="h-5 w-5 text-emerald-600" />
+                <CardTitle className="flex items-center gap-2 text-base md:text-lg text-slate-900 dark:text-slate-100">
+                  <Target className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                   Progression des Objectifs
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-slate-500 dark:text-slate-400">
                   Avancement global : {globalGoalsProgress}% ({formatMoney(epargneConstituee, currency)})
                 </CardDescription>
               </div>
               <Link href="/savings">
-                <Button variant="ghost" size="sm" className="text-blue-600 font-medium text-xs">
+                <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium text-xs">
                   Gérer &rarr;
                 </Button>
               </Link>
@@ -440,13 +450,13 @@ export default function DashboardPage() {
               return (
                 <div key={goal.id} className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs sm:text-sm">
-                    <span className="font-semibold text-slate-800 truncate">{goal.name}</span>
-                    <span className="text-xs font-bold text-slate-700 shrink-0">
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{goal.name}</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
                       {formatMoney(goal.current, currency)}{" "}
                       <span className="text-slate-400 font-normal">/ {formatMoney(goal.target, currency)} ({pct}%)</span>
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${goal.color || "bg-emerald-600"}`}
                       style={{ width: `${pct}%` }}
@@ -456,10 +466,10 @@ export default function DashboardPage() {
               );
             })}
             {savingsGoals.length === 0 && (
-              <div className="text-center py-6 text-slate-500 text-xs space-y-2">
+              <div className="text-center py-6 text-slate-500 dark:text-slate-400 text-xs space-y-2">
                 <p>Aucun objectif financier configuré (Moto, Maison, Scolarité, Urgence...).</p>
                 <Link href="/savings">
-                  <Button size="sm" variant="outline" className="mt-1 text-xs">
+                  <Button size="sm" variant="outline" className="mt-1 text-xs dark:border-slate-700 dark:text-slate-300">
                     + Définir un objectif
                   </Button>
                 </Link>
@@ -554,15 +564,15 @@ export default function DashboardPage() {
       {/* Grid 2 colonnes : Dernières Transactions & Progression des Budgets */}
       <div className="grid gap-6 md:grid-cols-7 mt-2">
         {/* Recent Transactions */}
-        <Card className="md:col-span-4 border-none shadow-sm">
+        <Card className="md:col-span-4 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Transactions Récentes</CardTitle>
-                <CardDescription>Vos dernières opérations enregistrées</CardDescription>
+                <CardTitle className="text-slate-900 dark:text-slate-100">Transactions Récentes</CardTitle>
+                <CardDescription className="text-slate-500 dark:text-slate-400">Vos dernières opérations enregistrées</CardDescription>
               </div>
               <Link href="/transactions">
-                <Button variant="ghost" size="sm" className="text-blue-600 font-medium">
+                <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium">
                   Voir tout <ArrowRight className="ml-1.5 h-4 w-4" />
                 </Button>
               </Link>
@@ -571,29 +581,29 @@ export default function DashboardPage() {
           <CardContent>
             <div className="space-y-4">
               {transactions.slice(0, 5).map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
                   <div className="flex items-center gap-3.5">
-                    <div className={`p-2.5 rounded-xl ${isIncomeTransaction(tx) ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                    <div className={`p-2.5 rounded-xl ${isIncomeTransaction(tx) ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
                       {isIncomeTransaction(tx) ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">{tx.label}</p>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{tx.label}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-slate-500">{tx.date}</span>
-                        <span className="text-xs text-slate-300">•</span>
-                        <span className={`text-xs ${isIncomeTransaction(tx) ? "text-emerald-600 font-medium" : "text-slate-500"}`}>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{tx.date}</span>
+                        <span className="text-xs text-slate-300 dark:text-slate-600">•</span>
+                        <span className={`text-xs ${isIncomeTransaction(tx) ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-slate-500 dark:text-slate-400"}`}>
                           {isIncomeTransaction(tx) ? "Revenu" : (tx.category || "Autre (Hors Budget)")}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div suppressHydrationWarning className={`font-semibold text-sm ${isIncomeTransaction(tx) ? 'text-emerald-600' : 'text-slate-800'}`}>
+                  <div suppressHydrationWarning className={`font-semibold text-sm ${isIncomeTransaction(tx) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'}`}>
                     {isIncomeTransaction(tx) ? '+' : '-'}{formatMoney(tx.amount, currency)}
                   </div>
                 </div>
               ))}
               {transactions.length === 0 && (
-                <div className="text-center py-8 text-slate-500 text-sm">
+                <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
                   Aucune transaction ce mois-ci. Saisissez votre première dépense !
                 </div>
               )}
@@ -602,15 +612,15 @@ export default function DashboardPage() {
         </Card>
 
         {/* Budgets Progress */}
-        <Card className="md:col-span-3 border-none shadow-sm">
+        <Card className="md:col-span-3 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Enveloppes par Catégorie</CardTitle>
-                <CardDescription>Consommation par rapport aux plafonds</CardDescription>
+                <CardTitle className="text-slate-900 dark:text-slate-100">Enveloppes par Catégorie</CardTitle>
+                <CardDescription className="text-slate-500 dark:text-slate-400">Consommation par rapport aux plafonds prévus</CardDescription>
               </div>
               <Link href="/budget">
-                <Button variant="ghost" size="sm" className="text-blue-600 font-medium">
+                <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium">
                   Ajuster
                 </Button>
               </Link>
@@ -621,19 +631,19 @@ export default function DashboardPage() {
               return (
                 <div key={idx} className="space-y-1.5">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-slate-700">{cat.name}</span>
-                    <span suppressHydrationWarning className="font-medium text-slate-900 text-xs">
-                      {formatMoney(cat.spent, currency)} <span className="text-slate-400 font-normal">/ {formatMoney(cat.amount, currency)}</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{cat.name}</span>
+                    <span suppressHydrationWarning className="font-medium text-slate-900 dark:text-slate-100 text-xs">
+                      {formatMoney(cat.spent, currency)} <span className="text-slate-400 dark:text-slate-500 font-normal">/ {formatMoney(cat.amount, currency)}</span>
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full ${cat.color || 'bg-blue-500'} rounded-full transition-all duration-500 ${cat.isOverBudget ? '!bg-red-500' : ''}`}
                       style={{ width: `${Math.min(cat.percent, 100)}%` }}
                     />
                   </div>
                   {cat.isOverBudget && (
-                    <p className="text-[11px] text-red-600 font-medium flex items-center gap-1">
+                    <p className="text-[11px] text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3" /> Plafond dépassé
                     </p>
                   )}
@@ -641,7 +651,7 @@ export default function DashboardPage() {
               );
             })}
             {categoryStats.length === 0 && (
-              <div className="text-center py-8 text-slate-500 text-sm">
+              <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
                 Aucune enveloppe définie. Cliquez sur « Ajuster » pour configurer votre budget.
               </div>
             )}

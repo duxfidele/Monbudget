@@ -55,7 +55,7 @@ export function LandingPreviewSection() {
         {activeTab === "mobile" && (
           <div className="pt-4 flex flex-col lg:flex-row items-center justify-center gap-8 md:gap-12 animate-in fade-in duration-300">
             {/* Phone 1: Dashboard & Transactions Screen */}
-            <div className="w-[310px] sm:w-[340px] rounded-[44px] p-3.5 bg-gradient-to-b from-slate-700 via-slate-800 to-slate-950 shadow-2xl shadow-sky-950/80 border border-slate-700">
+            <div className="w-full max-w-[320px] sm:max-w-[340px] rounded-[44px] p-3.5 bg-gradient-to-b from-slate-700 via-slate-800 to-slate-950 shadow-2xl shadow-sky-950/80 border border-slate-700">
               <div className="w-full bg-[#0F1E36] rounded-[36px] overflow-hidden border border-slate-800 text-white p-4 space-y-4">
                 {/* Dynamic Island / Notch */}
                 <div className="flex justify-between items-center text-[10px] text-slate-400 px-3 pt-1">
@@ -145,7 +145,7 @@ export function LandingPreviewSection() {
             </div>
 
             {/* Phone 2: Budget Envelopes & Curve Screen */}
-            <div className="w-[310px] sm:w-[340px] rounded-[44px] p-3.5 bg-gradient-to-b from-slate-700 via-slate-800 to-slate-950 shadow-2xl shadow-sky-950/80 border border-slate-700">
+            <div className="w-full max-w-[320px] sm:max-w-[340px] rounded-[44px] p-3.5 bg-gradient-to-b from-slate-700 via-slate-800 to-slate-950 shadow-2xl shadow-sky-950/80 border border-slate-700">
               <div className="w-full bg-[#0F1E36] rounded-[36px] overflow-hidden border border-slate-800 text-white p-4 space-y-4">
                 {/* Dynamic Island / Notch */}
                 <div className="flex justify-between items-center text-[10px] text-slate-400 px-3 pt-1">

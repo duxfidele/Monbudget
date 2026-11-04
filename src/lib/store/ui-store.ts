@@ -8,6 +8,7 @@ import {
   IncomeSourceType,
   getMonthlySavingsContributions,
   getSpentByCategory,
+  AFRICAN_EXPENSE_CATEGORIES,
 } from "@/lib/utils/budget-calc";
 
 export type IncomeSourceEntry = {
@@ -209,7 +210,7 @@ function loadLocalCache(uid?: string | null): LocalCache | null {
     if (!raw) return null;
     const cache: LocalCache = JSON.parse(raw);
     let mutated = false;
-    if (!cache.currency) {
+    if (!cache.currency || cache.currency === "EUR" || cache.currency === "€") {
       cache.currency = "FCFA";
       mutated = true;
     }
@@ -358,7 +359,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   alertThreshold: initialCache?.alertThreshold ?? 80,
-  currency: initialCache?.currency || "FCFA",
+  currency: (initialCache?.currency && initialCache.currency !== "EUR" && initialCache.currency !== "€") ? initialCache.currency : "FCFA",
   payDay: initialCache?.payDay ?? 28,
   notifications: initialCache?.notifications ? { ...defaultNotifications, ...initialCache.notifications } : defaultNotifications,
   isLoading: false,
@@ -366,7 +367,14 @@ export const useUIStore = create<UIState>((set, get) => ({
   baseSalary: initialMonthData?.baseSalary || 0,
   income: initialMonthData?.income || 0,
   incomeEntries: initialMonthData?.incomeEntries || [],
-  categories: deduplicateCategories(initialMonthData?.categories || []),
+  categories: (initialMonthData?.categories && initialMonthData.categories.length > 0)
+    ? deduplicateCategories(initialMonthData.categories)
+    : AFRICAN_EXPENSE_CATEGORIES.map((cat, idx) => ({
+        id: `cat-default-${idx}`,
+        name: cat.name,
+        color: cat.color,
+        amount: 0,
+      })),
   transactions: (initialMonthData?.transactions || []).map((tx) => {
     const isInc = tx.type === "income" || tx.type === "income_adjustment";
     return isInc && (tx.category === "Alimentation" || !tx.category)
@@ -413,7 +421,12 @@ export const useUIStore = create<UIState>((set, get) => ({
         });
         set({ currency: "FCFA", alertThreshold: 80, payDay: 28 });
       } else {
-        const cur = profile.currency && profile.currency.trim() ? profile.currency.trim() : "FCFA";
+        let cur = profile.currency && profile.currency.trim() ? profile.currency.trim() : "FCFA";
+        // Migration automatique des comptes avec devise historique EUR (notamment degladux@gmail.com) vers FCFA
+        if (cur === "EUR" || cur === "€" || (user.email && user.email.toLowerCase().includes("degladux"))) {
+          cur = "FCFA";
+          supabase.from("profiles").update({ currency: "FCFA" }).eq("id", user.id).then();
+        }
         const th = profile.alert_threshold_percent ? Number(profile.alert_threshold_percent) : 80;
         const pd = profile.pay_day ? Number(profile.pay_day) : 28;
         
@@ -471,18 +484,50 @@ export const useUIStore = create<UIState>((set, get) => ({
         const fetchedBaseSalary = remoteIncomeEntries.reduce((sum, inc) => sum + inc.amount, 0);
 
         // 4. Catégories & Allocations
-        const { data: allCategories } = await supabase
+        let { data: allCategories } = await supabase
           .from("categories")
           .select("*")
           .eq("user_id", user.id)
           .eq("is_active", true);
+
+        // Si l'utilisateur n'a aucune catégorie (nouveau compte inscrit ou profil sans catégories),
+        // générer automatiquement les 11 catégories africaines par défaut avec prévisions à 0 FCFA
+        if (!allCategories || allCategories.length === 0) {
+          try {
+            const defaultCatsToInsert = AFRICAN_EXPENSE_CATEGORIES.map((cat) => ({
+              user_id: user.id,
+              name: cat.name,
+              color: cat.color,
+              is_active: true,
+            }));
+            const { data: insertedCats } = await supabase
+              .from("categories")
+              .insert(defaultCatsToInsert)
+              .select();
+            if (insertedCats && insertedCats.length > 0) {
+              allCategories = insertedCats;
+            }
+          } catch (catErr) {
+            console.warn("Could not insert default categories into Supabase:", catErr);
+          }
+        }
+
+        const effectiveCategoriesList = (allCategories && allCategories.length > 0)
+          ? allCategories
+          : AFRICAN_EXPENSE_CATEGORIES.map((cat, idx) => ({
+              id: `cat-default-${idx}`,
+              name: cat.name,
+              color: cat.color,
+              user_id: user.id,
+              is_active: true,
+            }));
 
         const { data: allocations } = await supabase
           .from("budget_allocations")
           .select("*")
           .eq("monthly_budget_id", budget.id);
 
-        const rawCategories: Category[] = (allCategories || []).map((cat) => {
+        const rawCategories: Category[] = effectiveCategoriesList.map((cat: any) => {
           const alloc = allocations?.find((a) => a.category_id === cat.id);
           return {
             id: cat.id,

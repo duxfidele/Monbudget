@@ -15,18 +15,29 @@ import {
   AlertCircle,
   Sparkles,
   Calendar,
-  Wallet
+  Wallet,
+  Sun,
+  Moon,
+  Monitor,
+  Palette
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTheme } from "next-themes";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useUIStore } from "@/lib/store/ui-store";
 
-type TabType = "profile" | "notifications" | "security";
+type TabType = "profile" | "appearance" | "notifications" | "security";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>("profile");
   const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const { theme, setTheme, systemTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Profile data
   const [name, setName] = useState("");
@@ -226,14 +237,14 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-8 pb-12">
       {/* En-tête */}
       <div>
-        <div className="inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-800 mb-1 border border-slate-200">
-          <User className="h-3.5 w-3.5 text-[#1E3A5F]" />
+        <div className="inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 mb-1 border border-slate-200 dark:border-slate-700">
+          <User className="h-3.5 w-3.5 text-[#1E3A5F] dark:text-sky-400" />
           <span>Configuration du compte</span>
         </div>
-        <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
+        <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
           Paramètres
         </h2>
-        <p className="text-slate-500 mt-1 text-sm md:text-base">
+        <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm md:text-base">
           Gérez votre profil, vos préférences de budget et la sécurité de votre compte.
         </p>
       </div>
@@ -247,11 +258,24 @@ export default function SettingsPage() {
             className={`w-full justify-start font-medium text-sm transition-all ${
               activeTab === "profile" 
                 ? "bg-[#1E3A5F] text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
             <User className="mr-2 h-4 w-4" />
             Mon Profil & Budget
+          </Button>
+
+          <Button 
+            variant={activeTab === "appearance" ? "secondary" : "ghost"} 
+            onClick={() => setActiveTab("appearance")}
+            className={`w-full justify-start font-medium text-sm transition-all ${
+              activeTab === "appearance" 
+                ? "bg-[#1E3A5F] text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <Palette className="mr-2 h-4 w-4" />
+            Apparence & Thème
           </Button>
 
           <Button 
@@ -260,7 +284,7 @@ export default function SettingsPage() {
             className={`w-full justify-start font-medium text-sm transition-all ${
               activeTab === "notifications" 
                 ? "bg-[#1E3A5F] text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
             <Bell className="mr-2 h-4 w-4" />
@@ -273,7 +297,7 @@ export default function SettingsPage() {
             className={`w-full justify-start font-medium text-sm transition-all ${
               activeTab === "security" 
                 ? "bg-[#1E3A5F] text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
             <Shield className="mr-2 h-4 w-4" />
@@ -298,52 +322,53 @@ export default function SettingsPage() {
           {activeTab === "profile" && (
             <div className="space-y-6">
               {/* Informations Personnelles */}
-              <Card className="border-none shadow-sm bg-white">
+              <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <CardHeader>
-                  <CardTitle className="text-lg">Informations Personnelles</CardTitle>
-                  <CardDescription>Vos coordonnées de compte enregistrées sur MonBudget.</CardDescription>
+                  <CardTitle className="text-lg text-slate-900 dark:text-slate-100">Informations Personnelles</CardTitle>
+                  <CardDescription className="text-slate-500 dark:text-slate-400">Vos coordonnées de compte enregistrées sur MonBudget.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">Nom complet</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Nom complet</label>
                     <Input 
                       placeholder="Votre nom complet" 
                       value={name} 
                       onChange={(e) => setName(e.target.value)} 
+                      className="dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                     />
                   </div>
                   <div className="grid gap-2">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-slate-700">Adresse e-mail</label>
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Adresse e-mail</label>
                       <span className="text-xs text-slate-400">Identifiant de connexion</span>
                     </div>
                     <Input 
                       type="email" 
                       value={email} 
                       disabled
-                      className="bg-slate-50 text-slate-600 cursor-not-allowed"
+                      className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 cursor-not-allowed dark:border-slate-700"
                     />
                   </div>
                 </CardContent>
               </Card>
 
               {/* Préférences du Budget */}
-              <Card className="border-none shadow-sm bg-white">
+              <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
+                  <CardTitle className="text-lg flex items-center gap-2 text-slate-900 dark:text-slate-100">
                     <Sparkles className="h-4 w-4 text-amber-500" />
                     Préférences de Calcul & Affichage
                   </CardTitle>
-                  <CardDescription>Paramétrez les règles de gestion de votre salaire.</CardDescription>
+                  <CardDescription className="text-slate-500 dark:text-slate-400">Paramétrez les règles de gestion de votre salaire.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* Devise */}
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">Devise par défaut</label>
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Devise par défaut</label>
                     <select 
                       value={localCurrency} 
                       onChange={(e) => setLocalCurrency(e.target.value)}
-                      className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A5F] focus-visible:ring-offset-2"
+                      className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1E3A5F] focus-visible:ring-offset-2"
                     >
                       <option value="FCFA">FCFA (Franc CFA - XOF)</option>
                       <option value="EUR">EUR (€ - Euro)</option>
@@ -352,46 +377,46 @@ export default function SettingsPage() {
                   </div>
 
                   {/* Jour de paie */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t pt-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t dark:border-slate-800 pt-4">
                     <div className="space-y-0.5">
-                      <label className="text-sm font-medium text-slate-900 flex items-center gap-1.5">
-                        <Calendar className="h-4 w-4 text-[#1E3A5F]" />
+                      <label className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                        <Calendar className="h-4 w-4 text-[#1E3A5F] dark:text-sky-400" />
                         Jour de paie habituel
                       </label>
-                      <p className="text-xs text-slate-500 max-w-md">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md">
                         Date à laquelle votre salaire est versé chaque mois (sert au calcul du budget journalier conseillé).
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-500">Le</span>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">Le</span>
                       <select 
                         value={localPayDay} 
                         onChange={(e) => setLocalPayDay(Number(e.target.value))}
-                        className="flex h-10 w-24 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800"
+                        className="flex h-10 w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100"
                       >
                         {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                           <option key={day} value={day}>{day}</option>
                         ))}
                       </select>
-                      <span className="text-sm text-slate-500">du mois</span>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">du mois</span>
                     </div>
                   </div>
 
                   {/* Seuil d'alerte */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t pt-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t dark:border-slate-800 pt-4">
                     <div className="space-y-0.5">
-                      <label className="text-sm font-medium text-slate-900 flex items-center gap-1.5">
+                      <label className="text-sm font-medium text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                         <AlertCircle className="h-4 w-4 text-amber-500" />
                         Seuil d'alerte des enveloppes
                       </label>
-                      <p className="text-xs text-slate-500 max-w-md">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md">
                         Déclenche un avertissement visuel lorsque vos dépenses atteignent ce pourcentage du budget.
                       </p>
                     </div>
                     <select 
                       value={localAlert} 
                       onChange={(e) => setLocalAlert(Number(e.target.value))}
-                      className="flex h-10 w-28 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold"
+                      className="flex h-10 w-28 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm font-semibold"
                     >
                       <option value={50}>50 %</option>
                       <option value={75}>75 %</option>
@@ -401,7 +426,7 @@ export default function SettingsPage() {
                     </select>
                   </div>
                 </CardContent>
-                <CardFooter className="flex justify-end pt-2 border-t">
+                <CardFooter className="flex justify-end pt-2 border-t dark:border-slate-800">
                   <Button 
                     onClick={handleSaveProfileAndPreferences} 
                     disabled={isSavingPrefs}
@@ -415,30 +440,143 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* ================= ONGLET : APPARENCE & THÈME ================= */}
+          {activeTab === "appearance" && (
+            <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                  <Palette className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                  Apparence & Thème d&apos;Affichage
+                </CardTitle>
+                <CardDescription className="text-slate-500 dark:text-slate-400">
+                  Personnalisez l&apos;interface visuelle selon votre confort de lecture (clair, sombre ou automatique).
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {/* Option 1: Clair */}
+                  <div
+                    onClick={() => {
+                      setTheme("light");
+                      toast.success("Thème clair activé !");
+                    }}
+                    className={`cursor-pointer rounded-xl border-2 p-4 transition-all hover:scale-[1.02] flex flex-col justify-between gap-3 ${
+                      mounted && theme === "light"
+                        ? "border-[#1E3A5F] bg-blue-50/50 dark:bg-blue-950/20 shadow-sm"
+                        : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="p-2 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                        <Sun className="h-5 w-5" />
+                      </div>
+                      {mounted && theme === "light" && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#1E3A5F] text-white">
+                          <CheckCircle2 className="h-3 w-3" /> Actif
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm text-slate-900 dark:text-slate-100">Mode Clair</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                        Interface claire et lumineuse, idéale pour les environnements ensoleillés.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Sombre */}
+                  <div
+                    onClick={() => {
+                      setTheme("dark");
+                      toast.success("Thème sombre activé !");
+                    }}
+                    className={`cursor-pointer rounded-xl border-2 p-4 transition-all hover:scale-[1.02] flex flex-col justify-between gap-3 ${
+                      mounted && theme === "dark"
+                        ? "border-[#1E3A5F] dark:border-blue-500 bg-slate-900 text-white shadow-sm"
+                        : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="p-2 rounded-lg bg-indigo-900 text-indigo-300">
+                        <Moon className="h-5 w-5" />
+                      </div>
+                      {mounted && theme === "dark" && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500 text-white">
+                          <CheckCircle2 className="h-3 w-3" /> Actif
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm text-slate-900 dark:text-slate-100">Mode Sombre</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                        Réduit la fatigue oculaire la nuit et préserve la batterie de votre smartphone.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Option 3: Système */}
+                  <div
+                    onClick={() => {
+                      setTheme("system");
+                      toast.success("Thème calqué sur le système !");
+                    }}
+                    className={`cursor-pointer rounded-xl border-2 p-4 transition-all hover:scale-[1.02] flex flex-col justify-between gap-3 ${
+                      mounted && theme === "system"
+                        ? "border-[#1E3A5F] bg-blue-50/50 dark:bg-blue-950/20 shadow-sm"
+                        : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        <Monitor className="h-5 w-5" />
+                      </div>
+                      {mounted && theme === "system" && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#1E3A5F] text-white">
+                          <CheckCircle2 className="h-3 w-3" /> Actif
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm text-slate-900 dark:text-slate-100">Système</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                        S&apos;adapte automatiquement au réglage sombre ou clair de votre appareil.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                  <span>Thème actuellement détecté : <strong className="text-slate-900 dark:text-white capitalize">{mounted ? (theme === "system" ? `Automatique (${systemTheme})` : theme) : "..."}</strong></span>
+                  <span className="text-slate-400">Enregistré localement</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* ================= ONGLET 2 : NOTIFICATIONS ================= */}
           {activeTab === "notifications" && (
-            <Card className="border-none shadow-sm bg-white">
+            <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-indigo-600" />
+                <CardTitle className="text-lg flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                  <Bell className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                   Alertes & Notifications In-App
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-slate-500 dark:text-slate-400">
                   Activez, personnalisez et enregistrez la manière dont MonBudget vous avertit en temps réel.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 {/* 1. Alerte de seuil d'enveloppe */}
-                <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200/80 bg-slate-50/60 transition-all hover:border-slate-300">
+                <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 transition-all hover:border-slate-300 dark:hover:border-slate-700">
                   <div className="flex items-center justify-between gap-4">
                     <div className="space-y-0.5 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-slate-900">Alertes de seuil d'enveloppe</p>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${notifBudgetAlert ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                        <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Alertes de seuil d'enveloppe</p>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${notifBudgetAlert ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400"}`}>
                           {notifBudgetAlert ? "Activé" : "Désactivé"}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         Affiche un avertissement instantané dès qu'une dépense atteint ou dépasse le seuil défini.
                       </p>
                     </div>
@@ -450,18 +588,18 @@ export default function SettingsPage() {
                         onChange={(e) => setNotifBudgetAlert(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1E3A5F]"></div>
+                      <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1E3A5F] dark:peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
 
                   {notifBudgetAlert && (
-                    <div className="pt-3 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                      <span className="text-xs font-semibold text-slate-700">Déclencher l'alerte à :</span>
+                    <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Déclencher l'alerte à :</span>
                       <div className="flex items-center gap-2">
                         <select 
                           value={notifBudgetAlertThreshold} 
                           onChange={(e) => setNotifBudgetAlertThreshold(Number(e.target.value))}
-                          className="flex h-9 w-32 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+                          className="flex h-9 w-32 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
                         >
                           <option value={50}>50 % du budget</option>
                           <option value={75}>75 % du budget</option>
@@ -475,16 +613,16 @@ export default function SettingsPage() {
                 </div>
 
                 {/* 2. Rappel avant le jour de paie */}
-                <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200/80 bg-slate-50/60 transition-all hover:border-slate-300">
+                <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 transition-all hover:border-slate-300 dark:hover:border-slate-700">
                   <div className="flex items-center justify-between gap-4">
                     <div className="space-y-0.5 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-slate-900">Rappels avant le jour de paie</p>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${notifPayDayReminder ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                        <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Rappels avant le jour de paie</p>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${notifPayDayReminder ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400"}`}>
                           {notifPayDayReminder ? "Activé" : "Désactivé"}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         Bannière de vigilance sur le tableau de bord à l'approche de votre versement (le {localPayDay} du mois).
                       </p>
                     </div>
@@ -496,18 +634,18 @@ export default function SettingsPage() {
                         onChange={(e) => setNotifPayDayReminder(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1E3A5F]"></div>
+                      <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1E3A5F] dark:peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
 
                   {notifPayDayReminder && (
-                    <div className="pt-3 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                      <span className="text-xs font-semibold text-slate-700">Délai d'anticipation :</span>
+                    <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Délai d'anticipation :</span>
                       <div className="flex items-center gap-2">
                         <select 
                           value={notifPayDayReminderDays} 
                           onChange={(e) => setNotifPayDayReminderDays(Number(e.target.value))}
-                          className="flex h-9 w-40 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+                          className="flex h-9 w-40 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
                         >
                           <option value={3}>3 jours avant</option>
                           <option value={5}>5 jours avant</option>
@@ -520,16 +658,16 @@ export default function SettingsPage() {
                 </div>
 
                 {/* 3. Bilan hebdomadaire */}
-                <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200/80 bg-slate-50/60 transition-all hover:border-slate-300">
+                <div className="flex flex-col gap-3 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 transition-all hover:border-slate-300 dark:hover:border-slate-700">
                   <div className="flex items-center justify-between gap-4">
                     <div className="space-y-0.5 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-slate-900">Bilan hebdomadaire</p>
-                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${notifWeeklySummary ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`}>
+                        <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Bilan hebdomadaire</p>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${notifWeeklySummary ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400"}`}>
                           {notifWeeklySummary ? "Activé" : "Désactivé"}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
                         Récapitulatif visuel du rythme des dépenses chaque dimanche soir pour préparer la semaine suivante.
                       </p>
                     </div>
@@ -541,12 +679,12 @@ export default function SettingsPage() {
                         onChange={(e) => setNotifWeeklySummary(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1E3A5F]"></div>
+                      <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#1E3A5F] dark:peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end pt-3 border-t">
+              <CardFooter className="flex justify-end pt-3 border-t dark:border-slate-800">
                 <Button 
                   onClick={handleSaveNotifications}
                   disabled={isSavingNotifs}
@@ -563,20 +701,20 @@ export default function SettingsPage() {
           {activeTab === "security" && (
             <div className="space-y-6">
               {/* Changement de mot de passe */}
-              <Card className="border-none shadow-sm bg-white">
+              <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <KeyRound className="h-5 w-5 text-amber-600" />
+                  <CardTitle className="text-lg flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                    <KeyRound className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                     Changer de Mot de Passe
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-slate-500 dark:text-slate-400">
                     Mettez à jour le mot de passe de votre compte Supabase Auth.
                   </CardDescription>
                 </CardHeader>
                 <form onSubmit={handleUpdatePassword}>
                   <CardContent className="space-y-4">
                     <div className="grid gap-2">
-                      <label className="text-sm font-medium text-slate-700">Nouveau mot de passe</label>
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Nouveau mot de passe</label>
                       <Input 
                         type="password" 
                         placeholder="Au moins 6 caractères" 
@@ -584,10 +722,11 @@ export default function SettingsPage() {
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
                         minLength={6}
+                        className="dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                       />
                     </div>
                     <div className="grid gap-2">
-                      <label className="text-sm font-medium text-slate-700">Confirmer le nouveau mot de passe</label>
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Confirmer le nouveau mot de passe</label>
                       <Input 
                         type="password" 
                         placeholder="Retapez le mot de passe" 
@@ -595,10 +734,11 @@ export default function SettingsPage() {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
                         minLength={6}
+                        className="dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                       />
                     </div>
                   </CardContent>
-                  <CardFooter className="flex justify-end pt-2 border-t">
+                  <CardFooter className="flex justify-end pt-2 border-t dark:border-slate-800">
                     <Button 
                       type="submit"
                       disabled={isUpdatingPassword}
@@ -612,25 +752,25 @@ export default function SettingsPage() {
               </Card>
 
               {/* État de la session */}
-              <Card className="border-none shadow-sm bg-white">
+              <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                 <CardHeader>
-                  <CardTitle className="text-lg">Session & Appareil Actuel</CardTitle>
-                  <CardDescription>Informations sur votre session connectée.</CardDescription>
+                  <CardTitle className="text-lg text-slate-900 dark:text-slate-100">Session & Appareil Actuel</CardTitle>
+                  <CardDescription className="text-slate-500 dark:text-slate-400">Informations sur votre session connectée.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs">
-                    <span className="text-slate-500">Compte connecté :</span>
-                    <strong className="text-slate-800">{email || "Utilisateur"}</strong>
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs">
+                    <span className="text-slate-500 dark:text-slate-400">Compte connecté :</span>
+                    <strong className="text-slate-800 dark:text-slate-200">{email || "Utilisateur"}</strong>
                   </div>
                   {userId && (
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 text-xs">
-                      <span className="text-slate-500">ID Unique :</span>
-                      <code className="text-slate-600 font-mono text-[11px]">{userId}</code>
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs">
+                      <span className="text-slate-500 dark:text-slate-400">ID Unique :</span>
+                      <code className="text-slate-600 dark:text-slate-300 font-mono text-[11px]">{userId}</code>
                     </div>
                   )}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 text-xs text-emerald-800">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-xs text-emerald-800 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40">
                     <span className="flex items-center gap-1.5 font-medium">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                       Sécurité par RLS active
                     </span>
                     <span>Données isolées et chiffrées</span>
