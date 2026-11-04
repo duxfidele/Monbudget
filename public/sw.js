@@ -1,15 +1,8 @@
 // Service Worker PWA pour MonBudget
-// Version: 1.0.0
+// Version: 1.0.1
 
-const CACHE_NAME = "monbudget-cache-v1";
-const STATIC_ASSETS = [
-  "/",
-  "/dashboard",
-  "/budget",
-  "/transactions",
-  "/savings",
-  "/debts",
-  "/settings",
+const CACHE_NAME = "monbudget-cache-v2";
+const CORE_STATIC_ASSETS = [
   "/offline.html",
   "/manifest.json",
   "/icons/icon.svg",
@@ -24,9 +17,13 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn("Certains assets statiques n'ont pas pu être pré-cachés :", err);
-      });
+      return Promise.allSettled(
+        CORE_STATIC_ASSETS.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn(`Pré-cache ignoré pour ${url}:`, err);
+          })
+        )
+      );
     })
   );
 });
@@ -86,7 +83,9 @@ self.addEventListener("fetch", (event) => {
           if (cachedResponse) return cachedResponse;
           const offlinePage = await caches.match("/offline.html");
           if (offlinePage) return offlinePage;
-          return caches.match("/dashboard");
+          return new Response("Application hors ligne. Veuillez vous reconnecter.", {
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          });
         })
     );
     return;
@@ -122,22 +121,16 @@ self.addEventListener("fetch", (event) => {
             caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           }
           return res;
+        }).catch(() => {
+          return new Response("", { status: 408 });
         });
       })
     );
     return;
   }
 
-  // Fallback standard Réseau -> Cache
+  // Comportement par défaut : fetch réseau direct
   event.respondWith(
-    fetch(request)
-      .then((res) => {
-        if (res && res.status === 200) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return res;
-      })
-      .catch(() => caches.match(request))
+    fetch(request).catch(() => caches.match(request))
   );
 });

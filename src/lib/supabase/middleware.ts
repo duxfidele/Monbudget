@@ -8,13 +8,19 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isHomePage = pathname === '/'
+  const isPwaOrStatic =
+    pathname === '/manifest.json' ||
+    pathname === '/sw.js' ||
+    pathname === '/offline.html' ||
+    pathname.startsWith('/icons/') ||
+    pathname === '/favicon.ico'
   const isGuestOnlyAuthRoute = pathname.startsWith('/login') || 
                                pathname.startsWith('/register') ||
                                pathname.startsWith('/forgot-password')
   const isAuthRoute = isGuestOnlyAuthRoute ||
                       pathname.startsWith('/reset-password') ||
                       pathname.startsWith('/auth/confirm')
-  const isPublicRoute = isHomePage || isAuthRoute
+  const isPublicRoute = isHomePage || isAuthRoute || isPwaOrStatic
 
   const allCookies = request.cookies.getAll()
   const hasAuthCookie = allCookies.some(c => c.name.startsWith('sb-') && c.name.includes('-auth-token'))

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Menu, X, ArrowRight, ShieldCheck, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { InstallButton } from "@/components/pwa/install-button";
 
 export function LandingNavbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -78,6 +79,7 @@ export function LandingNavbar() {
 
           {/* Desktop Action Buttons */}
           <div className="hidden md:flex items-center gap-3">
+            <InstallButton variant="landing" />
             {isLoggedIn ? (
               <Link href="/dashboard">
                 <Button className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold px-4 py-2 rounded-xl shadow-md shadow-sky-500/20 transition-all hover:shadow-sky-500/30 flex items-center gap-2">
@@ -137,6 +139,7 @@ export function LandingNavbar() {
           </nav>
 
           <div className="pt-2 flex flex-col gap-2.5">
+            <InstallButton variant="landing" className="w-full justify-center py-3" />
             {isLoggedIn ? (
               <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
                 <Button className="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
