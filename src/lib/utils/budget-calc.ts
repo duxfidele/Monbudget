@@ -587,9 +587,18 @@ export function getDebtAlerts(
 
 /**
  * ============================================================================
- * F. MOTEUR D'INTELLIGENCE ARTIFICIELLE FINANCIÈRE
+ * F. MOTEUR D'INTELLIGENCE ARTIFICIELLE FINANCIÈRE (CONSEILLER MULTI-PAGES)
  * ============================================================================
  */
+export interface AIFinding {
+  id: string;
+  severity: "critical" | "warning" | "positive" | "info";
+  sourcePages: string[]; // ex: ["Mon Budget", "Épargne", "Transactions"]
+  title: string;
+  detail: string;
+  impactAmount?: number;
+}
+
 export interface AIRecommendation {
   id: string;
   priority: "high" | "medium" | "low";
@@ -598,13 +607,38 @@ export interface AIRecommendation {
   description: string;
   actionLabel?: string;
   actionHref?: string;
+  correctiveActionType?:
+    | "align_overbudget"
+    | "fit_envelopes_to_balance"
+    | "sync_unplanned_savings"
+    | "create_emergency_fund";
+  correctivePayload?: {
+    categoryName?: string;
+    targetAmount?: number;
+  };
+}
+
+export interface TemporalFinancialMetrics {
+  dayOfMonth: number;
+  daysInMonth: number;
+  monthElapsedPercent: number;
+  daysUntilPayDay: number;
+  totalOutflows: number;
+  outflowPercentOfIncome: number;
+  dailySurvivalQuota: number;
+  reservedInUnspentEnvelopes: number;
+  freeMarginAfterEnvelopes: number;
+  unplannedOrExceededTotal: number;
+  burnRateStatus: "critical" | "warning" | "healthy";
 }
 
 export interface FinancialAIAnalysis {
   healthScore: number; // 0 - 100
   healthLabel: "Excellente" | "Bonne" | "À surveiller" | "Critique";
   summary: string;
+  findings: AIFinding[];
   recommendations: AIRecommendation[];
+  temporal: TemporalFinancialMetrics;
   breakdown: {
     essentialsPercent: number;
     solidarityAndTithePercent: number;
@@ -624,6 +658,7 @@ export function generateFinancialAIAnalysis({
   monthlySavings = 0,
   currency = "FCFA",
   currentDate = new Date(),
+  payDay = 28,
 }: {
   income: number;
   incomeSourcesCount?: number;
@@ -634,13 +669,102 @@ export function generateFinancialAIAnalysis({
   monthlySavings?: number;
   currency?: string;
   currentDate?: Date;
+  payDay?: number;
 }): FinancialAIAnalysis {
   const totalExpenses = getTotalExpenses(transactions);
-  const remaining = getRemainingToLive(income, totalExpenses, monthlySavings);
+  const txSavings = getSpentByCategory(transactions, "Épargne", monthlySavings);
+  const effectiveMonthlySavings = Math.max(monthlySavings, txSavings);
+  const remaining = getRemainingToLive(income, totalExpenses, effectiveMonthlySavings);
   const payableDebts = getTotalPayableDebts(debts);
   const receivableDebts = getTotalReceivableDebts(debts);
   const debtAlerts = getDebtAlerts(debts, currentDate, 7, currency);
   const overBudgetCats = getOverBudgetCategories(categories, transactions, 80);
+
+  // 1. Métriques temporelles (Jour du mois vs Rythme de sortie d'argent)
+  const dayOfMonth = currentDate.getDate();
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  const monthElapsedPercent = Math.max(1, Math.round((dayOfMonth / daysInMonth) * 100));
+
+  const dailyInfo = getDailyBudget({
+    remainingAmount: remaining,
+    totalIncome: income,
+    targetPayDay: payDay,
+    currentDate,
+    currency,
+  });
+  const daysUntilPayDay = Math.max(1, dailyInfo.daysRemaining);
+  const dailySurvivalQuota = remaining > 0 ? Math.floor(remaining / daysUntilPayDay) : 0;
+
+  const totalOutflows = totalExpenses + effectiveMonthlySavings;
+  const outflowPercentOfIncome = income > 0 ? Math.round((totalOutflows / income) * 100) : 0;
+
+  // Calcul des enveloppes restantes à consommer (hors Épargne déjà déduite)
+  let reservedInUnspentEnvelopes = 0;
+  let unplannedOrExceededTotal = 0;
+  const exceededCategoriesList: { name: string; budgeted: number; spent: number; excess: number }[] = [];
+  const handledCatNames = new Set<string>();
+
+  for (const cat of categories) {
+    const norm = cat.name.trim().toLowerCase();
+    handledCatNames.add(norm);
+    const budgeted = Math.max(0, Number(cat.amount) || 0);
+    const spent = getSpentByCategory(transactions, cat.name, effectiveMonthlySavings);
+
+    if (norm !== "épargne" && norm !== "epargne") {
+      if (budgeted > spent) {
+        reservedInUnspentEnvelopes += budgeted - spent;
+      } else if (spent > budgeted) {
+        const excess = spent - budgeted;
+        unplannedOrExceededTotal += excess;
+        exceededCategoriesList.push({
+          name: cat.name,
+          budgeted,
+          spent,
+          excess,
+        });
+      }
+    }
+  }
+
+  // Détecter les dépenses faites sur des catégories absentes de Mon Budget
+  for (const tx of transactions) {
+    if (!isExpenseTransaction(tx) || isSavingsTransaction(tx)) continue;
+    const catName = (tx.category || "Autre (Hors Budget)").trim();
+    const norm = catName.toLowerCase();
+    if (!handledCatNames.has(norm)) {
+      const amt = Number(tx.amount) || 0;
+      unplannedOrExceededTotal += amt;
+      const existing = exceededCategoriesList.find((e) => e.name.toLowerCase() === norm);
+      if (existing) {
+        existing.spent += amt;
+        existing.excess += amt;
+      } else {
+        exceededCategoriesList.push({
+          name: catName,
+          budgeted: 0,
+          spent: amt,
+          excess: amt,
+        });
+      }
+    }
+  }
+
+  const freeMarginAfterEnvelopes = remaining - reservedInUnspentEnvelopes;
+
+  // Déterminer le statut du rythme de consommation (Burn Rate)
+  let burnRateStatus: "critical" | "warning" | "healthy" = "healthy";
+  if (
+    remaining <= 0 ||
+    (income > 0 && dayOfMonth <= 10 && outflowPercentOfIncome >= 75) ||
+    (income > 0 && remaining / income < 0.18 && daysUntilPayDay >= 15)
+  ) {
+    burnRateStatus = "critical";
+  } else if (
+    (income > 0 && outflowPercentOfIncome > monthElapsedPercent + 30) ||
+    freeMarginAfterEnvelopes < 0
+  ) {
+    burnRateStatus = "warning";
+  }
 
   // Calcul des grandes masses de dépenses (Réalité africaine)
   const essentialNames = [
@@ -649,9 +773,11 @@ export function generateFinancialAIAnalysis({
     "logement & loyer",
     "transport",
     "transport & carburant",
+    "déplacement",
     "santé",
     "santé & pharmacie",
     "scolarité",
+    "besoin enfants",
     "électricité et eau",
     "factures (eau, électricité, canal+)",
     "communication et internet",
@@ -664,7 +790,7 @@ export function generateFinancialAIAnalysis({
   let leisureSpent = 0;
 
   for (const tx of transactions) {
-    if (!isExpenseTransaction(tx)) continue;
+    if (!isExpenseTransaction(tx) || isSavingsTransaction(tx)) continue;
     const catNorm = (tx.category || "").trim().toLowerCase();
     const amt = Number(tx.amount) || 0;
     if (essentialNames.includes(catNorm)) {
@@ -681,33 +807,46 @@ export function generateFinancialAIAnalysis({
   const essentialsPercent = income > 0 ? Math.round((essentialsSpent / income) * 100) : 0;
   const solidarityAndTithePercent = income > 0 ? Math.round((solidaritySpent / income) * 100) : 0;
   const leisurePercent = income > 0 ? Math.round((leisureSpent / income) * 100) : 0;
-  const savingsPercent = income > 0 ? Math.round((monthlySavings / income) * 100) : 0;
+  const savingsPercent = income > 0 ? Math.round((effectiveMonthlySavings / income) * 100) : 0;
   const debtRatioPercent = income > 0 ? Math.round((payableDebts / income) * 100) : payableDebts > 0 ? 100 : 0;
 
-  // Calcul du Score de Santé Financière sur 100
+  // Calcul du Score de Santé Financière sur 100 (tenant compte de la réalité temporelle !)
   let score = 70;
   if (income <= 0) {
     score = 40;
   } else {
-    // 1. Solde disponible
-    if (remaining < 0) score -= 25;
-    else if (remaining / income >= 0.15) score += 10;
+    // 1. Solde disponible et rythme temporel
+    if (remaining < 0) {
+      score -= 30;
+    } else if (burnRateStatus === "critical") {
+      score -= 18;
+    } else if (burnRateStatus === "warning") {
+      score -= 8;
+    } else if (remaining / income >= 0.25) {
+      score += 10;
+    }
 
-    // 2. Épargne
-    if (savingsPercent >= 15) score += 12;
-    else if (savingsPercent >= 5) score += 5;
+    // 2. Couverture des enveloppes restantes par le solde réel
+    if (freeMarginAfterEnvelopes < 0) {
+      score -= 10;
+    }
+
+    // 3. Épargne (valorisée mais équilibrée avec le reste à vivre)
+    if (savingsPercent >= 15 && remaining >= income * 0.2) score += 12;
+    else if (savingsPercent >= 15 && remaining < income * 0.2) score += 4;
+    else if (savingsPercent >= 5) score += 6;
     else if (savingsGoals.length === 0) score -= 8;
 
-    // 3. Endettement
+    // 4. Endettement
     if (debtRatioPercent > 50) score -= 20;
     else if (debtRatioPercent > 25) score -= 10;
     else if (payableDebts === 0) score += 8;
 
-    // 4. Respect des enveloppes
+    // 5. Respect des enveloppes & dépenses non prévues
     const strictlyOver = overBudgetCats.filter((c) => c.isOverBudget);
     score -= strictlyOver.length * 5;
 
-    // 5. Diversification des revenus
+    // 6. Diversification des revenus
     if (incomeSourcesCount >= 2) score += 5;
   }
 
@@ -721,11 +860,203 @@ export function generateFinancialAIAnalysis({
       ? "À surveiller"
       : "Critique";
 
+  // ==========================================================================
+  // CONSTATS MULTI-PAGES (FINDINGS) BASÉS SUR LA RÉALITÉ IMMÉDIATE
+  // ==========================================================================
+  const findings: AIFinding[] = [];
+
+  // Constat A : Diagnostic temporel (ex: Jour 4 du mois et il ne reste que 93 000 F)
+  if (income > 0) {
+    if (burnRateStatus === "critical" || burnRateStatus === "warning") {
+      findings.push({
+        id: "finding-burn-rate",
+        severity: burnRateStatus === "critical" ? "critical" : "warning",
+        sourcePages: ["Tableau de bord", "Mon Budget", "Transactions"],
+        title: `Jour ${dayOfMonth} du mois : ${outflowPercentOfIncome}% de vos revenus déjà sortis`,
+        detail: `Nous sommes seulement le ${dayOfMonth} du mois (${monthElapsedPercent}% du mois écoulé) et vous avez déjà engagé ${formatMoney(totalOutflows, currency)} sur ${formatMoney(income, currency)}. Il vous reste ${formatMoney(remaining, currency)} en caisse pour tenir ${daysUntilPayDay} jours jusqu'à la paie (soit un plafond strict de ${formatMoney(dailySurvivalQuota, currency)}/jour).`,
+        impactAmount: remaining,
+      });
+    } else {
+      findings.push({
+        id: "finding-burn-rate-ok",
+        severity: "positive",
+        sourcePages: ["Tableau de bord", "Mon Budget"],
+        title: `Jour ${dayOfMonth} du mois : rythme de trésorerie maîtrisé`,
+        detail: `Avec ${formatMoney(remaining, currency)} disponibles pour les ${daysUntilPayDay} prochains jours, vous disposez d'une marge quotidienne de ${formatMoney(dailySurvivalQuota, currency)}/jour.`,
+        impactAmount: remaining,
+      });
+    }
+  }
+
+  // Constat B : Analyse de l'Épargne ajoutée vs Reste à vivre
+  if (effectiveMonthlySavings > 0 && income > 0) {
+    if (savingsPercent >= 25 && remaining < income * 0.25) {
+      findings.push({
+        id: "finding-heavy-early-savings",
+        severity: "warning",
+        sourcePages: ["Épargne", "Mon Budget"],
+        title: `Fort prélèvement d'épargne (${formatMoney(effectiveMonthlySavings, currency)}, soit ${savingsPercent}% du revenu)`,
+        detail: `Cette épargne a été comptabilisée automatiquement dans Mon Budget. C'est un effort remarquable pour vos objectifs, mais combiné à vos dépenses (${formatMoney(totalExpenses, currency)}), il réduit votre liquidité immédiate à ${formatMoney(remaining, currency)} dès le ${dayOfMonth} du mois.`,
+        impactAmount: effectiveMonthlySavings,
+      });
+    } else {
+      findings.push({
+        id: "finding-savings-active",
+        severity: "positive",
+        sourcePages: ["Épargne", "Mon Budget"],
+        title: `Épargne du mois (${formatMoney(effectiveMonthlySavings, currency)}) synchronisée au budget`,
+        detail: `Vos versements d'épargne représentent ${savingsPercent}% de vos entrées du mois et sont bien déduits de votre solde restant.`,
+        impactAmount: effectiveMonthlySavings,
+      });
+    }
+  }
+
+  // Constat C : Dépenses non prévues ou dépassements d'enveloppes (Loisirs, Remboursement dette, etc.)
+  if (exceededCategoriesList.length > 0) {
+    const detailsText = exceededCategoriesList
+      .map((item) =>
+        item.budgeted > 0
+          ? `${item.name} (${formatMoney(item.spent, currency)} dépensés contre ${formatMoney(item.budgeted, currency)} prévus, soit +${formatMoney(item.excess, currency)})`
+          : `${item.name} (${formatMoney(item.spent, currency)} ajoutés sans budget initial)`
+      )
+      .join(" ; ");
+
+    findings.push({
+      id: "finding-unplanned-expenses",
+      severity: "critical",
+      sourcePages: ["Transactions", "Mon Budget", "Dettes & Créances"],
+      title: `${exceededCategoriesList.length} poste(s) avec dépenses non prévues ou en dépassement (+${formatMoney(unplannedOrExceededTotal, currency)})`,
+      detail: `Sorties au-dessus des prévisions initiales : ${detailsText}. Cet écart de ${formatMoney(unplannedOrExceededTotal, currency)} a directement diminué votre solde restant.`,
+      impactAmount: unplannedOrExceededTotal,
+    });
+  }
+
+  // Constat D : Confrontation entre le Solde réel restant (ex: 93 000 F) et les Enveloppes restantes à dépenser (ex: 85 000 F)
+  if (income > 0 && reservedInUnspentEnvelopes > 0) {
+    if (freeMarginAfterEnvelopes < 0) {
+      findings.push({
+        id: "finding-envelopes-exceed-cash",
+        severity: "critical",
+        sourcePages: ["Mon Budget", "Tableau de bord"],
+        title: `Vos enveloppes restantes (${formatMoney(reservedInUnspentEnvelopes, currency)}) dépassent votre solde réel (${formatMoney(remaining, currency)})`,
+        detail: `Attention : il vous reste ${formatMoney(remaining, currency)} en caisse, mais vos enveloppes non encore dépensées prévoient encore ${formatMoney(reservedInUnspentEnvelopes, currency)} de sorties. Il manque ${formatMoney(Math.abs(freeMarginAfterEnvelopes), currency)} pour tout couvrir !`,
+        impactAmount: Math.abs(freeMarginAfterEnvelopes),
+      });
+    } else if (freeMarginAfterEnvelopes <= income * 0.08) {
+      findings.push({
+        id: "finding-tight-free-margin",
+        severity: "warning",
+        sourcePages: ["Mon Budget"],
+        title: `Marge libre très serrée (${formatMoney(freeMarginAfterEnvelopes, currency)}) après vos enveloppes prévues`,
+        detail: `Sur vos ${formatMoney(remaining, currency)} en caisse, ${formatMoney(reservedInUnspentEnvelopes, currency)} sont déjà réservés dans vos enveloppes non consommées (Santé, Déplacement, Besoin enfants, etc.). Il ne vous reste que ${formatMoney(freeMarginAfterEnvelopes, currency)} de marge pour les imprévus du mois.`,
+        impactAmount: freeMarginAfterEnvelopes,
+      });
+    }
+  }
+
+  // ==========================================================================
+  // RECOMMANDATIONS & ACTIONS CORRECTRICES CONCRÈTES
+  // ==========================================================================
   const recommendations: AIRecommendation[] = [];
 
-  // Recommandation 1 : Alertes dettes urgentes
+  // Recommandation Prioritaire 1 : Si le solde restant ne suffit plus à couvrir les enveloppes restantes
+  if (income > 0 && freeMarginAfterEnvelopes < 0) {
+    recommendations.push({
+      id: "action-fit-envelopes-to-balance",
+      priority: "high",
+      category: "budget",
+      title: `Action correctrice : Réduire vos enveloppes restantes de ${formatMoney(Math.abs(freeMarginAfterEnvelopes), currency)}`,
+      description: `Votre caisse réelle (${formatMoney(remaining, currency)}) ne peut plus financer les ${formatMoney(reservedInUnspentEnvelopes, currency)} prévus dans vos enveloppes non consommées. Ajustez-les proportionnellement à votre solde réel en 1 clic pour éviter le découvert.`,
+      actionLabel: "Ajuster mes enveloppes au solde réel",
+      actionHref: "/budget",
+      correctiveActionType: "fit_envelopes_to_balance",
+    });
+  }
+
+  // Recommandation Prioritaire 2 : Alerte Rythme de début de mois (ex: le 4 du mois avec 93 000 F)
+  if (income > 0 && (burnRateStatus === "critical" || burnRateStatus === "warning")) {
+    recommendations.push({
+      id: "action-survival-pacing",
+      priority: "high",
+      category: "budget",
+      title: `Plan de maîtrise sur ${daysUntilPayDay} jours : plafonnez vos dépenses à ${formatMoney(dailySurvivalQuota, currency)}/jour`,
+      description: `Au jour ${dayOfMonth} du mois, il vous reste ${formatMoney(remaining, currency)}. Pour ne pas tomber à sec avant le ${payDay}, bloquez toute dépense de loisirs ou non urgente et respectez strictement le quota de ${formatMoney(dailySurvivalQuota, currency)} par jour.`,
+      actionLabel: "Piloter mes transactions",
+      actionHref: "/transactions",
+    });
+  }
+
+  // Recommandation Prioritaire 3 : Dépenses non prévues ou dépassements (Loisirs, Dette, etc.)
+  if (exceededCategoriesList.length > 0) {
+    const worst = exceededCategoriesList.sort((a, b) => b.excess - a.excess)[0];
+    recommendations.push({
+      id: "category-overbudget",
+      priority: "high",
+      category: "budget",
+      title: `Régulariser l'écart sur « ${worst.name} » (+${formatMoney(worst.excess, currency)} hors prévision)`,
+      description:
+        worst.budgeted > 0
+          ? `Vous avez dépensé ${formatMoney(worst.spent, currency)} sur « ${worst.name} » pour ${formatMoney(worst.budgeted, currency)} prévus. Mettez à jour le plafond de cette enveloppe et bloquez toute nouvelle sortie sur ce poste ce mois-ci.`
+          : `Vous avez engagé ${formatMoney(worst.spent, currency)} sur « ${worst.name} » sans enveloppe prévue au départ. Officialisez ce poste dans votre budget pour garder vos comptes justes.`,
+      actionLabel: `Aligner l'enveloppe ${worst.name}`,
+      actionHref: "/budget",
+      correctiveActionType: "align_overbudget",
+      correctivePayload: {
+        categoryName: worst.name,
+        targetAmount: worst.spent,
+      },
+    });
+  } else if (overBudgetCats.length > 0) {
+    const worst = overBudgetCats[0];
+    recommendations.push({
+      id: "category-warning",
+      priority: "medium",
+      category: "budget",
+      title: `Enveloppe "${worst.name}" sous tension (${worst.percent}%)`,
+      description: `Vous avez déjà consommé ${worst.percent}% du budget "${worst.name}". Ralentissez sur ce poste pour finir le mois sereinement.`,
+      actionLabel: "Voir les enveloppes",
+      actionHref: "/budget",
+    });
+  }
+
+  // Recommandation 4 : Conseil sur l'épargne déjà élevée en début de mois
+  if (effectiveMonthlySavings > 0 && savingsPercent >= 25 && remaining < income * 0.25) {
+    recommendations.push({
+      id: "savings-pause-advice",
+      priority: "medium",
+      category: "savings",
+      title: `Suspendez les nouveaux versements d'épargne pour le reste du mois`,
+      description: `Avec ${formatMoney(effectiveMonthlySavings, currency)} déjà épargnés (${savingsPercent}% de vos revenus), votre objectif mensuel d'épargne est largement atteint. Conservez vos ${formatMoney(remaining, currency)} restants en liquidité disponible pour les besoins courants du mois.`,
+      actionLabel: "Voir mon épargne",
+      actionHref: "/savings",
+    });
+  }
+
+  // Recommandation 5 : Alertes dettes urgentes & Créances à recouvrer pour renflouer la caisse !
   const overduePayables = debtAlerts.filter((a) => a.debt.type === "payable" && a.urgency === "overdue");
   const overdueReceivables = debtAlerts.filter((a) => a.debt.type === "receivable" && a.urgency === "overdue");
+
+  if (receivableDebts > 0 && remaining < income * 0.3) {
+    recommendations.push({
+      id: "debt-recover-cashboost",
+      priority: "high",
+      category: "debt",
+      title: `Relancez vos créances (${formatMoney(receivableDebts, currency)}) pour remonter votre solde`,
+      description: `Votre solde restant est de ${formatMoney(remaining, currency)} alors qu'on vous doit ${formatMoney(receivableDebts, currency)}. Encaisser même une partie de vos créances augmentera immédiatement votre budget disponible.`,
+      actionLabel: "Recouvrer mes créances",
+      actionHref: "/debts",
+    });
+  } else if (overdueReceivables.length > 0) {
+    recommendations.push({
+      id: "debt-overdue-receivable",
+      priority: "high",
+      category: "debt",
+      title: `Créances en retard à récupérer (${formatMoney(receivableDebts, currency)})`,
+      description: `${overdueReceivables[0].message} Relancer vos débiteurs augmentera immédiatement votre trésorerie disponible.`,
+      actionLabel: "Voir les créances",
+      actionHref: "/debts",
+    });
+  }
 
   if (overduePayables.length > 0) {
     recommendations.push({
@@ -739,60 +1070,22 @@ export function generateFinancialAIAnalysis({
     });
   }
 
-  if (overdueReceivables.length > 0) {
-    recommendations.push({
-      id: "debt-overdue-receivable",
-      priority: "high",
-      category: "debt",
-      title: `Créances à récupérer (${formatMoney(receivableDebts, currency)})`,
-      description: `${overdueReceivables[0].message} Relancer vos débiteurs augmentera immédiatement votre trésorerie disponible.`,
-      actionLabel: "Voir les créances",
-      actionHref: "/debts",
-    });
-  }
-
-  // Recommandation 2 : Dépassement de budget ou déficit
-  if (remaining < 0) {
-    recommendations.push({
-      id: "budget-deficit",
-      priority: "high",
-      category: "budget",
-      title: "Alerte : Déficit mensuel détecté",
-      description: `Vos sorties dépassent vos revenus de ${formatMoney(Math.abs(remaining), currency)}. Suspendez les dépenses non essentielles (Loisirs, Autres) jusqu'à la prochaine entrée.`,
-      actionLabel: "Ajuster mon budget",
-      actionHref: "/budget",
-    });
-  } else if (overBudgetCats.length > 0) {
-    const worst = overBudgetCats[0];
-    recommendations.push({
-      id: "category-overbudget",
-      priority: worst.isOverBudget ? "high" : "medium",
-      category: "budget",
-      title: `Enveloppe "${worst.name}" sous tension (${worst.percent}%)`,
-      description: worst.isOverBudget
-        ? `Vous avez dépassé le plafond de "${worst.name}" de ${formatMoney(Math.abs(worst.remaining), currency)}. Rééquilibrez avec une enveloppe moins consommée.`
-        : `Vous avez déjà consommé ${worst.percent}% du budget "${worst.name}". Ralentissez sur ce poste pour finir le mois sereinement.`,
-      actionLabel: "Voir les enveloppes",
-      actionHref: "/budget",
-    });
-  }
-
-  // Recommandation 3 : Solidarité & Dîmes
+  // Recommandation 6 : Solidarité & Dîmes
   if (income > 0 && solidarityAndTithePercent > 25) {
     recommendations.push({
       id: "solidarity-balance",
       priority: "medium",
       category: "solidarity",
       title: `Poids élevé de Solidarité & Dîmes (${solidarityAndTithePercent}% du revenu)`,
-      description: `Votre générosité est admirable (${formatMoney(solidaritySpent, currency)}), mais elle dépasse 25% de vos revenus. Fixez une enveloppe mensuelle dédiée aux imprévus familiaux pour protéger votre épargne.`,
+      description: `Votre générosité est admirable (${formatMoney(solidaritySpent, currency)}), mais elle dépasse 25% de vos revenus. Fixez une enveloppe mensuelle dédiée aux imprévus familiaux pour protéger votre solde.`,
       actionLabel: "Plafonner l'enveloppe",
       actionHref: "/budget",
     });
   }
 
-  // Recommandation 4 : Épargne & Fonds d'urgence
-  const hasEmergencyFund = savingsGoals.some((g) =>
-    g.name.toLowerCase().includes("urgence") || g.name.toLowerCase().includes("sécurité")
+  // Recommandation 7 : Épargne & Fonds d'urgence
+  const hasEmergencyFund = savingsGoals.some(
+    (g) => g.name.toLowerCase().includes("urgence") || g.name.toLowerCase().includes("sécurité")
   );
   if (!hasEmergencyFund) {
     recommendations.push({
@@ -804,21 +1097,22 @@ export function generateFinancialAIAnalysis({
         "En Afrique, les imprévus (santé, famille, pannes) sont fréquents. Créez un objectif « Constituer un fonds d'urgence » équivalent à 3 mois de dépenses vitales.",
       actionLabel: "Créer ce fonds",
       actionHref: "/savings",
+      correctiveActionType: "create_emergency_fund",
     });
-  } else if (income > 0 && savingsPercent < 10 && remaining > 0) {
-    const suggestedSaving = Math.max(5000, Math.round((income * 0.1 - monthlySavings) / 1000) * 1000);
+  } else if (income > 0 && savingsPercent < 10 && remaining > income * 0.25) {
+    const suggestedSaving = Math.max(5000, Math.round((income * 0.1 - effectiveMonthlySavings) / 1000) * 1000);
     recommendations.push({
       id: "savings-boost",
       priority: "medium",
       category: "savings",
       title: `Augmentez votre taux d'épargne (${savingsPercent}% actuellement)`,
-      description: `Il vous reste ${formatMoney(remaining, currency)} disponibles ce mois-ci. Mettez de côté au moins ${formatMoney(Math.min(suggestedSaving, remaining), currency)} vers vos projets (moto, maison, scolarité).`,
+      description: `Il vous reste ${formatMoney(remaining, currency)} disponibles ce mois-ci. Mettez de côté au moins ${formatMoney(Math.min(suggestedSaving, remaining), currency)} vers vos projets.`,
       actionLabel: "Épargner maintenant",
       actionHref: "/savings",
     });
   }
 
-  // Recommandation 5 : Diversification des revenus
+  // Recommandation 8 : Diversification des revenus
   if (incomeSourcesCount <= 1 && income > 0) {
     recommendations.push({
       id: "income-diversification",
@@ -832,7 +1126,7 @@ export function generateFinancialAIAnalysis({
     });
   }
 
-  // Recommandation 6 : Ratio d'endettement
+  // Recommandation 9 : Ratio d'endettement
   if (payableDebts > 0 && overduePayables.length === 0) {
     recommendations.push({
       id: "debt-repayment-plan",
@@ -845,24 +1139,40 @@ export function generateFinancialAIAnalysis({
     });
   }
 
-  // Synthèse globale
+  // Synthèse globale réaliste et incarnée
   let summary = "";
   if (income <= 0) {
     summary =
-      "Commencez par renseigner vos sources de revenus du mois (Salaire, Commerce, Prestations...) pour activer le diagnostic IA complet.";
+      "Commencez par renseigner vos sources de revenus du mois (Salaire, Commerce, Prestations...) pour activer le diagnostic complet de votre Conseiller IA.";
+  } else if (burnRateStatus === "critical") {
+    summary = `Alerte Trésorerie au jour ${dayOfMonth} du mois : vous avez déjà mobilisé ${outflowPercentOfIncome}% de vos entrées (${formatMoney(totalOutflows, currency)}, dont ${formatMoney(effectiveMonthlySavings, currency)} d'épargne). Il ne vous reste que ${formatMoney(remaining, currency)} pour tenir ${daysUntilPayDay} jours (max ${formatMoney(dailySurvivalQuota, currency)}/jour).`;
+  } else if (exceededCategoriesList.length > 0) {
+    summary = `Au jour ${dayOfMonth} du mois, votre solde réel est de ${formatMoney(remaining, currency)} (${formatMoney(dailySurvivalQuota, currency)}/jour sur ${daysUntilPayDay} j), mais ${exceededCategoriesList.length} poste(s) ont dépassé les prévisions initiales de ${formatMoney(unplannedOrExceededTotal, currency)}.`;
   } else if (healthScore >= 80) {
-    summary = `Excellente maîtrise financière (${healthScore}/100) ! Votre solde est positif (${formatMoney(remaining, currency)}) et vos charges sont bien contenues.`;
-  } else if (healthScore >= 60) {
-    summary = `Bonne gestion globale (${healthScore}/100), avec un solde disponible de ${formatMoney(remaining, currency)}. Suivez les recommandations ci-dessous pour renforcer votre épargne.`;
+    summary = `Excellente maîtrise financière (${healthScore}/100) au jour ${dayOfMonth} du mois ! Votre solde réel est de ${formatMoney(remaining, currency)} (${formatMoney(dailySurvivalQuota, currency)}/jour disponibles).`;
   } else {
-    summary = `Votre équilibre financier demande de la vigilance (${healthScore}/100). Priorisez la maîtrise des enveloppes en dépassement et le suivi de vos échéances de dettes.`;
+    summary = `Gestion globale à ${healthScore}/100 au jour ${dayOfMonth} du mois, avec un solde réel restant de ${formatMoney(remaining, currency)} pour ${daysUntilPayDay} jours (${formatMoney(dailySurvivalQuota, currency)}/jour).`;
   }
 
   return {
     healthScore,
     healthLabel,
     summary,
+    findings,
     recommendations,
+    temporal: {
+      dayOfMonth,
+      daysInMonth,
+      monthElapsedPercent,
+      daysUntilPayDay,
+      totalOutflows,
+      outflowPercentOfIncome,
+      dailySurvivalQuota,
+      reservedInUnspentEnvelopes,
+      freeMarginAfterEnvelopes,
+      unplannedOrExceededTotal,
+      burnRateStatus,
+    },
     breakdown: {
       essentialsPercent,
       solidarityAndTithePercent,

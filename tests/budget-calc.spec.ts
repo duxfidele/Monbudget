@@ -279,4 +279,37 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
     expect(soldeRestant).toBe(210000);
     expect(resteAAllouer).toBe(soldeRestant);
   });
+
+  test("AI advisor detects early-month cash burn, unplanned expenses and heavy savings", () => {
+    const analysis = generateFinancialAIAnalysis({
+      income: 553000,
+      incomeSourcesCount: 2,
+      categories: [
+        { name: "Loisirs", amount: 45000 },
+        { name: "Santé", amount: 25000 },
+        { name: "Besoin enfants", amount: 15000 },
+        { name: "Remboursement de dette", amount: 25000 },
+      ],
+      transactions: [
+        { amount: 55000, category: "Loisirs", type: "expense" },
+        { amount: 45000, category: "Remboursement de dette", type: "expense" },
+        { amount: 135000, category: "Alimentation", type: "expense" },
+        { amount: 225000, category: "Épargne", type: "expense" },
+      ],
+      savingsGoals: [{ name: "Constituer un fonds d'urgence", target: 1000000, current: 225000 }],
+      debts: [],
+      monthlySavings: 225000,
+      currency: "FCFA",
+      currentDate: new Date("2026-11-04T12:00:00Z"),
+      payDay: 28,
+    });
+
+    expect(analysis.temporal.dayOfMonth).toBe(4);
+    expect(analysis.temporal.burnRateStatus).toBe("critical");
+    expect(analysis.findings.some((f) => f.id === "finding-burn-rate")).toBe(true);
+    expect(analysis.findings.some((f) => f.id === "finding-unplanned-expenses")).toBe(true);
+    expect(analysis.findings.some((f) => f.id === "finding-heavy-early-savings")).toBe(true);
+    expect(analysis.recommendations.some((r) => r.correctiveActionType === "align_overbudget")).toBe(true);
+    expect(analysis.temporal.dailySurvivalQuota).toBeGreaterThan(0);
+  });
 });

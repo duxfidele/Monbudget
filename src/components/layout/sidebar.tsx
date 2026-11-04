@@ -9,6 +9,7 @@ import {
   ArrowRightLeft,
   PiggyBank,
   HandCoins,
+  Brain,
   LineChart,
   Settings,
 } from "lucide-react";
@@ -45,7 +46,13 @@ const routes = [
     color: "text-amber-400",
   },
   {
-    label: "Rapports & IA",
+    label: "Conseiller IA",
+    icon: Brain,
+    href: "/advisor",
+    color: "text-cyan-400",
+  },
+  {
+    label: "Rapports",
     icon: LineChart,
     href: "/reports",
     color: "text-orange-400",

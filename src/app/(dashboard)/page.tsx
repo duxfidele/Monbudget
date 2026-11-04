@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Wallet, 
-  TrendingDown, 
-  PiggyBank, 
-  Receipt, 
-  ArrowRight, 
-  ArrowDownRight, 
-  ArrowUpRight, 
+import {
+  Wallet,
+  TrendingDown,
+  PiggyBank,
+  Receipt,
+  ArrowRight,
+  ArrowDownRight,
+  ArrowUpRight,
   Calendar,
   Sparkles,
   AlertTriangle,
@@ -26,11 +26,11 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
 import { exportMonthlyReportCSV, exportMonthlyReportPDF } from "@/lib/utils/report-export";
-import { 
-  getTotalExpenses, 
-  getRemainingToLive, 
-  getDailyBudget, 
-  formatMoney, 
+import {
+  getTotalExpenses,
+  getRemainingToLive,
+  getDailyBudget,
+  formatMoney,
   getCategoryProgress,
   getSpentByCategory,
   isIncomeTransaction,
@@ -69,6 +69,7 @@ export default function DashboardPage() {
     debts,
     monthlySavings: epargneMois,
     currency,
+    payDay: payDay || 28,
   });
 
   // Dépenses effectuées aujourd'hui (pour déduction automatique)
@@ -227,14 +228,13 @@ export default function DashboardPage() {
               </div>
 
               <div className="w-full bg-black/30 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/10">
-                <div 
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    dailyInfo.isOverDailyBudget 
-                      ? "bg-amber-400" 
-                      : dailyInfo.dailyProgressPercent > 80 
-                        ? "bg-amber-300" 
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${dailyInfo.isOverDailyBudget
+                      ? "bg-amber-400"
+                      : dailyInfo.dailyProgressPercent > 80
+                        ? "bg-amber-300"
                         : "bg-emerald-400"
-                  }`}
+                    }`}
                   style={{ width: `${Math.min(100, Math.max(0, dailyInfo.dailyProgressPercent))}%` }}
                 />
               </div>
@@ -312,7 +312,7 @@ export default function DashboardPage() {
             </p>
           </CardContent>
         </Card>
-        
+
         {/* 2. Dépenses du mois */}
         <Card className="border-none shadow-sm bg-white">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -326,9 +326,9 @@ export default function DashboardPage() {
               {formatMoney(depenses, currency)}
             </div>
             <div className="w-full bg-slate-100 h-1.5 mt-3 rounded-full overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all duration-500 ${pourcentageDepense > 90 ? 'bg-red-500' : 'bg-blue-600'}`} 
-                style={{ width: `${Math.min(pourcentageDepense, 100)}%` }} 
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${pourcentageDepense > 90 ? 'bg-red-500' : 'bg-blue-600'}`}
+                style={{ width: `${Math.min(pourcentageDepense, 100)}%` }}
               />
             </div>
             <p className="text-xs text-slate-400 mt-1">{Math.round(pourcentageDepense)}% des revenus consommés</p>
@@ -485,8 +485,19 @@ export default function DashboardPage() {
                   </CardDescription>
                 </div>
               </div>
-              <div className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-bold text-emerald-300">
-                Santé : {aiAnalysis.healthScore}/100 ({aiAnalysis.healthLabel})
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-bold text-emerald-300">
+                  Santé : {aiAnalysis.healthScore}/100 ({aiAnalysis.healthLabel})
+                </div>
+                <Link href="/advisor">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 text-xs bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold"
+                  >
+                    Conseiller IA &rarr;
+                  </Button>
+                </Link>
               </div>
             </div>
           </CardHeader>
@@ -503,13 +514,12 @@ export default function DashboardPage() {
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`w-2 h-2 rounded-full ${
-                          rec.priority === "high"
+                        className={`w-2 h-2 rounded-full ${rec.priority === "high"
                             ? "bg-rose-400"
                             : rec.priority === "medium"
-                            ? "bg-amber-300"
-                            : "bg-sky-300"
-                        }`}
+                              ? "bg-amber-300"
+                              : "bg-sky-300"
+                          }`}
                       />
                       <span className="text-xs font-bold text-white">{rec.title}</span>
                     </div>
@@ -519,7 +529,7 @@ export default function DashboardPage() {
                     <Link href={rec.actionHref} className="shrink-0 self-end sm:self-center">
                       <Button
                         size="sm"
-                         variant="secondary"
+                        variant="secondary"
                         className="h-7 text-[11px] bg-white text-[#1E3A5F] hover:bg-slate-100 font-semibold"
                       >
                         {rec.actionLabel || "Agir"}
@@ -617,7 +627,7 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={`h-full ${cat.color || 'bg-blue-500'} rounded-full transition-all duration-500 ${cat.isOverBudget ? '!bg-red-500' : ''}`}
                       style={{ width: `${Math.min(cat.percent, 100)}%` }}
                     />

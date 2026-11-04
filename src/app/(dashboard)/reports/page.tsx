@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
@@ -66,7 +67,7 @@ interface MonthlyHistoryItem {
 }
 
 export default function ReportsPage() {
-  const { transactions, categories, income, incomeEntries, savingsGoals, debts, currency, activeMonth } = useUIStore();
+  const { transactions, categories, income, incomeEntries, savingsGoals, debts, currency, activeMonth, payDay } = useUIStore();
   const [mounted, setMounted] = useState(false);
   const [historyData, setHistoryData] = useState<MonthlyHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -190,6 +191,7 @@ export default function ReportsPage() {
     debts,
     monthlySavings,
     currency,
+    payDay: payDay || 28,
   });
 
   // Répartition par catégorie strictement concordante
@@ -573,49 +575,27 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* Section Complète : Recommandations de l'Intelligence Artificielle Financière (Pilier F) */}
-      <Card className="border border-indigo-100 shadow-sm bg-white">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg text-slate-900">
-            <Sparkles className="h-5 w-5 text-indigo-600" />
-            Recommandations de l'Intelligence Artificielle Financière
-          </CardTitle>
-          <CardDescription>
-            {aiAnalysis.summary}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            {aiAnalysis.recommendations.map((rec) => {
-              const badgeColor =
-                rec.priority === "high"
-                  ? "bg-red-50 border-red-200 text-red-900"
-                  : rec.priority === "medium"
-                  ? "bg-amber-50 border-amber-200 text-amber-900"
-                  : "bg-indigo-50 border-indigo-200 text-indigo-900";
-              return (
-                <div
-                  key={rec.id}
-                  className={`p-4 rounded-xl border ${badgeColor} flex flex-col justify-between gap-2`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <h4 className="font-bold text-sm">{rec.title}</h4>
-                      <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-white/80">
-                        {rec.category}
-                      </span>
-                    </div>
-                    <p className="text-xs opacity-90 leading-relaxed">{rec.description}</p>
-                  </div>
-                  {rec.actionLabel && (
-                    <div className="pt-2 border-t border-black/5 text-xs font-semibold">
-                      👉 Action conseillée : {rec.actionLabel}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+      {/* Passerelle vers la page dédiée Conseiller IA */}
+      <Card className="border border-indigo-200 shadow-sm bg-gradient-to-r from-indigo-50/80 via-white to-emerald-50/60">
+        <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700">
+              <Sparkles className="h-4 w-4 text-amber-500" />
+              <span>Conseiller Financier IA dédié</span>
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">
+              Consultez vos constats en temps réel et actions correctrices
+            </h3>
+            <p className="text-xs md:text-sm text-slate-600 max-w-2xl">
+              {aiAnalysis.summary}
+            </p>
           </div>
+          <Link href="/advisor" className="shrink-0">
+            <Button className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white gap-1.5 shadow-xs">
+              <span>Ouvrir le Conseiller IA</span>
+              <ArrowUpRight className="h-4 w-4" />
+            </Button>
+          </Link>
         </CardContent>
       </Card>
     </div>
