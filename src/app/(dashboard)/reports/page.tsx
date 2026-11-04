@@ -297,81 +297,81 @@ export default function ReportsPage() {
 
       {/* Cartes KPI Ratios Financiers */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Taux de Dépense</CardTitle>
-            <div className="p-2 bg-red-100 rounded-lg">
-              <TrendingDown className="h-4 w-4 text-red-600" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Taux de Dépense</CardTitle>
+            <div className="p-2 bg-red-100 dark:bg-red-950/50 rounded-lg">
+              <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
+            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {Math.round(tauxDepense)}%
             </div>
-            <div className="w-full bg-slate-100 h-1.5 mt-3 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-3 rounded-full overflow-hidden">
               <div 
                 className={`h-full rounded-full ${tauxDepense > 85 ? 'bg-red-500' : 'bg-emerald-500'}`} 
                 style={{ width: `${Math.min(tauxDepense, 100)}%` }} 
               />
             </div>
-            <p className="text-xs text-slate-500 mt-1.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
               {formatMoney(totalExpenses, currency)} consommés sur votre salaire
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Reste Disponible</CardTitle>
-            <div className="p-2 bg-sky-100 rounded-lg">
-              <Wallet className="h-4 w-4 text-sky-600" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Reste Disponible</CardTitle>
+            <div className="p-2 bg-sky-100 dark:bg-sky-950/50 rounded-lg">
+              <Wallet className="h-4 w-4 text-sky-600 dark:text-sky-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div suppressHydrationWarning className={`text-2xl font-bold ${resteAVivre < 0 ? 'text-red-600' : 'text-slate-800'}`}>
+            <div suppressHydrationWarning className={`text-2xl font-bold ${resteAVivre < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
               {formatMoney(resteAVivre, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
               {resteAVivre >= 0 ? "Non encore dépensé ce mois" : "Dépassement de budget"}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Capacité d'Épargne</CardTitle>
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <PiggyBank className="h-4 w-4 text-emerald-600" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Capacité d'Épargne</CardTitle>
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-950/50 rounded-lg">
+              <PiggyBank className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
+            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {Math.round(tauxEpargne)}%
             </div>
-            <div className="w-full bg-slate-100 h-1.5 mt-3 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-3 rounded-full overflow-hidden">
               <div 
                 className="h-full rounded-full bg-emerald-500" 
                 style={{ width: `${Math.min(tauxEpargne, 100)}%` }} 
               />
             </div>
-            <p className="text-xs text-slate-500 mt-1.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
               Total cumulé : {formatMoney(monthlySavings, currency)}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Catégories Actives</CardTitle>
-            <div className="p-2 bg-indigo-100 rounded-lg">
-              <PieIcon className="h-4 w-4 text-indigo-600" />
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Catégories Actives</CardTitle>
+            <div className="p-2 bg-indigo-100 dark:bg-indigo-950/50 rounded-lg">
+              <PieIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             </div>
           </CardHeader>
           <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
+            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {categoryStats.length} <span className="text-sm font-normal text-slate-400">/ {categories.length}</span>
             </div>
-            <p className="text-xs text-slate-500 mt-1.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
               Postes ayant enregistré des dépenses
             </p>
           </CardContent>
@@ -381,15 +381,15 @@ export default function ReportsPage() {
       {/* Graphiques Principaux */}
       <div className="grid gap-6 lg:grid-cols-7">
         {/* Graphique 1 : Évolution Revenus vs Dépenses (4 colonnes) */}
-        <Card className="lg:col-span-4 border-none shadow-sm bg-white">
+        <Card className="lg:col-span-4 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <BarChart3 className="h-5 w-5 text-[#1E3A5F]" />
+                <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
+                  <BarChart3 className="h-5 w-5 text-[#1E3A5F] dark:text-sky-400" />
                   Revenus vs Dépenses Réelles
                 </CardTitle>
-                <CardDescription>Comparatif mensuel de vos flux financiers</CardDescription>
+                <CardDescription className="text-slate-500 dark:text-slate-400">Comparatif mensuel de vos flux financiers</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -423,13 +423,13 @@ export default function ReportsPage() {
         </Card>
 
         {/* Graphique 2 : Répartition des Dépenses (3 colonnes) */}
-        <Card className="lg:col-span-3 border-none shadow-sm bg-white flex flex-col justify-between">
+        <Card className="lg:col-span-3 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <PieIcon className="h-5 w-5 text-indigo-600" />
+            <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
+              <PieIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               Répartition des Dépenses
             </CardTitle>
-            <CardDescription>Part de chaque catégorie ce mois-ci</CardDescription>
+            <CardDescription className="text-slate-500 dark:text-slate-400">Part de chaque catégorie ce mois-ci</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-center">
             {categoryStats.length > 0 ? (
@@ -464,9 +464,9 @@ export default function ReportsPage() {
             )}
 
             {/* Légende rapide */}
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t mt-2">
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800 mt-2">
               {categoryStats.slice(0, 4).map((cat, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-xs text-slate-600 truncate">
+                <div key={i} className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 truncate">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
                   <span className="truncate">{cat.name} : {Math.round(cat.percent)}%</span>
                 </div>
@@ -479,13 +479,13 @@ export default function ReportsPage() {
       {/* Section Insights & Top Postes de Dépenses */}
       <div className="grid gap-6 md:grid-cols-7">
         {/* Top 3 Postes */}
-        <Card className="md:col-span-4 border-none shadow-sm bg-white">
+        <Card className="md:col-span-4 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
+            <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
               <Award className="h-5 w-5 text-amber-500" />
               Top Postes de Dépenses ({capitalizedMonth})
             </CardTitle>
-            <CardDescription>Les postes qui consomment le plus votre salaire</CardDescription>
+            <CardDescription className="text-slate-500 dark:text-slate-400">Les postes qui consomment le plus votre salaire</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {top3Categories.map((cat, index) => (
@@ -576,22 +576,22 @@ export default function ReportsPage() {
       </div>
 
       {/* Passerelle vers la page dédiée Conseiller IA */}
-      <Card className="border border-indigo-200 shadow-sm bg-gradient-to-r from-indigo-50/80 via-white to-emerald-50/60">
+      <Card className="border border-indigo-200 dark:border-indigo-900/60 shadow-sm bg-gradient-to-r from-indigo-50/80 via-white to-emerald-50/60 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900">
         <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-sky-300">
               <Sparkles className="h-4 w-4 text-amber-500" />
               <span>Conseiller Financier IA dédié</span>
             </div>
-            <h3 className="text-lg font-bold text-slate-900">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
               Consultez vos constats en temps réel et actions correctrices
             </h3>
-            <p className="text-xs md:text-sm text-slate-600 max-w-2xl">
+            <p className="text-xs md:text-sm text-slate-600 dark:text-slate-300 max-w-2xl">
               {aiAnalysis.summary}
             </p>
           </div>
           <Link href="/advisor" className="shrink-0">
-            <Button className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white gap-1.5 shadow-xs">
+            <Button className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-semibold gap-1.5 shadow-xs">
               <span>Ouvrir le Conseiller IA</span>
               <ArrowUpRight className="h-4 w-4" />
             </Button>

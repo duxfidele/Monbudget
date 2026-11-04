@@ -6,6 +6,7 @@ import { Menu, X, ArrowRight, ShieldCheck, LayoutDashboard } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { InstallButton } from "@/components/pwa/install-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function LandingNavbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -80,6 +81,7 @@ export function LandingNavbar() {
           {/* Desktop Action Buttons */}
           <div className="hidden md:flex items-center gap-3">
             <InstallButton variant="landing" />
+            <ThemeToggle className="text-slate-300 hover:text-white hover:bg-white/10" />
             {isLoggedIn ? (
               <Link href="/dashboard">
                 <Button className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold px-4 py-2 rounded-xl shadow-md shadow-sky-500/20 transition-all hover:shadow-sky-500/30 flex items-center gap-2">
@@ -108,8 +110,9 @@ export function LandingNavbar() {
             )}
           </div>
 
-          {/* Mobile Hamburger Button */}
-          <div className="flex items-center md:hidden">
+          {/* Mobile Hamburger Button & Theme */}
+          <div className="flex items-center gap-1.5 md:hidden">
+            <ThemeToggle className="text-slate-300 hover:text-white hover:bg-white/10" />
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

@@ -335,7 +335,7 @@ function CategoryRowInput({
   };
 
   return (
-    <div className="flex flex-col gap-2.5 p-3.5 sm:p-4 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-white hover:shadow-xs hover:border-slate-200 transition-all">
+    <div className="flex flex-col gap-2.5 p-3.5 sm:p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850 hover:bg-white dark:hover:bg-slate-800 hover:shadow-xs hover:border-slate-200 dark:hover:border-slate-700 transition-all">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Nom de la catégorie avec renommage inline */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -355,7 +355,7 @@ function CategoryRowInput({
                   }
                 }}
                 autoFocus
-                className="h-8 text-sm font-semibold rounded-md bg-white border-slate-300"
+                className="h-8 text-sm font-semibold rounded-md bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100"
               />
               <Button 
                 size="icon" 
@@ -407,7 +407,7 @@ function CategoryRowInput({
             onChange={(val) => onUpdateAmount(category.id, val)}
             currency={currency}
             className="w-36 sm:w-40 md:w-44"
-            inputClassName="bg-white border-slate-200 h-9 text-sm md:text-base"
+            inputClassName="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 h-9 text-sm md:text-base text-slate-900 dark:text-slate-100"
           />
 
           <Button
@@ -415,7 +415,7 @@ function CategoryRowInput({
             variant="ghost"
             size="icon"
             onClick={() => setShowQuickPills(!showQuickPills)}
-            className={`h-8 w-8 rounded-lg text-slate-400 hover:text-[#1E3A5F] hover:bg-blue-50 ${showQuickPills ? "bg-blue-50 text-[#1E3A5F]" : ""}`}
+            className={`h-8 w-8 rounded-lg text-slate-400 hover:text-[#1E3A5F] dark:hover:text-sky-300 hover:bg-blue-50 dark:hover:bg-slate-800 ${showQuickPills ? "bg-blue-50 dark:bg-slate-800 text-[#1E3A5F] dark:text-sky-300" : ""}`}
             title="Ajustements rapides (+ / -)"
           >
             <Zap className="h-4 w-4" />
@@ -425,7 +425,7 @@ function CategoryRowInput({
             variant="ghost" 
             size="icon" 
             onClick={() => onRemove(category.id)}
-            className="text-slate-400 hover:text-red-600 hover:bg-red-50 h-8 w-8 rounded-lg"
+            className="text-slate-400 hover:text-red-600 dark:hover:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 h-8 w-8 rounded-lg"
             title="Supprimer cette catégorie"
           >
             <Trash2 className="h-4 w-4" />
@@ -435,33 +435,33 @@ function CategoryRowInput({
 
       {/* Barre d ajustements rapides (Chips interactifs) */}
       {showQuickPills && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-1.5 pb-0.5 border-t border-slate-200/60 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 pt-1.5 pb-0.5 border-t border-slate-200/60 dark:border-slate-800 text-xs">
           <span className="text-[11px] font-medium text-slate-400 mr-1">Ajuster :</span>
           <button
             type="button"
             onClick={() => handleAddQuickAmount(5000)}
-            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#1E3A5F] hover:bg-blue-50/50 text-slate-700 font-medium transition"
+            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
           >
             +5 000
           </button>
           <button
             type="button"
             onClick={() => handleAddQuickAmount(10000)}
-            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#1E3A5F] hover:bg-blue-50/50 text-slate-700 font-medium transition"
+            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
           >
             +10 000
           </button>
           <button
             type="button"
             onClick={() => handleAddQuickAmount(25000)}
-            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#1E3A5F] hover:bg-blue-50/50 text-slate-700 font-medium transition"
+            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
           >
             +25 000
           </button>
           <button
             type="button"
             onClick={() => handleAddQuickAmount(50000)}
-            className="px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:border-[#1E3A5F] hover:bg-blue-50/50 text-slate-700 font-medium transition"
+            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
           >
             +50 000
           </button>
@@ -1104,7 +1104,7 @@ export default function BudgetPage() {
                     size="sm"
                     variant="outline"
                     onClick={handleBudgetizeDebtEnvelope}
-                    className="w-full mt-1.5 h-7 text-[11px] border-rose-200 bg-white hover:bg-rose-50 text-rose-700 font-semibold"
+                    className="w-full mt-1.5 h-7 text-[11px] border-rose-200 dark:border-rose-900 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-400 font-semibold"
                   >
                     <Plus className="h-3 w-3 mr-1" />
                     Créer l&apos;enveloppe « Remboursement de dette »
@@ -1112,54 +1112,54 @@ export default function BudgetPage() {
                 )}
               </div>
 
-              <div className="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-100 space-y-1">
-                <div className="flex items-center justify-between text-emerald-900">
+              <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 space-y-1">
+                <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
                   <span className="flex items-center gap-1 font-medium">
-                    <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600" />
+                    <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                     Créances à récupérer :
                   </span>
                   <strong className="font-bold">{formatMoney(totalReceivableDebts, currency)}</strong>
                 </div>
-                <div className="flex items-center justify-between text-slate-600 text-[11px]">
+                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
                   <span>Encaissé ce mois (+ Revenu) :</span>
-                  <strong className="text-emerald-700">+{formatMoney(recoveredThisMonth, currency)}</strong>
+                  <strong className="text-emerald-700 dark:text-emerald-300">+{formatMoney(recoveredThisMonth, currency)}</strong>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Carte Liaison directe Épargne & Objectifs <-> Mon Budget */}
-          <Card className="border border-emerald-200/80 shadow-sm bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40">
+          <Card className="border border-emerald-200/80 dark:border-emerald-900/40 shadow-sm bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                  <PiggyBank className="h-4 w-4 text-emerald-600" />
+                <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <PiggyBank className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   Lien Épargne & Objectifs
                 </CardTitle>
                 <Link
                   href="/savings"
-                  className="text-xs font-semibold text-[#1E3A5F] hover:underline flex items-center gap-1"
+                  className="text-xs font-semibold text-[#1E3A5F] dark:text-sky-400 hover:underline flex items-center gap-1"
                 >
                   <span>Voir objectifs</span>
                   <ArrowUpRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
-              <CardDescription className="text-xs text-slate-500">
+              <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
                 Synchronisé avec vos versements d&apos;épargne et vos transactions
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2.5 text-xs">
-              <div className="p-2.5 rounded-lg bg-emerald-50/80 border border-emerald-100 space-y-1">
-                <div className="flex items-center justify-between text-emerald-900">
+              <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 space-y-1">
+                <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
                   <span className="font-medium">Épargné ce mois-ci :</span>
                   <strong className="font-bold">{formatMoney(epargne, currency)}</strong>
                 </div>
-                <div className="flex items-center justify-between text-slate-600 text-[11px]">
+                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
                   <span>Cumul total des objectifs ({savingsGoals.length}) :</span>
-                  <strong className="text-emerald-700">{formatMoney(totalSavingsAccumulated, currency)}</strong>
+                  <strong className="text-emerald-700 dark:text-emerald-300">{formatMoney(totalSavingsAccumulated, currency)}</strong>
                 </div>
                 {savingsEnvelope ? (
-                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-emerald-200/60 text-slate-700">
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-emerald-200/60 dark:border-emerald-800 text-slate-700 dark:text-slate-300">
                     <span>Enveloppe Épargne prévue :</span>
                     <strong>{formatMoney(savingsEnvelope.amount, currency)}</strong>
                   </div>
@@ -1169,7 +1169,7 @@ export default function BudgetPage() {
                     size="sm"
                     variant="outline"
                     onClick={handleBudgetizeSavingsEnvelope}
-                    className="w-full mt-1.5 h-7 text-[11px] border-emerald-200 bg-white hover:bg-emerald-50 text-emerald-700 font-semibold"
+                    className="w-full mt-1.5 h-7 text-[11px] border-emerald-200 dark:border-emerald-900 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-semibold"
                   >
                     <Plus className="h-3 w-3 mr-1" />
                     Créer l&apos;enveloppe « Épargne » (10%)
@@ -1333,7 +1333,7 @@ export default function BudgetPage() {
               <div className="flex flex-col sm:flex-row gap-3">
                 <Input 
                   placeholder="Ex: Épargne projet, Imprévus, Cadeaux..." 
-                  className="flex-1 rounded-lg bg-white border-slate-200 text-sm"
+                  className="flex-1 rounded-lg bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-sm"
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
                   onKeyDown={(e) => {
@@ -1347,7 +1347,7 @@ export default function BudgetPage() {
                     currency={currency}
                     placeholder="Montant alloué"
                     className="w-36 sm:w-40"
-                    inputClassName="bg-white border-slate-200 h-10 text-sm"
+                    inputClassName="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 h-10 text-sm text-slate-900 dark:text-slate-100"
                   />
                   <Button 
                     onClick={handleAddCategory} 

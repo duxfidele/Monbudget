@@ -256,65 +256,65 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-4">
-        {/* Navigation des Onglets (Sidebar interne) */}
-        <div className="md:col-span-1 space-y-1.5">
+        {/* Navigation des Onglets (Sidebar interne sur desktop, barre défilante sur mobile) */}
+        <div className="md:col-span-1 flex md:flex-col gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
           <Button 
             variant={activeTab === "profile" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("profile")}
-            className={`w-full justify-start font-medium text-sm transition-all ${
+            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
               activeTab === "profile" 
-                ? "bg-[#1E3A5F] text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
+                ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            <User className="mr-2 h-4 w-4" />
-            Mon Profil & Budget
+            <User className="mr-2 h-4 w-4 shrink-0" />
+            <span>Mon Profil & Budget</span>
           </Button>
 
           <Button 
             variant={activeTab === "appearance" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("appearance")}
-            className={`w-full justify-start font-medium text-sm transition-all ${
+            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
               activeTab === "appearance" 
-                ? "bg-[#1E3A5F] text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
+                ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            <Palette className="mr-2 h-4 w-4" />
-            Apparence & Thème
+            <Palette className="mr-2 h-4 w-4 shrink-0" />
+            <span>Apparence & Thème</span>
           </Button>
 
           <Button 
             variant={activeTab === "notifications" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("notifications")}
-            className={`w-full justify-start font-medium text-sm transition-all ${
+            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
               activeTab === "notifications" 
-                ? "bg-[#1E3A5F] text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
+                ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            <Bell className="mr-2 h-4 w-4" />
-            Notifications
+            <Bell className="mr-2 h-4 w-4 shrink-0" />
+            <span>Notifications</span>
           </Button>
 
           <Button 
             variant={activeTab === "security" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("security")}
-            className={`w-full justify-start font-medium text-sm transition-all ${
+            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
               activeTab === "security" 
-                ? "bg-[#1E3A5F] text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
+                ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
             }`}
           >
-            <Shield className="mr-2 h-4 w-4" />
-            Sécurité & Accès
+            <Shield className="mr-2 h-4 w-4 shrink-0" />
+            <span>Sécurité & Accès</span>
           </Button>
 
-          <div className="pt-4 border-t mt-4">
+          <div className="hidden md:block pt-4 border-t border-slate-200 dark:border-slate-800 mt-4">
             <Button 
               variant="ghost" 
               onClick={handleLogout} 
-              className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 text-sm font-medium"
+              className="w-full justify-start text-red-600 dark:text-rose-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-rose-950/30 text-sm font-medium"
             >
               <LogOut className="mr-2 h-4 w-4" />
               Déconnexion

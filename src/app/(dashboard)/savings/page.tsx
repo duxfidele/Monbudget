@@ -173,13 +173,13 @@ export default function SavingsPage() {
     <div className="flex flex-col gap-8 pb-12">
       {/* 1. Modale de Création d'Objectif */}
       <Dialog open={isNewGoalOpen} onOpenChange={setIsNewGoalOpen}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
-              <Target className="h-5 w-5 text-[#1E3A5F]" />
-              Nouvel Objectif d'Épargne
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+              <Target className="h-5 w-5 text-[#1E3A5F] dark:text-sky-400" />
+              Nouvel Objectif d&apos;Épargne
             </DialogTitle>
-            <DialogDescription className="text-slate-500">
+            <DialogDescription className="text-slate-500 dark:text-slate-400">
               Fixez un cap clair pour votre projet financier.
             </DialogDescription>
           </DialogHeader>
@@ -187,7 +187,7 @@ export default function SavingsPage() {
           <div className="space-y-4 py-2">
             {/* Modèles rapides (Pilier D) */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Projets fréquents (clic rapide)
               </label>
               <div className="flex flex-wrap gap-1.5">
@@ -202,8 +202,8 @@ export default function SavingsPage() {
                     }}
                     className={`text-xs px-2.5 py-1 rounded-full border transition ${
                       goalName === tpl.name
-                        ? "bg-[#1E3A5F] text-white border-[#1E3A5F] font-semibold"
-                        : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+                        ? "bg-[#1E3A5F] dark:bg-sky-600 text-white border-[#1E3A5F] dark:border-sky-600 font-semibold"
+                        : "bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
                     }`}
                   >
                     {tpl.name}
@@ -213,7 +213,7 @@ export default function SavingsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Nom du projet</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Nom du projet</label>
               <Input 
                 placeholder="Ex: Acheter une moto, Construire une maison, Scolarité..." 
                 value={goalName} 
@@ -222,7 +222,7 @@ export default function SavingsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Montant cible ({currency})</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Montant cible ({currency})</label>
               <Input 
                 type="number" 
                 placeholder="Ex: 500000" 
@@ -232,7 +232,7 @@ export default function SavingsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Date d'échéance souhaitée (optionnelle)</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Date d&apos;échéance souhaitée (optionnelle)</label>
               <Input 
                 type="date" 
                 value={goalTargetDate} 
@@ -241,7 +241,7 @@ export default function SavingsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Couleur d'identification</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Couleur d&apos;identification</label>
               <div className="flex items-center gap-2.5 pt-1">
                 {GOAL_COLORS.map((c) => (
                   <button
@@ -258,8 +258,8 @@ export default function SavingsPage() {
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setIsNewGoalOpen(false)}>Annuler</Button>
-            <Button onClick={handleCreateGoal} className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white">
-              Créer l'objectif
+            <Button onClick={handleCreateGoal} className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-semibold">
+              Créer l&apos;objectif
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -267,20 +267,20 @@ export default function SavingsPage() {
 
       {/* 2. Modale de Versement / Contribution */}
       <Dialog open={isDepositOpen} onOpenChange={setIsDepositOpen}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
-              <PiggyBank className="h-5 w-5 text-emerald-600" />
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+              <PiggyBank className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               Verser vers {selectedGoal?.name}
             </DialogTitle>
-            <DialogDescription className="text-slate-500">
+            <DialogDescription className="text-slate-500 dark:text-slate-400">
               Ajoutez un montant épargné pour rapprocher votre objectif du but.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Montant à verser ({currency})</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Montant à verser ({currency})</label>
               <Input 
                 type="number" 
                 placeholder="Ex: 25000" 
@@ -291,7 +291,7 @@ export default function SavingsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Date du versement</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Date du versement</label>
               <Input 
                 type="date" 
                 value={depositDate} 
@@ -300,7 +300,7 @@ export default function SavingsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">Note ou provenance (optionnelle)</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Note ou provenance (optionnelle)</label>
               <Input 
                 placeholder="Ex: Épargne de paie, Prime trimestrielle, Reliquat du mois..." 
                 value={depositNotes} 
@@ -321,13 +321,13 @@ export default function SavingsPage() {
 
       {/* 3. Modale d'Historique des Contributions */}
       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-        <DialogContent className="sm:max-w-lg bg-white max-h-[85vh] flex flex-col">
+        <DialogContent className="sm:max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
-              <History className="h-5 w-5 text-blue-600" />
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+              <History className="h-5 w-5 text-blue-600 dark:text-sky-400" />
               Historique des versements : {selectedGoal?.name}
             </DialogTitle>
-            <DialogDescription className="text-slate-500">
+            <DialogDescription className="text-slate-500 dark:text-slate-400">
               Total cumulé : <strong>{selectedGoal ? formatMoney(selectedGoal.current, currency) : 0}</strong> sur un objectif de {selectedGoal ? formatMoney(selectedGoal.target, currency) : 0}
             </DialogDescription>
           </DialogHeader>
@@ -335,16 +335,16 @@ export default function SavingsPage() {
           <div className="flex-1 overflow-y-auto space-y-3 py-3 pr-1">
             {selectedGoal && selectedGoal.contributions && selectedGoal.contributions.length > 0 ? (
               selectedGoal.contributions.map((contrib) => (
-                <div key={contrib.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100/60 transition">
+                <div key={contrib.id} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100/60 dark:hover:bg-slate-800 transition">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
+                    <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
                       <ArrowUpRight className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="font-semibold text-sm text-slate-800">
+                      <p className="font-semibold text-sm text-slate-800 dark:text-slate-100">
                         +{formatMoney(contrib.amount, currency)}
                       </p>
-                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                         <span>{new Date(contrib.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}</span>
                         {contrib.notes && (
                           <>
@@ -535,7 +535,7 @@ export default function SavingsPage() {
           const remainingAmount = Math.max(0, goal.target - goal.current);
 
           return (
-            <Card key={goal.id} className="border-none shadow-sm flex flex-col group bg-white hover:shadow-md transition-shadow">
+            <Card key={goal.id} className="border-none shadow-sm flex flex-col group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
                   <div className={`p-3 rounded-xl ${goal.color || "bg-blue-600"} text-white shadow-xs`}>
@@ -548,7 +548,7 @@ export default function SavingsPage() {
                       variant="ghost" 
                       size="icon" 
                       onClick={() => updateSavingsGoalStatus(goal.id, isPaused ? "active" : "paused")}
-                      className="text-slate-400 hover:text-slate-700 h-8 w-8"
+                      className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 h-8 w-8"
                       title={isPaused ? "Reprendre l'objectif" : "Mettre en pause"}
                     >
                       {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
@@ -564,7 +564,7 @@ export default function SavingsPage() {
                           toast.success("Objectif supprimé.");
                         }
                       }} 
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 h-8 w-8"
+                      className="text-slate-400 hover:text-red-600 dark:hover:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 h-8 w-8"
                       title="Supprimer"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -574,9 +574,9 @@ export default function SavingsPage() {
 
                 <div className="mt-3">
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-lg font-bold text-slate-800">{goal.name}</CardTitle>
+                    <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-100">{goal.name}</CardTitle>
                     {isPaused && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                         En pause
                       </span>
                     )}
@@ -647,13 +647,13 @@ export default function SavingsPage() {
         })}
 
         {savingsGoals.length === 0 && (
-          <div className="col-span-full p-12 bg-white rounded-2xl border border-dashed border-slate-200 text-center flex flex-col items-center">
-            <div className="p-3 bg-blue-50 text-[#1E3A5F] rounded-full mb-3">
+          <div className="col-span-full p-12 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-center flex flex-col items-center">
+            <div className="p-3 bg-blue-50 dark:bg-blue-950/60 text-[#1E3A5F] dark:text-sky-400 rounded-full mb-3">
               <PiggyBank className="h-8 w-8" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-1">Aucun projet d'épargne pour l'instant</h3>
-            <p className="text-slate-500 text-sm mb-4 max-w-md">
-              Choisissez un objectif concret ci-dessous ou créez votre propre projet d'épargne :
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">Aucun projet d&apos;épargne pour l&apos;instant</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 max-w-md">
+              Choisissez un objectif concret ci-dessous ou créez votre propre projet d&apos;épargne :
             </p>
             <div className="flex flex-wrap justify-center gap-2 mb-6 max-w-xl">
               {SAVINGS_GOAL_TEMPLATES.map((tpl) => (
@@ -666,13 +666,13 @@ export default function SavingsPage() {
                     setGoalColor(tpl.color);
                     setIsNewGoalOpen(true);
                   }}
-                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-[#1E3A5F] border border-slate-200 hover:border-blue-200 transition"
+                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-[#1E3A5F] dark:hover:text-sky-300 border border-slate-200 dark:border-slate-700 hover:border-blue-200 transition"
                 >
                   + {tpl.name}
                 </button>
               ))}
             </div>
-            <Button onClick={() => setIsNewGoalOpen(true)} className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white gap-2">
+            <Button onClick={() => setIsNewGoalOpen(true)} className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-semibold gap-2">
               <Plus className="h-4 w-4" />
               <span>Créer mon premier objectif</span>
             </Button>

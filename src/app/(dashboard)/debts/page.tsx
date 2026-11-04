@@ -233,27 +233,27 @@ export default function DebtsPage() {
     <div className="flex flex-col gap-6 pb-12">
       {/* 1. Modale Création Dette / Créance */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
-              <HandCoins className="h-5 w-5 text-[#1E3A5F]" />
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+              <HandCoins className="h-5 w-5 text-[#1E3A5F] dark:text-sky-400" />
               Enregistrer une Dette ou Créance
             </DialogTitle>
-            <DialogDescription className="text-slate-500">
+            <DialogDescription className="text-slate-500 dark:text-slate-400">
               Suivez précisément ce que vous devez rembourser et ce que l&apos;on vous doit.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             {/* Sélecteur Type */}
-            <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+            <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
               <button
                 type="button"
                 onClick={() => setDebtType("payable")}
                 className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
                   debtType === "payable"
-                    ? "bg-white shadow-xs text-rose-600"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-white dark:bg-slate-700 shadow-xs text-rose-600 dark:text-rose-400"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 <ArrowUpRight className="h-4 w-4" />
@@ -264,8 +264,8 @@ export default function DebtsPage() {
                 onClick={() => setDebtType("receivable")}
                 className={`flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
                   debtType === "receivable"
-                    ? "bg-white shadow-xs text-emerald-600"
-                    : "text-slate-600 hover:text-slate-900"
+                    ? "bg-white dark:bg-slate-700 shadow-xs text-emerald-600 dark:text-emerald-400"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 <ArrowDownLeft className="h-4 w-4" />
@@ -355,13 +355,13 @@ export default function DebtsPage() {
 
       {/* 2. Modale d'enregistrement d'un remboursement */}
       <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
-              <PlusCircle className="h-5 w-5 text-emerald-600" />
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+              <PlusCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               Enregistrer un remboursement
             </DialogTitle>
-            <DialogDescription className="text-slate-500">
+            <DialogDescription className="text-slate-500 dark:text-slate-400">
               {currentSelectedDebt?.type === "payable"
                 ? `Remboursement versé à ${currentSelectedDebt?.personName}`
                 : `Remboursement reçu de ${currentSelectedDebt?.personName}`}
@@ -374,7 +374,7 @@ export default function DebtsPage() {
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Montant remboursé ({currency})
               </label>
               <Input
@@ -397,7 +397,7 @@ export default function DebtsPage() {
                         formatThousands(Math.round(currentSelectedDebt.remainingAmount / 2))
                       )
                     }
-                    className="text-xs px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
+                    className="text-xs px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium"
                   >
                     50% ({formatMoney(Math.round(currentSelectedDebt.remainingAmount / 2), currency)})
                   </button>
@@ -406,7 +406,7 @@ export default function DebtsPage() {
                     onClick={() =>
                       setPaymentAmountStr(formatThousands(currentSelectedDebt.remainingAmount))
                     }
-                    className="text-xs px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold"
+                    className="text-xs px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 font-semibold"
                   >
                     Solder tout ({formatMoney(currentSelectedDebt.remainingAmount, currency)})
                   </button>
@@ -415,7 +415,7 @@ export default function DebtsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Date du remboursement
               </label>
               <Input
@@ -426,7 +426,7 @@ export default function DebtsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 Note (Mobile Money, Espèces, Virement...)
               </label>
               <Input
@@ -443,7 +443,7 @@ export default function DebtsPage() {
             </Button>
             <Button
               onClick={handleSubmitPayment}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
             >
               Valider le remboursement
             </Button>
@@ -453,13 +453,13 @@ export default function DebtsPage() {
 
       {/* 3. Modale Historique des remboursements */}
       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-        <DialogContent className="sm:max-w-lg bg-white max-h-[85vh] flex flex-col">
+        <DialogContent className="sm:max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
-              <History className="h-5 w-5 text-[#1E3A5F]" />
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
+              <History className="h-5 w-5 text-[#1E3A5F] dark:text-sky-400" />
               Historique : {currentSelectedDebt?.personName}
             </DialogTitle>
-            <DialogDescription className="text-slate-500">
+            <DialogDescription className="text-slate-500 dark:text-slate-400">
               Montant initial :{" "}
               <strong>{formatMoney(currentSelectedDebt?.totalAmount || 0, currency)}</strong> | Reste
               :{" "}
@@ -730,7 +730,7 @@ export default function DebtsPage() {
           return (
             <Card
               key={debt.id}
-              className="border-none shadow-sm bg-white flex flex-col justify-between hover:shadow-md transition-shadow"
+              className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between hover:shadow-md transition-shadow"
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
@@ -738,14 +738,14 @@ export default function DebtsPage() {
                     <div
                       className={`p-2.5 rounded-xl ${
                         debt.type === "payable"
-                          ? "bg-rose-50 text-rose-600"
-                          : "bg-emerald-50 text-emerald-600"
+                          ? "bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400"
+                          : "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"
                       }`}
                     >
                       <User className="h-5 w-5" />
                     </div>
                     <div>
-                      <CardTitle className="text-base font-bold text-slate-900">
+                      <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
                         {debt.personName}
                       </CardTitle>
                       {debt.phone && (
@@ -855,23 +855,23 @@ export default function DebtsPage() {
         })}
 
         {filteredDebts.length === 0 && (
-          <div className="col-span-full p-10 bg-white rounded-2xl border border-dashed border-slate-200 text-center flex flex-col items-center">
-            <div className="p-3 bg-amber-50 text-amber-600 rounded-full mb-3">
+          <div className="col-span-full p-10 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-center flex flex-col items-center">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-full mb-3">
               <HandCoins className="h-7 w-7" />
             </div>
-            <h3 className="text-base font-bold text-slate-800 mb-1">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-1">
               {activeTab === "payable"
                 ? "Aucune dette à rembourser enregistrée"
                 : "Aucune créance à récupérer enregistrée"}
             </h3>
-            <p className="text-xs text-slate-500 max-w-md mb-5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mb-5">
               {activeTab === "payable"
                 ? "Notez ici les montants empruntés avec leur date d'échéance pour recevoir des rappels et suivre vos remboursements."
                 : "Notez ici les sommes prêtées à vos proches ou clients afin de suivre chaque remboursement reçu."}
             </p>
             <Button
               onClick={() => handleOpenAddModal(activeTab)}
-              className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white gap-2"
+              className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-semibold gap-2"
             >
               <Plus className="h-4 w-4" />
               <span>
