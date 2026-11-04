@@ -40,7 +40,8 @@ export default function SettingsPage() {
     payDay: storePayDay, 
     notifications: storeNotifications,
     updatePreferences, 
-    updateNotifications 
+    updateNotifications,
+    resetStore
   } = useUIStore();
 
   const [localAlert, setLocalAlert] = useState(80);
@@ -135,6 +136,7 @@ export default function SettingsPage() {
 
   const handleLogout = async () => {
     try {
+      resetStore();
       await supabase.auth.signOut();
       toast.success("Déconnexion réussie");
       router.push("/login");

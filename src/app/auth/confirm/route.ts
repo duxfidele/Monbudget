@@ -1,12 +1,15 @@
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getSafeRedirectUrl } from '@/lib/utils/security'
+
+export { getSafeRedirectUrl }
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
-  const next = searchParams.get('next') ?? '/'
+  const next = searchParams.get('next')
 
   if (token_hash && type) {
     const supabase = await createClient()
@@ -20,8 +23,8 @@ export async function GET(request: NextRequest) {
         const redirectUrl = new URL('/reset-password', request.url)
         return NextResponse.redirect(redirectUrl)
       }
-      // Rediriger l'utilisateur vers la page spécifiée ou vers l'accueil
-      const redirectUrl = new URL(next, request.url)
+      // Rediriger de manière sécurisée vers un chemin interne uniquement (protection anti-Open Redirect)
+      const redirectUrl = getSafeRedirectUrl(next, request.url)
       return NextResponse.redirect(redirectUrl)
     }
   } else {
@@ -31,7 +34,7 @@ export async function GET(request: NextRequest) {
       const supabase = await createClient()
       const { error } = await supabase.auth.exchangeCodeForSession(code)
       if (!error) {
-        const redirectUrl = new URL(next, request.url)
+        const redirectUrl = getSafeRedirectUrl(next, request.url)
         return NextResponse.redirect(redirectUrl)
       }
     }

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
+import { getUserStorageKey } from "@/lib/utils/security";
 import {
   deduplicateCategories,
   DebtItem,
@@ -103,6 +104,10 @@ interface UIState {
   activeMonth: { year: number; month: number };
   setActiveMonth: (year: number, month: number) => void;
 
+  // Session & Cache
+  userId: string | null;
+  resetStore: () => void;
+
   // Global Data
   budget_id: string | null;
   baseSalary: number;
@@ -164,7 +169,29 @@ interface UIState {
   initStore: () => Promise<void>;
 }
 
-const STORAGE_KEY = "monbudget_local_cache_v3";
+function getSavedUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        const item = localStorage.getItem(key);
+        if (item) {
+          const parsed = JSON.parse(item);
+          if (parsed?.user?.id) return parsed.user.id;
+        }
+      }
+    }
+  } catch {}
+  return null;
+}
+
+let activeUserId: string | null = typeof window !== "undefined" ? getSavedUserId() : null;
+
+export function getStorageKey(uid?: string | null): string {
+  return getUserStorageKey(uid ?? activeUserId);
+}
+
 const currentDate = new Date();
 const supabase = createClient();
 
@@ -174,10 +201,11 @@ function getMonthKey(year: number, month: number): string {
 
 export { deduplicateCategories };
 
-function loadLocalCache(): LocalCache | null {
+function loadLocalCache(uid?: string | null): LocalCache | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(uid);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const cache: LocalCache = JSON.parse(raw);
     let mutated = false;
@@ -209,7 +237,7 @@ function loadLocalCache(): LocalCache | null {
     }
     if (mutated) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
+        localStorage.setItem(key, JSON.stringify(cache));
       } catch {}
     }
     return cache;
@@ -218,10 +246,11 @@ function loadLocalCache(): LocalCache | null {
   }
 }
 
-function saveLocalCache(cache: LocalCache) {
+function saveLocalCache(cache: LocalCache, uid?: string | null) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
+    const key = getStorageKey(uid);
+    localStorage.setItem(key, JSON.stringify(cache));
   } catch (err) {
     console.warn("Could not save to localStorage", err);
   }
@@ -237,6 +266,35 @@ const allocationDebounceTimers: Record<string, NodeJS.Timeout> = {};
 let incomeDebounceTimer: NodeJS.Timeout | null = null;
 
 export const useUIStore = create<UIState>((set, get) => ({
+  userId: activeUserId,
+  resetStore: () => {
+    if (typeof window !== "undefined") {
+      try {
+        const currentKey = getStorageKey();
+        localStorage.removeItem(currentKey);
+        localStorage.removeItem("monbudget_local_cache_v3");
+        localStorage.removeItem("monbudget_local_cache_anon");
+      } catch {}
+    }
+    activeUserId = null;
+    set({
+      userId: null,
+      budget_id: null,
+      baseSalary: 0,
+      income: 0,
+      incomeEntries: [],
+      categories: [],
+      transactions: [],
+      savingsGoals: [],
+      debts: [],
+      isSidebarOpen: false,
+      alertThreshold: 80,
+      currency: "FCFA",
+      payDay: 28,
+      notifications: defaultNotifications,
+    });
+  },
+
   isSidebarOpen: false,
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
   setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
@@ -322,6 +380,23 @@ export const useUIStore = create<UIState>((set, get) => ({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      activeUserId = user.id;
+      set({ userId: user.id });
+
+      // Clean up legacy non-partitioned cache & migrate to user partition if needed
+      if (typeof window !== "undefined") {
+        try {
+          const userKey = getStorageKey(user.id);
+          if (!localStorage.getItem(userKey)) {
+            const legacy = localStorage.getItem("monbudget_local_cache_v3");
+            if (legacy) {
+              localStorage.setItem(userKey, legacy);
+            }
+          }
+          localStorage.removeItem("monbudget_local_cache_v3");
+        } catch {}
+      }
 
       const { year, month } = get().activeMonth;
       const monthKey = getMonthKey(year, month);
