@@ -47,10 +47,10 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
     debts,
   } = payload;
 
-  const totalExpenses = getTotalExpenses(transactions);
   const monthlySavings = getMonthlySavingsContributions(savingsGoals, year, month);
+  const totalExpenses = getTotalExpenses(transactions, monthlySavings);
   const totalSavingsAccumulated = savingsGoals.reduce((sum, g) => sum + (Number(g.current) || 0), 0);
-  const remaining = getRemainingToLive(income, totalExpenses, monthlySavings);
+  const remaining = getRemainingToLive(income, totalExpenses);
   const payableDebts = getTotalPayableDebts(debts);
   const receivableDebts = getTotalReceivableDebts(debts);
 
@@ -236,10 +236,10 @@ export function exportMonthlyReportPDF(payload: ReportExportPayload): void {
     debts,
   } = payload;
 
-  const totalExpenses = getTotalExpenses(transactions);
   const monthlySavings = getMonthlySavingsContributions(savingsGoals, year, month);
+  const totalExpenses = getTotalExpenses(transactions, monthlySavings);
   const totalSavingsAccumulated = savingsGoals.reduce((sum, g) => sum + (Number(g.current) || 0), 0);
-  const remaining = getRemainingToLive(income, totalExpenses, monthlySavings);
+  const remaining = getRemainingToLive(income, totalExpenses);
   const payableDebts = getTotalPayableDebts(debts);
   const receivableDebts = getTotalReceivableDebts(debts);
 

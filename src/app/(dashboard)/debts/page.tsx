@@ -88,9 +88,9 @@ export default function DebtsPage() {
   const alerts = getDebtAlerts(debts, new Date(), 7, currency);
 
   // Liaison directe avec Mon Budget
-  const totalExpenses = getTotalExpenses(transactions);
   const monthlySavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
-  const availableBalance = getRemainingToLive(income, totalExpenses, monthlySavings);
+  const totalExpenses = getTotalExpenses(transactions, monthlySavings);
+  const availableBalance = getRemainingToLive(income, totalExpenses);
   const debtEnvelope = categories.find(
     (c) => c.name.trim().toLowerCase() === "remboursement de dette"
   );

@@ -46,14 +46,14 @@ export default function DashboardPage() {
   const { income, incomeEntries, categories, transactions, savingsGoals, debts, currency, payDay, notifications, activeMonth } = useUIStore();
 
   // 1. Calculs financiers purs et précis via budget-calc
-  const depenses = getTotalExpenses(transactions);
+  const epargneMois = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+  const depenses = getTotalExpenses(transactions, epargneMois);
   const depensesPrevues = categories.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
   const resteAAllouer = income - depensesPrevues;
-  const epargneMois = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
   const epargneConstituee = savingsGoals.reduce((sum, g) => sum + g.current, 0);
   const totalTargetSavings = savingsGoals.reduce((sum, g) => sum + g.target, 0);
   const globalGoalsProgress = totalTargetSavings > 0 ? Math.round((epargneConstituee / totalTargetSavings) * 100) : 0;
-  const reste = getRemainingToLive(income, depenses, epargneMois);
+  const reste = getRemainingToLive(income, depenses);
   const pourcentageDepense = income > 0 ? (depenses / income) * 100 : 0;
 
   // Dettes & Créances (Pilier A & E)
@@ -327,6 +327,11 @@ export default function DashboardPage() {
             <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
               {formatMoney(depenses, currency)}
             </div>
+            {epargneMois > 0 && (
+              <p className="text-xs text-sky-600 dark:text-sky-400 mt-1 font-medium">
+                dont {formatMoney(epargneMois, currency)} d&apos;épargne mise de côté
+              </p>
+            )}
             <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-3 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${pourcentageDepense > 90 ? 'bg-red-500' : 'bg-blue-600'}`}

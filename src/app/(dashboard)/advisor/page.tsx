@@ -56,7 +56,6 @@ export default function AdvisorPage() {
     addSavingsGoal,
   } = useUIStore();
 
-  const totalExpenses = getTotalExpenses(transactions);
   const rawMonthlySavings = getMonthlySavingsContributions(
     savingsGoals,
     activeMonth.year,
@@ -66,7 +65,8 @@ export default function AdvisorPage() {
     rawMonthlySavings,
     getSpentByCategory(transactions, "Épargne", rawMonthlySavings)
   );
-  const remaining = getRemainingToLive(income, totalExpenses, monthlySavings);
+  const totalExpenses = getTotalExpenses(transactions, monthlySavings);
+  const remaining = getRemainingToLive(income, totalExpenses);
 
   const aiAnalysis = generateFinancialAIAnalysis({
     income,

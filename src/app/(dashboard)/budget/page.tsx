@@ -566,14 +566,14 @@ export default function BudgetPage() {
     .filter((tx) => isIncomeTransaction(tx))
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const depenses = getTotalExpenses(transactions);
   const rawMonthlySavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
   const epargne = Math.max(rawMonthlySavings, getSpentByCategory(transactions, "Épargne", rawMonthlySavings));
-  const resteReel = getRemainingToLive(income, depenses, epargne);
+  const depenses = getTotalExpenses(transactions, epargne);
+  const resteReel = getRemainingToLive(income, depenses);
 
   const totalAllocated = getEffectiveTotalAllocated(categories, transactions, epargne);
   const remaining = income - totalAllocated;
-  const totalRealOutflows = depenses + epargne;
+  const totalRealOutflows = depenses;
   const reservedInEnvelopes = Math.max(0, totalAllocated - totalRealOutflows);
 
   // Liaison directe avec Dettes & Créances

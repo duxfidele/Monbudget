@@ -122,8 +122,8 @@ export default function ReportsPage() {
           let mSavings = Math.max(0, mIncome - mExpenses);
           if (b.year === activeMonth.year && b.month === activeMonth.month) {
             mIncome = income;
-            mExpenses = getTotalExpenses(transactions);
             mSavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+            mExpenses = getTotalExpenses(transactions, mSavings);
           }
 
           return {
@@ -138,8 +138,8 @@ export default function ReportsPage() {
         if (!hasActiveMonth) {
           const curDate = new Date(activeMonth.year, activeMonth.month - 1, 1);
           const curLabel = curDate.toLocaleDateString("fr-FR", { month: "short" });
-          const curExpenses = getTotalExpenses(transactions);
           const curSavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+          const curExpenses = getTotalExpenses(transactions, curSavings);
           mapped.push({
             month: curLabel.charAt(0).toUpperCase() + curLabel.slice(1),
             revenus: income,
@@ -153,13 +153,14 @@ export default function ReportsPage() {
         // Fallback avec le mois courant actif
         const curDate = new Date(activeMonth.year, activeMonth.month - 1, 1);
         const curLabel = curDate.toLocaleDateString("fr-FR", { month: "short" });
-        const curExpenses = getTotalExpenses(transactions);
+        const curSavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+        const curExpenses = getTotalExpenses(transactions, curSavings);
         setHistoryData([
           {
             month: curLabel.charAt(0).toUpperCase() + curLabel.slice(1),
             revenus: income,
             depenses: curExpenses,
-            epargne: Math.max(0, income - curExpenses),
+            epargne: curSavings,
           }
         ]);
       }
@@ -172,10 +173,10 @@ export default function ReportsPage() {
 
   // Calculs actuels pour le mois sélectionné (100% concordants avec Dashboard)
   const currentExpenses = transactions.filter((tx) => tx.type === "expense" || !tx.type);
-  const totalExpenses = getTotalExpenses(transactions);
   const monthlySavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+  const totalExpenses = getTotalExpenses(transactions, monthlySavings);
   const totalSavingsAllTime = savingsGoals.reduce((sum, g) => sum + g.current, 0);
-  const resteAVivre = getRemainingToLive(income, totalExpenses, monthlySavings);
+  const resteAVivre = getRemainingToLive(income, totalExpenses);
 
   // Taux financiers concordants
   const tauxEpargne = income > 0 ? (monthlySavings / income) * 100 : 0;
@@ -315,7 +316,7 @@ export default function ReportsPage() {
               />
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-              {formatMoney(totalExpenses, currency)} consommés sur votre salaire
+              {formatMoney(totalExpenses, currency)} engagés {monthlySavings > 0 ? `(dont ${formatMoney(monthlySavings, currency)} d'épargne)` : "sur votre salaire"}
             </p>
           </CardContent>
         </Card>

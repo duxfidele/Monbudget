@@ -88,9 +88,9 @@ export default function SavingsPage() {
   const completedGoalsCount = savingsGoals.filter(g => g.current >= g.target).length;
 
   // Liaison directe avec Mon Budget & Transactions
-  const totalExpenses = getTotalExpenses(transactions);
   const monthlySavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
-  const availableBalance = getRemainingToLive(income, totalExpenses, monthlySavings);
+  const totalExpenses = getTotalExpenses(transactions, monthlySavings);
+  const availableBalance = getRemainingToLive(income, totalExpenses);
   const savingsEnvelope = categories.find(
     (c) => c.name.trim().toLowerCase() === "épargne"
   );

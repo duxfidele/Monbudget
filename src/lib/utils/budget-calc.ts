@@ -85,10 +85,20 @@ export function isSavingsTransaction(tx: TransactionItem & { label?: string }): 
   return cat === "épargne" || cat === "epargne" || lbl.startsWith("épargne :");
 }
 
-export function getTotalExpenses(transactions: TransactionItem[]): number {
-  return transactions
+export function getTotalExpenses(
+  transactions: TransactionItem[],
+  monthlySavings: number = 0
+): number {
+  const regularExpenses = transactions
     .filter((tx) => isExpenseTransaction(tx) && !isSavingsTransaction(tx))
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
+  const txSavings = transactions
+    .filter((tx) => isExpenseTransaction(tx) && isSavingsTransaction(tx))
+    .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
+  const effectiveSavings = Math.max(Number(monthlySavings) || 0, txSavings);
+  return regularExpenses + effectiveSavings;
 }
 
 /**
@@ -106,10 +116,14 @@ export function getRemainingToAllocate(income: number, totalAllocated: number): 
 }
 
 /**
- * Calcule le reste à vivre réel (Revenus - Dépenses - Épargne)
+ * Calcule le reste à vivre réel (Revenus - Dépenses totales incluant l'épargne)
  */
-export function getRemainingToLive(income: number, totalExpenses: number, totalSavings: number = 0): number {
-  return income - totalExpenses - totalSavings;
+export function getRemainingToLive(
+  income: number,
+  totalExpenses: number,
+  _optionalSeparateSavings: number = 0
+): number {
+  return income - totalExpenses;
 }
 
 /**
@@ -671,10 +685,10 @@ export function generateFinancialAIAnalysis({
   currentDate?: Date;
   payDay?: number;
 }): FinancialAIAnalysis {
-  const totalExpenses = getTotalExpenses(transactions);
   const txSavings = getSpentByCategory(transactions, "Épargne", monthlySavings);
   const effectiveMonthlySavings = Math.max(monthlySavings, txSavings);
-  const remaining = getRemainingToLive(income, totalExpenses, effectiveMonthlySavings);
+  const totalExpenses = getTotalExpenses(transactions, effectiveMonthlySavings);
+  const remaining = getRemainingToLive(income, totalExpenses);
   const payableDebts = getTotalPayableDebts(debts);
   const receivableDebts = getTotalReceivableDebts(debts);
   const debtAlerts = getDebtAlerts(debts, currentDate, 7, currency);

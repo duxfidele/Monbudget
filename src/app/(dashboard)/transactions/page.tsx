@@ -104,11 +104,10 @@ export default function TransactionsPage() {
     .filter((tx) => isIncomeTransaction(tx))
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const totalExpenses = getTotalExpenses(transactions);
-
   const epargne = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
-  const reste = getRemainingToLive(income, totalExpenses, epargne);
-  const soldeNet = income - totalExpenses;
+  const totalExpenses = getTotalExpenses(transactions, epargne);
+  const reste = getRemainingToLive(income, totalExpenses);
+  const soldeNet = reste;
 
   // Dépenses effectuées aujourd'hui (pour déduction automatique)
   const todayISO = new Date().toISOString().split("T")[0];
@@ -438,7 +437,9 @@ export default function TransactionsPage() {
               -{formatMoney(totalExpenses, currency)}
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Consommées sur vos enveloppes de dépenses
+              {epargne > 0
+                ? `dont ${formatMoney(epargne, currency)} d'épargne mise de côté`
+                : "Consommées sur vos enveloppes de dépenses"}
             </p>
           </CardContent>
         </Card>

@@ -271,13 +271,41 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
     ];
     const monthlySavings = 50000;
 
-    const depenses = getTotalExpenses(transactions); // 40 000 (excludes Épargne to avoid double count)
-    const soldeRestant = getRemainingToLive(income, depenses, monthlySavings); // 300 000 - 40 000 - 50 000 = 210 000
+    const depenses = getTotalExpenses(transactions, monthlySavings); // 90 000 (40 000 regular + 50 000 savings)
+    const soldeRestant = getRemainingToLive(income, depenses); // 300 000 - 90 000 = 210 000
     const effectiveAllocated = getEffectiveTotalAllocated(categories, transactions, monthlySavings); // 40 000 + 50 000 = 90 000
     const resteAAllouer = income - effectiveAllocated; // 300 000 - 90 000 = 210 000
 
+    expect(depenses).toBe(90000);
     expect(soldeRestant).toBe(210000);
     expect(resteAAllouer).toBe(soldeRestant);
+  });
+
+  test("considers savings as expenses and deducts it directly from available balance without double counting", () => {
+    const income = 500000;
+    const transactions = [
+      { amount: 120000, category: "Loyer", type: "expense" as const },
+      { amount: 80000, category: "Alimentation", type: "expense" as const },
+      { amount: 50000, category: "Épargne", type: "expense" as const },
+    ];
+    const monthlySavingsFromGoals = 50000; // linked to goal
+
+    const totalExpenses = getTotalExpenses(transactions, monthlySavingsFromGoals);
+    // 120 000 + 80 000 + max(50 000, 50 000) = 250 000
+    expect(totalExpenses).toBe(250000);
+
+    const availableBalance = getRemainingToLive(income, totalExpenses);
+    // 500 000 - 250 000 = 250 000
+    expect(availableBalance).toBe(250000);
+
+    // If no savings transaction in array yet, but monthlySavings = 75 000
+    const txWithoutSavings = [
+      { amount: 120000, category: "Loyer", type: "expense" as const },
+      { amount: 80000, category: "Alimentation", type: "expense" as const },
+    ];
+    const totalWithOnlyGoalSavings = getTotalExpenses(txWithoutSavings, 75000);
+    expect(totalWithOnlyGoalSavings).toBe(275000);
+    expect(getRemainingToLive(income, totalWithOnlyGoalSavings)).toBe(225000);
   });
 
   test("AI advisor detects early-month cash burn, unplanned expenses and heavy savings", () => {
