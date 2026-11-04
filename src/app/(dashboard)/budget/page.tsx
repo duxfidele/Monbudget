@@ -573,6 +573,8 @@ export default function BudgetPage() {
 
   const totalAllocated = getEffectiveTotalAllocated(categories, transactions, epargne);
   const remaining = income - totalAllocated;
+  const totalRealOutflows = depenses + epargne;
+  const reservedInEnvelopes = Math.max(0, totalAllocated - totalRealOutflows);
 
   // Liaison directe avec Dettes & Créances
   const totalPayableDebts = getTotalPayableDebts(debts);
@@ -998,55 +1000,61 @@ export default function BudgetPage() {
             </CardContent>
           </Card>
 
-          {/* Reste à allouer Card */}
-          <Card className={`border-none shadow-sm transition-colors ${remaining < 0 ? "bg-red-50 border border-red-200" : remaining === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-white"}`}>
+          {/* Solde réel restant & Répartition Card */}
+          <Card className={`border-none shadow-sm transition-colors ${resteReel < 0 ? "bg-red-50 border border-red-200" : resteReel === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-white"}`}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-slate-600">Reste à allouer</CardTitle>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                  Synchronisé au solde
+                <CardTitle className="text-sm font-medium text-slate-600">Solde réel restant</CardTitle>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Solde disponible réel
                 </span>
               </div>
             </CardHeader>
             <CardContent>
-              <div suppressHydrationWarning className={`text-3xl font-extrabold ${remaining < 0 ? "text-red-600" : remaining === 0 ? "text-emerald-600" : "text-slate-800"}`}>
-                {formatMoney(remaining, currency)}
+              <div suppressHydrationWarning className={`text-3xl font-extrabold ${resteReel < 0 ? "text-red-600" : resteReel === 0 ? "text-emerald-600" : "text-slate-800"}`}>
+                {formatMoney(resteReel, currency)}
               </div>
 
-              <div className="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 space-y-1 text-xs text-slate-600">
+              <div className="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5 text-xs text-slate-600">
                 <div className="flex items-center justify-between">
-                  <span>Total comptabilisé au budget :</span>
-                  <strong className="text-slate-800">{formatMoney(totalAllocated, currency)}</strong>
+                  <span>Dépenses + Épargne déjà sorties :</span>
+                  <strong className="text-slate-800">{formatMoney(totalRealOutflows, currency)}</strong>
                 </div>
                 {epargne > 0 && (
                   <div className="flex items-center justify-between text-emerald-700 text-[11px]">
                     <span>• dont Épargne comptabilisée auto :</span>
-                    <strong>{formatMoney(Math.max(epargne, savingsEnvelope?.amount || 0), currency)}</strong>
+                    <strong>{formatMoney(epargne, currency)}</strong>
                   </div>
                 )}
                 <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 text-[11px]">
-                  <span>Solde restant disponible :</span>
-                  <strong className="text-[#1E3A5F]">{formatMoney(resteReel, currency)}</strong>
+                  <span>Réservé dans vos enveloppes restantes :</span>
+                  <strong className="text-amber-700">{formatMoney(reservedInEnvelopes, currency)}</strong>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span>Marge libre non affectée (à allouer) :</span>
+                  <strong className={remaining < 0 ? "text-red-600" : "text-[#1E3A5F]"}>
+                    {formatMoney(remaining, currency)}
+                  </strong>
                 </div>
               </div>
 
-              {remaining === 0 && (
+              {remaining === 0 && resteReel >= 0 && (
                 <div className="flex items-center gap-1.5 text-emerald-700 text-xs mt-3 font-medium bg-emerald-100/60 p-2.5 rounded-lg">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span>Budget Base Zéro parfait : chaque franc a une affectation précise !</span>
+                  <span>Budget Base Zéro parfait : chaque franc de votre solde a une affectation précise !</span>
                 </div>
               )}
 
               {remaining > 0 && (
                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                  Il vous reste ce montant à ventiler dans vos enveloppes ou à verser en épargne (vos épargnes et dépenses du mois sont déjà déduites automatiquement).
+                  Sur vos <strong>{formatMoney(resteReel, currency)}</strong> en caisse, <strong>{formatMoney(reservedInEnvelopes, currency)}</strong> sont réservés dans vos enveloppes et <strong>{formatMoney(remaining, currency)}</strong> sont libres à allouer.
                 </p>
               )}
 
               {remaining < 0 && (
                 <div className="flex items-start gap-1.5 text-red-600 text-xs mt-3 font-medium bg-red-100/70 p-2.5 rounded-lg">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>Déficit ! Vos enveloppes et épargnes dépassent votre revenu de {formatMoney(Math.abs(remaining), currency)}. Réduisez certains plafonds.</span>
+                  <span>Vos enveloppes prévues dépassent votre solde disponible de {formatMoney(Math.abs(remaining), currency)}. Réduisez certains plafonds.</span>
                 </div>
               )}
             </CardContent>
