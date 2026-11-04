@@ -4,6 +4,7 @@ import {
   getTotalExpenses, 
   getRemainingToLive, 
   getCategoryProgress, 
+  getEffectiveTotalAllocated,
   formatMoney,
   isIncomeTransaction,
   isExpenseTransaction,
@@ -256,5 +257,26 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
     expect(analysis.healthScore).toBeGreaterThan(0);
     expect(analysis.breakdown.solidarityAndTithePercent).toBe(25); // (45k+30k)/300k = 25%
     expect(analysis.recommendations.length).toBeGreaterThan(0);
+  });
+
+  test("accounts for unbudgeted savings and expenses so Reste à allouer matches Solde restant", () => {
+    const income = 300000;
+    // User did NOT budget Épargne (0 FCFA) and budgeted 100 000 FCFA for Alimentation
+    const categories = [
+      { name: "Alimentation", amount: 0 },
+    ];
+    const transactions = [
+      { amount: 40000, category: "Alimentation", type: "expense" as const },
+      { amount: 50000, category: "Épargne", type: "expense" as const },
+    ];
+    const monthlySavings = 50000;
+
+    const depenses = getTotalExpenses(transactions); // 40 000 (excludes Épargne to avoid double count)
+    const soldeRestant = getRemainingToLive(income, depenses, monthlySavings); // 300 000 - 40 000 - 50 000 = 210 000
+    const effectiveAllocated = getEffectiveTotalAllocated(categories, transactions, monthlySavings); // 40 000 + 50 000 = 90 000
+    const resteAAllouer = income - effectiveAllocated; // 300 000 - 90 000 = 210 000
+
+    expect(soldeRestant).toBe(210000);
+    expect(resteAAllouer).toBe(soldeRestant);
   });
 });

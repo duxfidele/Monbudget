@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
-import { deduplicateCategories, DebtItem, DebtPaymentItem, IncomeSourceType } from "@/lib/utils/budget-calc";
+import {
+  deduplicateCategories,
+  DebtItem,
+  DebtPaymentItem,
+  IncomeSourceType,
+  getMonthlySavingsContributions,
+  getSpentByCategory,
+} from "@/lib/utils/budget-calc";
 
 export type IncomeSourceEntry = {
   id: string;
@@ -640,6 +647,42 @@ export const useUIStore = create<UIState>((set, get) => ({
         set({ savingsGoals: mappedGoals });
       }
 
+      // Synchroniser automatiquement l'enveloppe Épargne dans Mon Budget si des épargnes existent sur le mois actif
+      const activeGoals = get().savingsGoals;
+      const monthlySavingsAmount = getMonthlySavingsContributions(activeGoals, year, month);
+      const txSavingsAmount = getSpentByCategory(get().transactions, "Épargne", monthlySavingsAmount);
+      const effectiveMonthlySavings = Math.max(monthlySavingsAmount, txSavingsAmount);
+      if (effectiveMonthlySavings > 0) {
+        const currentCats = get().categories;
+        const hasSavingsCat = currentCats.some(
+          (c) => c.name.trim().toLowerCase() === "épargne" || c.name.trim().toLowerCase() === "epargne"
+        );
+        let syncedSavingsCats = currentCats;
+        if (!hasSavingsCat) {
+          const newSavCat: Category = {
+            id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `cat-sav-${Date.now()}`,
+            name: "Épargne",
+            amount: effectiveMonthlySavings,
+            color: "bg-emerald-600",
+          };
+          syncedSavingsCats = deduplicateCategories([...currentCats, newSavCat]);
+        } else {
+          syncedSavingsCats = currentCats.map((c) => {
+            const norm = c.name.trim().toLowerCase();
+            if (norm === "épargne" || norm === "epargne") {
+              return { ...c, amount: Math.max(Number(c.amount) || 0, effectiveMonthlySavings) };
+            }
+            return c;
+          });
+        }
+        set({ categories: syncedSavingsCats });
+        const cacheAfterSavings = loadLocalCache();
+        if (cacheAfterSavings && cacheAfterSavings.months[monthKey]) {
+          cacheAfterSavings.months[monthKey].categories = syncedSavingsCats;
+          saveLocalCache(cacheAfterSavings);
+        }
+      }
+
       // 7. Dettes & Créances
       try {
         const { data: remoteDebts } = await supabase
@@ -1156,9 +1199,19 @@ export const useUIStore = create<UIState>((set, get) => ({
       category: assignedCatName,
     };
 
+    const newTransactions = [transactionItem, ...get().transactions];
+    const newIncome = isInc ? get().income + tx.amount : get().income;
+
     // Si c'est une dépense sur une catégorie qui n'est pas encore dans Mon Budget, l'ajouter automatiquement à Mon Budget
+    // Et si c'est une épargne (ou non budgétisé), comptabiliser automatiquement le montant dans l'enveloppe
     let updatedCategories = get().categories;
+    const isSavingsCat =
+      assignedCatName.toLowerCase() === "épargne" ||
+      assignedCatName.toLowerCase() === "epargne" ||
+      tx.label.trim().toLowerCase().startsWith("épargne :");
+
     if (!isInc && assignedCatName && assignedCatName !== "Autre (Hors Budget)") {
+      const catSpentAfter = getSpentByCategory(newTransactions, assignedCatName);
       const catExists = updatedCategories.some(
         (c) => c.name.trim().toLowerCase() === assignedCatName.toLowerCase()
       );
@@ -1170,15 +1223,19 @@ export const useUIStore = create<UIState>((set, get) => ({
         const newCat: Category = {
           id: newCatId,
           name: assignedCatName,
-          amount: 0,
-          color: assignedCatName.toLowerCase() === "épargne" ? "bg-emerald-600" : "bg-blue-500",
+          amount: isSavingsCat ? catSpentAfter : 0,
+          color: isSavingsCat ? "bg-emerald-600" : "bg-blue-500",
         };
         updatedCategories = deduplicateCategories([...updatedCategories, newCat]);
+      } else if (isSavingsCat) {
+        updatedCategories = updatedCategories.map((c) => {
+          if (c.name.trim().toLowerCase() === assignedCatName.toLowerCase()) {
+            return { ...c, amount: Math.max(Number(c.amount) || 0, catSpentAfter) };
+          }
+          return c;
+        });
       }
     }
-
-    const newTransactions = [transactionItem, ...get().transactions];
-    const newIncome = isInc ? get().income + tx.amount : get().income;
 
     set({
       transactions: newTransactions,
@@ -1280,7 +1337,13 @@ export const useUIStore = create<UIState>((set, get) => ({
       let syncedContribIdToRemove: string | null = null;
       let syncedGoalToUpdate: SavingsGoal | null = null;
 
+      let updatedCategories = get().categories;
       if (isSavingsTx) {
+        const { year: curYear, month: curMonth } = get().activeMonth;
+        const prevMonthlySav = Math.max(
+          getMonthlySavingsContributions(get().savingsGoals, curYear, curMonth),
+          getSpentByCategory(get().transactions, "Épargne")
+        );
         updatedGoals = get().savingsGoals.map((g) => {
           const matchingContrib = (g.contributions || []).find(
             (c) =>
@@ -1303,6 +1366,18 @@ export const useUIStore = create<UIState>((set, get) => ({
           syncedGoalToUpdate = updatedG;
           return updatedG;
         });
+
+        const newMonthlySav = Math.max(
+          getMonthlySavingsContributions(updatedGoals, curYear, curMonth),
+          getSpentByCategory(newTransactions, "Épargne")
+        );
+        updatedCategories = updatedCategories.map((c) => {
+          const norm = c.name.trim().toLowerCase();
+          if ((norm === "épargne" || norm === "epargne") && (Number(c.amount) || 0) <= prevMonthlySav) {
+            return { ...c, amount: newMonthlySav };
+          }
+          return c;
+        });
       }
 
       set({
@@ -1310,6 +1385,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         income: newIncome,
         debts: updatedDebts,
         savingsGoals: updatedGoals,
+        categories: updatedCategories,
       });
 
       const { year, month } = get().activeMonth;
@@ -1319,6 +1395,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         if (cache.months[monthKey]) {
           cache.months[monthKey].transactions = newTransactions;
           cache.months[monthKey].income = newIncome;
+          cache.months[monthKey].categories = updatedCategories;
         }
         cache.debts = updatedDebts;
         cache.savingsGoals = updatedGoals;
@@ -1585,18 +1662,52 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     const updatedTransactions = [linkedTx, ...get().transactions];
 
+    // Comptabiliser automatiquement l'épargne dans Mon Budget même si elle n'était pas budgétisée
+    const { year, month } = get().activeMonth;
+    const monthlySavingsTotal = Math.max(
+      getMonthlySavingsContributions(updatedGoals, year, month),
+      getSpentByCategory(updatedTransactions, "Épargne")
+    );
+
+    let updatedCategories = get().categories;
+    const hasSavingsCat = updatedCategories.some(
+      (c) => c.name.trim().toLowerCase() === "épargne" || c.name.trim().toLowerCase() === "epargne"
+    );
+
+    if (!hasSavingsCat) {
+      const newSavCat: Category = {
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `cat-sav-${Date.now()}`,
+        name: "Épargne",
+        amount: monthlySavingsTotal,
+        color: "bg-emerald-600",
+      };
+      updatedCategories = deduplicateCategories([...updatedCategories, newSavCat]);
+    } else {
+      updatedCategories = updatedCategories.map((c) => {
+        const norm = c.name.trim().toLowerCase();
+        if (norm === "épargne" || norm === "epargne") {
+          return { ...c, amount: Math.max(Number(c.amount) || 0, monthlySavingsTotal) };
+        }
+        return c;
+      });
+    }
+
     set({
       savingsGoals: updatedGoals,
       transactions: updatedTransactions,
+      categories: updatedCategories,
     });
 
-    const { year, month } = get().activeMonth;
     const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache();
     if (cache) {
       cache.savingsGoals = updatedGoals;
       if (cache.months[monthKey]) {
         cache.months[monthKey].transactions = updatedTransactions;
+        cache.months[monthKey].categories = updatedCategories;
       }
       saveLocalCache(cache);
     }
@@ -1681,18 +1792,37 @@ export const useUIStore = create<UIState>((set, get) => ({
       txToRemoveId = matchingTx.id;
     }
 
+    const { year, month } = get().activeMonth;
+    const prevMonthlySav = Math.max(
+      getMonthlySavingsContributions(get().savingsGoals, year, month),
+      getSpentByCategory(get().transactions, "Épargne")
+    );
+    const newMonthlySav = Math.max(
+      getMonthlySavingsContributions(updatedGoals, year, month),
+      getSpentByCategory(updatedTransactions, "Épargne")
+    );
+
+    const updatedCategories = get().categories.map((c) => {
+      const norm = c.name.trim().toLowerCase();
+      if ((norm === "épargne" || norm === "epargne") && (Number(c.amount) || 0) <= prevMonthlySav) {
+        return { ...c, amount: newMonthlySav };
+      }
+      return c;
+    });
+
     set({
       savingsGoals: updatedGoals,
       transactions: updatedTransactions,
+      categories: updatedCategories,
     });
 
-    const { year, month } = get().activeMonth;
     const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache();
     if (cache) {
       cache.savingsGoals = updatedGoals;
       if (cache.months[monthKey]) {
         cache.months[monthKey].transactions = updatedTransactions;
+        cache.months[monthKey].categories = updatedCategories;
       }
       saveLocalCache(cache);
     }

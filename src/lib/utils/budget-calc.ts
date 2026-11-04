@@ -115,15 +115,68 @@ export function getRemainingToLive(income: number, totalExpenses: number, totalS
 /**
  * Calcule le total dépensé pour une catégorie spécifique
  */
-export function getSpentByCategory(transactions: TransactionItem[], categoryName: string): number {
+export function getSpentByCategory(
+  transactions: TransactionItem[],
+  categoryName: string,
+  monthlySavings: number = 0
+): number {
   const normalized = categoryName.trim().toLowerCase();
-  return transactions
+  const txSpent = transactions
     .filter(
       (tx) =>
         isExpenseTransaction(tx) &&
         (tx.category || "").trim().toLowerCase() === normalized
     )
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
+  if ((normalized === "épargne" || normalized === "epargne") && monthlySavings > txSpent) {
+    return monthlySavings;
+  }
+  return txSpent;
+}
+
+/**
+ * Calcule le total effectivement mobilisé dans Mon Budget :
+ * - Pour chaque enveloppe : max(montant budgété, montant réellement dépensé/épargné)
+ * - Si l'épargne du mois n'a pas encore d'enveloppe ou dépasse l'enveloppe : elle est comptabilisée automatiquement
+ * - Si des dépenses hors-budget existent : elles sont également comptabilisées
+ * Cela garantit que le "Reste à allouer" est toujours conforme au "Solde restant".
+ */
+export function getEffectiveTotalAllocated(
+  categories: CategoryItem[],
+  transactions: TransactionItem[] = [],
+  monthlySavings: number = 0
+): number {
+  const handledCategories = new Set<string>();
+  let total = 0;
+
+  for (const cat of categories) {
+    const norm = cat.name.trim().toLowerCase();
+    handledCategories.add(norm);
+    const budgeted = Math.max(0, Number(cat.amount) || 0);
+    const spent = getSpentByCategory(transactions, cat.name, monthlySavings);
+    total += Math.max(budgeted, spent);
+  }
+
+  // Si aucune enveloppe "Épargne" n'existe encore mais que des épargnes ont été faites ce mois-ci
+  if (!handledCategories.has("épargne") && !handledCategories.has("epargne")) {
+    const savingsSpent = getSpentByCategory(transactions, "Épargne", monthlySavings);
+    total += Math.max(monthlySavings, savingsSpent);
+    handledCategories.add("épargne");
+    handledCategories.add("epargne");
+  }
+
+  // Ajouter toute dépense effectuée sur une catégorie non encore présente dans les enveloppes
+  for (const tx of transactions) {
+    if (!isExpenseTransaction(tx)) continue;
+    if (isSavingsTransaction(tx)) continue; // Déjà compté dans l'épargne ci-dessus
+    const normCat = (tx.category || "Autre (Hors Budget)").trim().toLowerCase();
+    if (!handledCategories.has(normCat)) {
+      total += Number(tx.amount) || 0;
+    }
+  }
+
+  return total;
 }
 
 /**

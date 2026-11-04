@@ -32,6 +32,7 @@ import {
   formatMoney, 
   getSpentByCategory, 
   getCategoryProgress,
+  getEffectiveTotalAllocated,
   formatThousands,
   parseThousands,
   isIncomeTransaction,
@@ -565,12 +566,13 @@ export default function BudgetPage() {
     .filter((tx) => isIncomeTransaction(tx))
     .reduce((sum, tx) => sum + tx.amount, 0);
 
-  const totalAllocated = categories.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const remaining = income - totalAllocated;
-
   const depenses = getTotalExpenses(transactions);
-  const epargne = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+  const rawMonthlySavings = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
+  const epargne = Math.max(rawMonthlySavings, getSpentByCategory(transactions, "Épargne", rawMonthlySavings));
   const resteReel = getRemainingToLive(income, depenses, epargne);
+
+  const totalAllocated = getEffectiveTotalAllocated(categories, transactions, epargne);
+  const remaining = income - totalAllocated;
 
   // Liaison directe avec Dettes & Créances
   const totalPayableDebts = getTotalPayableDebts(debts);
@@ -587,9 +589,28 @@ export default function BudgetPage() {
     (c) => c.name.trim().toLowerCase() === "remboursement de dette"
   );
   const savingsEnvelope = categories.find(
-    (c) => c.name.trim().toLowerCase() === "épargne"
+    (c) => c.name.trim().toLowerCase() === "épargne" || c.name.trim().toLowerCase() === "epargne"
   );
   const totalSavingsAccumulated = savingsGoals.reduce((sum, g) => sum + (Number(g.current) || 0), 0);
+
+  // Comptabilisation automatique de l'épargne dans Mon Budget même si elle n'a pas été budgétisée manuellement
+  useEffect(() => {
+    if (epargne <= 0) return;
+    if (!savingsEnvelope) {
+      const uuid =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `cat-sav-${Date.now()}`;
+      addCategory({
+        id: uuid,
+        name: "Épargne",
+        amount: epargne,
+        color: "bg-emerald-600",
+      });
+    } else if ((Number(savingsEnvelope.amount) || 0) < epargne) {
+      updateCategoryAmount(savingsEnvelope.id, epargne);
+    }
+  }, [epargne, savingsEnvelope, addCategory, updateCategoryAmount]);
 
   const handleBudgetizeSavingsEnvelope = async () => {
     const suggestedAmount =
@@ -980,11 +1001,33 @@ export default function BudgetPage() {
           {/* Reste à allouer Card */}
           <Card className={`border-none shadow-sm transition-colors ${remaining < 0 ? "bg-red-50 border border-red-200" : remaining === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-white"}`}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600">Reste à allouer</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-slate-600">Reste à allouer</CardTitle>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                  Synchronisé au solde
+                </span>
+              </div>
             </CardHeader>
             <CardContent>
               <div suppressHydrationWarning className={`text-3xl font-extrabold ${remaining < 0 ? "text-red-600" : remaining === 0 ? "text-emerald-600" : "text-slate-800"}`}>
                 {formatMoney(remaining, currency)}
+              </div>
+
+              <div className="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 space-y-1 text-xs text-slate-600">
+                <div className="flex items-center justify-between">
+                  <span>Total comptabilisé au budget :</span>
+                  <strong className="text-slate-800">{formatMoney(totalAllocated, currency)}</strong>
+                </div>
+                {epargne > 0 && (
+                  <div className="flex items-center justify-between text-emerald-700 text-[11px]">
+                    <span>• dont Épargne comptabilisée auto :</span>
+                    <strong>{formatMoney(Math.max(epargne, savingsEnvelope?.amount || 0), currency)}</strong>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 text-[11px]">
+                  <span>Solde restant disponible :</span>
+                  <strong className="text-[#1E3A5F]">{formatMoney(resteReel, currency)}</strong>
+                </div>
               </div>
 
               {remaining === 0 && (
@@ -996,14 +1039,14 @@ export default function BudgetPage() {
 
               {remaining > 0 && (
                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                  Il vous reste ce montant à ventiler dans vos enveloppes ou à verser en épargne.
+                  Il vous reste ce montant à ventiler dans vos enveloppes ou à verser en épargne (vos épargnes et dépenses du mois sont déjà déduites automatiquement).
                 </p>
               )}
 
               {remaining < 0 && (
                 <div className="flex items-start gap-1.5 text-red-600 text-xs mt-3 font-medium bg-red-100/70 p-2.5 rounded-lg">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>Déficit ! Vos enveloppes dépassent votre revenu de {formatMoney(Math.abs(remaining), currency)}. Réduisez certains plafonds.</span>
+                  <span>Déficit ! Vos enveloppes et épargnes dépassent votre revenu de {formatMoney(Math.abs(remaining), currency)}. Réduisez certains plafonds.</span>
                 </div>
               )}
             </CardContent>
@@ -1250,11 +1293,18 @@ export default function BudgetPage() {
             {/* Liste des enveloppes avec composants de saisie fluide */}
             <div className="space-y-3">
               {categories.map((cat) => {
-                const spent = getSpentByCategory(transactions, cat.name);
+                const spent = getSpentByCategory(transactions, cat.name, epargne);
+                const isSav =
+                  cat.name.trim().toLowerCase() === "épargne" ||
+                  cat.name.trim().toLowerCase() === "epargne";
+                const displayCat =
+                  isSav && (Number(cat.amount) || 0) < spent
+                    ? { ...cat, amount: spent }
+                    : cat;
                 return (
                   <CategoryRowInput 
                     key={cat.id}
-                    category={cat}
+                    category={displayCat}
                     currency={currency}
                     spent={spent}
                     remainingToAllocate={remaining}
