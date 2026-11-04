@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { MonthSelector } from "@/components/dashboard/month-selector";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NetworkStatus } from "@/components/pwa/network-status";
+import { InstallButton } from "@/components/pwa/install-button";
 import { useUIStore } from "@/lib/store/ui-store";
 
 export const Header = () => {
@@ -40,8 +42,10 @@ export const Header = () => {
         <MonthSelector />
       </div>
       
-      {/* User Actions & Theme Toggle */}
-      <div className="flex items-center gap-1 sm:gap-2">
+      {/* User Actions, PWA Install, Network Status & Theme Toggle */}
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        <NetworkStatus />
+        <InstallButton variant="header" />
         <ThemeToggle />
         <Link href="/settings">
           <Button 

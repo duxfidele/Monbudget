@@ -19,13 +19,16 @@ import {
   Sun,
   Moon,
   Monitor,
-  Palette
+  Palette,
+  Download,
+  RefreshCw
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useUIStore } from "@/lib/store/ui-store";
+import { InstallButton } from "@/components/pwa/install-button";
 
 type TabType = "profile" | "appearance" | "notifications" | "security";
 
@@ -50,6 +53,9 @@ export default function SettingsPage() {
     currency: storeCurrency, 
     payDay: storePayDay, 
     notifications: storeNotifications,
+    isOnline,
+    pendingSyncCount,
+    syncPendingQueue,
     updatePreferences, 
     updateNotifications,
     resetStore
@@ -548,6 +554,45 @@ export default function SettingsPage() {
                 <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
                   <span>Thème actuellement détecté : <strong className="text-slate-900 dark:text-white capitalize">{mounted ? (theme === "system" ? `Automatique (${systemTheme})` : theme) : "..."}</strong></span>
                   <span className="text-slate-400">Enregistré localement</span>
+                </div>
+
+                {/* Section Installation Application & Mode Hors-ligne */}
+                <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                      <Download className="h-4 w-4 text-[#1E3A5F] dark:text-sky-400" />
+                      Application & Synchronisation Hors-Ligne (PWA)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Installez MonBudget sur votre machine (ordinateur ou smartphone) pour y accéder même sans connexion Internet.
+                    </p>
+                  </div>
+
+                  <InstallButton variant="settings" />
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs">
+                    <div className="space-y-0.5">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">État du réseau et de la synchronisation :</span>
+                      <p className="text-slate-500 dark:text-slate-400">
+                        {isOnline ? "🟢 Connecté à Internet - Vos données sont synchronisées avec le cloud Supabase." : "🟠 Hors-ligne - Vos données sont sauvegardées en local sur cet appareil."}
+                      </p>
+                    </div>
+                    {pendingSyncCount > 0 ? (
+                      <Button
+                        size="sm"
+                        onClick={syncPendingQueue}
+                        disabled={!isOnline}
+                        className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs shrink-0 gap-1.5"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        <span>Synchroniser ({pendingSyncCount})</span>
+                      </Button>
+                    ) : (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold shrink-0 flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Synchronisé
+                      </span>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

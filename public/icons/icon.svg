@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="50%" stop-color="#1E3A5F" />
+      <stop offset="100%" stop-color="#071324" />
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#1D4ED8" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Fond avec coins arrondis -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Anneau subtil d'accent -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="4" />
+
+  <!-- Groupe central Portefeuille / MonBudget -->
+  <g filter="url(#shadow)" transform="translate(64, 76)">
+    <!-- Corps du portefeuille principal -->
+    <rect x="24" y="60" width="336" height="230" rx="32" fill="url(#cardGrad)" stroke="rgba(255,255,255,0.2)" stroke-width="3" />
+
+    <!-- Rabat supérieur du portefeuille -->
+    <path d="M 24 130 C 140 160, 244 160, 360 130 L 360 84 C 360 68, 344 52, 328 52 L 56 52 C 40 52, 24 68, 24 84 Z" fill="#1E40AF" opacity="0.6" />
+
+    <!-- Carte bancaire qui dépasse -->
+    <rect x="70" y="16" width="244" height="120" rx="18" fill="url(#emeraldGrad)" opacity="0.9" stroke="rgba(255,255,255,0.25)" stroke-width="2" />
+    <circle cx="110" cy="56" r="16" fill="rgba(255,255,255,0.8)" />
+    <circle cx="132" cy="56" r="16" fill="rgba(252,211,77,0.7)" />
+
+    <!-- Fermoir doré avec pièce / logo -->
+    <rect x="260" y="135" width="105" height="80" rx="20" fill="#0F172A" stroke="rgba(255,255,255,0.15)" stroke-width="2" />
+    <circle cx="312" cy="175" r="24" fill="url(#goldGrad)" stroke="#D97706" stroke-width="2" />
+    
+    <!-- Symbole monétaire / lettre B stylisée dans la pièce -->
+    <text x="312" y="184" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="26" text-anchor="middle" fill="#78350F">F</text>
+
+    <!-- Étoile d'intelligence / épargne -->
+    <g transform="translate(40, 210)">
+      <circle cx="28" cy="28" r="28" fill="#10B981" opacity="0.2" />
+      <circle cx="28" cy="28" r="18" fill="#10B981" />
+      <path d="M 28 17 L 30.5 24 L 38 24.5 L 32 29.5 L 34 37 L 28 32.5 L 22 37 L 24 29.5 L 18 24.5 L 25.5 24 Z" fill="#FFFFFF" />
+    </g>
+  </g>
+
+  <!-- Texte MonBudget stylisé en bas -->
+  <text x="256" y="440" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="44" letter-spacing="1.5" text-anchor="middle" fill="#FFFFFF">
+    Mon<tspan fill="#F59E0B">Budget</tspan>
+  </text>
+  <text x="256" y="472" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="600" font-size="16" letter-spacing="4" text-anchor="middle" fill="#93C5FD">
+    SALAIRE &amp; GESTION
+  </text>
+</svg>

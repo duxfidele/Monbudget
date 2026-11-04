@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
 import { getUserStorageKey } from "@/lib/utils/security";
+import { toast } from "sonner";
 import {
   deduplicateCategories,
   DebtItem,
@@ -84,6 +85,26 @@ export const defaultNotifications: NotificationSettings = {
   weeklySummary: false,
 };
 
+export type PendingSyncAction = {
+  id: string;
+  type: 
+    | "add_transaction" 
+    | "remove_transaction" 
+    | "update_category_amount" 
+    | "update_income" 
+    | "add_income_entry"
+    | "remove_income_entry"
+    | "add_savings_goal"
+    | "update_savings_goal"
+    | "add_savings_contribution"
+    | "add_debt"
+    | "add_debt_payment"
+    | "remove_debt"
+    | "update_preferences";
+  payload: any;
+  timestamp: number;
+};
+
 export interface LocalCache {
   currency: string;
   payDay: number;
@@ -93,6 +114,7 @@ export interface LocalCache {
   months: Record<string, MonthData>;
   savingsGoals: SavingsGoal[];
   debts?: DebtItem[];
+  pendingSyncQueue?: PendingSyncAction[];
 }
 
 interface UIState {
@@ -108,6 +130,18 @@ interface UIState {
   // Session & Cache
   userId: string | null;
   resetStore: () => void;
+
+  // Offline & PWA Sync Engine
+  isOnline: boolean;
+  pendingSyncCount: number;
+  canInstallPwa: boolean;
+  isPwaInstalled: boolean;
+  setOnlineStatus: (online: boolean) => void;
+  setDeferredPrompt: (prompt: any) => void;
+  setAppInstalled: () => void;
+  installPwa: () => Promise<boolean>;
+  syncPendingQueue: () => Promise<number>;
+  enqueueSyncAction: (action: Omit<PendingSyncAction, "id" | "timestamp">) => void;
 
   // Global Data
   budget_id: string | null;
@@ -188,6 +222,7 @@ function getSavedUserId(): string | null {
 }
 
 let activeUserId: string | null = typeof window !== "undefined" ? getSavedUserId() : null;
+let deferredInstallPrompt: any = null;
 
 export function getStorageKey(uid?: string | null): string {
   return getUserStorageKey(uid ?? activeUserId);
@@ -210,6 +245,9 @@ function loadLocalCache(uid?: string | null): LocalCache | null {
     if (!raw) return null;
     const cache: LocalCache = JSON.parse(raw);
     let mutated = false;
+    if (!cache.pendingSyncQueue) {
+      cache.pendingSyncQueue = [];
+    }
     if (!cache.currency || cache.currency === "EUR" || cache.currency === "€") {
       cache.currency = "FCFA";
       mutated = true;
@@ -367,6 +405,147 @@ export const useUIStore = create<UIState>((set, get) => ({
   baseSalary: initialMonthData?.baseSalary || 0,
   income: initialMonthData?.income || 0,
   incomeEntries: initialMonthData?.incomeEntries || [],
+
+  // Offline & PWA Sync State
+  isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+  pendingSyncCount: initialCache?.pendingSyncQueue?.length || 0,
+  canInstallPwa: false,
+  isPwaInstalled: false,
+
+  setOnlineStatus: (online) => {
+    set({ isOnline: online });
+  },
+
+  setDeferredPrompt: (prompt) => {
+    deferredInstallPrompt = prompt;
+    set({ canInstallPwa: true });
+  },
+
+  setAppInstalled: () => {
+    deferredInstallPrompt = null;
+    set({ canInstallPwa: false, isPwaInstalled: true });
+  },
+
+  installPwa: async () => {
+    if (!deferredInstallPrompt) return false;
+    try {
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+      if (choice && choice.outcome === "accepted") {
+        set({ canInstallPwa: false, isPwaInstalled: true });
+        deferredInstallPrompt = null;
+        toast.success("Application MonBudget installée avec succès !");
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  enqueueSyncAction: (action) => {
+    const syncAction: PendingSyncAction = {
+      id: `sync-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: Date.now(),
+      ...action,
+    };
+    const cache = loadLocalCache();
+    if (cache) {
+      if (!cache.pendingSyncQueue) cache.pendingSyncQueue = [];
+      cache.pendingSyncQueue.push(syncAction);
+      saveLocalCache(cache);
+      set({ pendingSyncCount: cache.pendingSyncQueue.length });
+    }
+  },
+
+  syncPendingQueue: async () => {
+    const cache = loadLocalCache();
+    if (!cache || !cache.pendingSyncQueue || cache.pendingSyncQueue.length === 0) {
+      set({ pendingSyncCount: 0 });
+      return 0;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return 0;
+
+    const queue = [...cache.pendingSyncQueue];
+    let synced = 0;
+    const remaining: PendingSyncAction[] = [];
+
+    for (const item of queue) {
+      try {
+        switch (item.type) {
+          case "add_transaction":
+            await supabase.from("transactions").insert(item.payload);
+            synced++;
+            break;
+          case "remove_transaction":
+            await supabase.from("transactions").delete().eq("id", item.payload.id);
+            synced++;
+            break;
+          case "update_category_amount":
+            if (item.payload.allocation_id) {
+              await supabase.from("budget_allocations").update({ allocated_amount: item.payload.amount }).eq("id", item.payload.allocation_id);
+            } else if (item.payload.budgetId && item.payload.categoryId) {
+              await supabase.from("budget_allocations").insert({
+                monthly_budget_id: item.payload.budgetId,
+                category_id: item.payload.categoryId,
+                allocated_amount: item.payload.amount,
+              });
+            }
+            synced++;
+            break;
+          case "add_income_entry":
+            await supabase.from("income_entries").insert(item.payload);
+            synced++;
+            break;
+          case "remove_income_entry":
+            await supabase.from("income_entries").delete().eq("id", item.payload.id);
+            synced++;
+            break;
+          case "add_savings_goal":
+            await supabase.from("savings_goals").insert(item.payload);
+            synced++;
+            break;
+          case "add_savings_contribution":
+            if (item.payload.goalId) {
+              await supabase.from("savings_contributions").insert({
+                savings_goal_id: item.payload.goalId,
+                amount: item.payload.amount,
+                notes: item.payload.notes,
+                contribution_date: item.payload.date,
+              });
+            }
+            synced++;
+            break;
+          case "add_debt":
+            await supabase.from("debts").insert(item.payload);
+            synced++;
+            break;
+          case "remove_debt":
+            await supabase.from("debts").delete().eq("id", item.payload.id);
+            synced++;
+            break;
+          default:
+            synced++;
+            break;
+        }
+      } catch (err) {
+        console.warn("Échec de synchronisation de l'action :", item, err);
+        remaining.push(item);
+      }
+    }
+
+    cache.pendingSyncQueue = remaining;
+    saveLocalCache(cache);
+    set({ pendingSyncCount: remaining.length });
+
+    if (synced > 0) {
+      toast.success(`Synchronisation terminée : ${synced} opération(s) synchronisée(s) !`);
+      get().initStore();
+    }
+    return synced;
+  },
   categories: (initialMonthData?.categories && initialMonthData.categories.length > 0)
     ? deduplicateCategories(initialMonthData.categories)
     : AFRICAN_EXPENSE_CATEGORIES.map((cat, idx) => ({
@@ -1284,6 +1463,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (allocationDebounceTimers[id]) clearTimeout(allocationDebounceTimers[id]);
     allocationDebounceTimers[id] = setTimeout(async () => {
       try {
+        if (!get().isOnline) {
+          throw new Error("Mode hors-ligne");
+        }
         const budgetId = get().budget_id;
         if (!budgetId) return;
         const category = get().categories.find((c) => c.id === id);
@@ -1304,7 +1486,18 @@ export const useUIStore = create<UIState>((set, get) => ({
           }
         }
       } catch (err) {
-        console.warn("Could not sync allocation to Supabase", err);
+        console.warn("Could not sync allocation to Supabase (queued)", err);
+        const budgetId = get().budget_id;
+        const category = get().categories.find((c) => c.id === id);
+        get().enqueueSyncAction({
+          type: "update_category_amount",
+          payload: {
+            allocation_id: category?.allocation_id,
+            budgetId,
+            categoryId: id,
+            amount,
+          },
+        });
       }
     }, 600);
   },
@@ -1375,6 +1568,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
 
     try {
+      if (!get().isOnline) {
+        throw new Error("Mode hors-ligne");
+      }
       const budgetId = get().budget_id;
       if (!budgetId) return;
 
@@ -1401,7 +1597,23 @@ export const useUIStore = create<UIState>((set, get) => ({
         transactionItem.id = newTx.id;
       }
     } catch (err) {
-      console.warn("Could not sync transaction to Supabase", err);
+      console.warn("Could not sync transaction to Supabase immediately (queued)", err);
+      let category_id = null;
+      if (!isInc) {
+        const cat = get().categories.find((c) => c.name.toLowerCase() === tx.category.toLowerCase());
+        if (cat) category_id = cat.id;
+      }
+      get().enqueueSyncAction({
+        type: "add_transaction",
+        payload: {
+          monthly_budget_id: get().budget_id,
+          category_id,
+          amount: tx.amount,
+          description: tx.label,
+          transaction_date: tx.date,
+          type: isInc ? "income_adjustment" : "expense",
+        },
+      });
     }
   },
 
@@ -1523,6 +1735,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       }
 
       try {
+        if (!get().isOnline) throw new Error("Mode hors-ligne");
         await supabase.from("transactions").delete().eq("id", id);
         if (syncedPaymentIdToRemove && syncedDebtToUpdate) {
           const dUpd = syncedDebtToUpdate as DebtItem;
@@ -1541,7 +1754,11 @@ export const useUIStore = create<UIState>((set, get) => ({
             .eq("id", gUpd.id);
         }
       } catch (err) {
-        console.warn("Could not delete transaction from Supabase", err);
+        console.warn("Could not delete transaction from Supabase immediately (queued)", err);
+        get().enqueueSyncAction({
+          type: "remove_transaction",
+          payload: { id },
+        });
       }
       return;
     }
@@ -1565,6 +1782,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
 
     try {
+      if (!get().isOnline) throw new Error("Mode hors-ligne");
       await supabase.from("transactions").delete().eq("id", id);
       if (syncedPaymentIdToRemove && syncedDebtToUpdate) {
         const dUpd = syncedDebtToUpdate as DebtItem;
@@ -1575,7 +1793,11 @@ export const useUIStore = create<UIState>((set, get) => ({
           .eq("id", dUpd.id);
       }
     } catch (err) {
-      console.warn("Could not delete transaction from Supabase", err);
+      console.warn("Could not delete transaction from Supabase immediately (queued)", err);
+      get().enqueueSyncAction({
+        type: "remove_transaction",
+        payload: { id },
+      });
     }
   },
 
