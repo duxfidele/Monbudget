@@ -81,7 +81,7 @@ export function LandingHowItWorks() {
 
         {/* Quick CTA */}
         <div className="mt-14 text-center">
-          <Link href="/register">
+          <Link href="/login">
             <Button
               size="lg"
               className="bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white font-semibold px-8 py-6 rounded-2xl shadow-xl shadow-sky-500/20 text-base"

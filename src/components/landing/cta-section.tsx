@@ -29,7 +29,7 @@ export function LandingCTASection() {
           </p>
 
           <div className="pt-2">
-            <Link href="/register">
+            <Link href="/login">
               <Button
                 size="lg"
                 className="bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 hover:from-blue-500 hover:to-cyan-300 text-slate-950 font-extrabold px-10 py-7 text-lg rounded-2xl shadow-xl shadow-sky-500/30 hover:shadow-sky-500/40 transition-all group"

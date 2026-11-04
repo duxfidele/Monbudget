@@ -36,7 +36,7 @@ export function LandingHero() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
-            <Link href="/register" className="w-full sm:w-auto">
+            <Link href="/login" className="w-full sm:w-auto">
               <Button
                 size="lg"
                 className="w-full sm:w-auto bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-semibold px-8 py-6 text-base rounded-2xl shadow-xl shadow-sky-500/25 hover:shadow-sky-500/35 transition-all group"

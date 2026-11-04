@@ -96,7 +96,7 @@ export function LandingNavbar() {
                     Connexion
                   </Button>
                 </Link>
-                <Link href="/register">
+                <Link href="/login">
                   <Button className="bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white font-medium px-5 py-2 rounded-xl shadow-md shadow-blue-600/30 hover:shadow-blue-500/40 transition-all group">
                     <span>Commencer gratuitement</span>
                     <ArrowRight className="w-4 h-4 ml-1.5 inline-block group-hover:translate-x-0.5 transition-transform" />
@@ -154,7 +154,7 @@ export function LandingNavbar() {
                     Connexion
                   </Button>
                 </Link>
-                <Link href="/register" onClick={() => setMobileMenuOpen(false)}>
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
                   <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl shadow-lg shadow-blue-600/30">
                     Commencer gratuitement
                   </Button>
