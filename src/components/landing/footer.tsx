@@ -57,6 +57,11 @@ export function LandingFooter() {
               <li>
                 <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
               </li>
+              <li>
+                <Link href="/support" className="text-sky-400 hover:text-white transition-colors font-medium">
+                  Support & Contact (WhatsApp)
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -107,6 +112,9 @@ export function LandingFooter() {
               </li>
               <li>
                 <a href="#faq" className="hover:text-white transition-colors">Audit de sécurité SaaS</a>
+              </li>
+              <li>
+                <Link href="/support" className="hover:text-white transition-colors">Centre d&apos;assistance</Link>
               </li>
             </ul>
           </div>

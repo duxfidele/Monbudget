@@ -34,11 +34,12 @@ export function LandingNavbar() {
   }, []);
 
   const navLinks = [
-    { label: "Fonctionnalités", href: "#fonctionnalites" },
-    { label: "Comment ça marche", href: "#comment-ca-marche" },
-    { label: "Aperçu", href: "#apercu" },
-    { label: "Tarifs", href: "#tarifs" },
-    { label: "FAQ", href: "#faq" },
+    { label: "Fonctionnalités", href: "/#fonctionnalites" },
+    { label: "Comment ça marche", href: "/#comment-ca-marche" },
+    { label: "Aperçu", href: "/#apercu" },
+    { label: "Tarifs", href: "/#tarifs" },
+    { label: "FAQ", href: "/#faq" },
+    { label: "Support", href: "/support" },
   ];
 
   return (
@@ -66,15 +67,15 @@ export function LandingNavbar() {
           </Link>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8">
+          <nav className="hidden md:flex items-center gap-7">
             {navLinks.map((link) => (
-              <a
+              <Link
                 key={link.label}
                 href={link.href}
                 className="text-sm font-medium text-slate-300 hover:text-white transition-colors relative py-1 hover:after:w-full after:w-0 after:h-0.5 after:bg-sky-400 after:absolute after:bottom-0 after:left-0 after:transition-all"
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
           </nav>
 
@@ -130,14 +131,14 @@ export function LandingNavbar() {
         <div className="md:hidden bg-[#0B1B33] border-b border-slate-800 px-4 pt-3 pb-6 space-y-4 shadow-2xl animate-in slide-in-from-top-2 duration-200">
           <nav className="flex flex-col space-y-3 pt-2">
             {navLinks.map((link) => (
-              <a
+              <Link
                 key={link.label}
                 href={link.href}
                 onClick={() => setMobileMenuOpen(false)}
                 className="text-base font-medium text-slate-200 hover:text-sky-400 py-2 border-b border-slate-800/60"
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
           </nav>
 

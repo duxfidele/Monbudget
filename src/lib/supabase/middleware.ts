@@ -8,6 +8,7 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isHomePage = pathname === '/'
+  const isSupportPage = pathname.startsWith('/support')
   const isPwaOrStatic =
     pathname === '/manifest.json' ||
     pathname === '/sw.js' ||
@@ -20,7 +21,7 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = isGuestOnlyAuthRoute ||
                       pathname.startsWith('/reset-password') ||
                       pathname.startsWith('/auth/confirm')
-  const isPublicRoute = isHomePage || isAuthRoute || isPwaOrStatic
+  const isPublicRoute = isHomePage || isSupportPage || isAuthRoute || isPwaOrStatic
 
   const allCookies = request.cookies.getAll()
   const hasAuthCookie = allCookies.some(c => c.name.startsWith('sb-') && c.name.includes('-auth-token'))

@@ -149,7 +149,15 @@ L'application intègre un sélecteur de thème complet :
 
 ---
 
-## 🚀 8. Guide d'Installation & Commandes Développeur
+## 💬 8. Support Client & Assistance WhatsApp
+
+MonBudget intègre une assistance directe pour accompagner les utilisateurs au quotidien :
+- **Bouton WhatsApp Flottant** : Présent en bas à droite sur les pages publiques (`/`, `/support`), il permet de contacter en 1 clic le support au **`+228 98 37 61 01`** avec un message d'accueil pré-configuré.
+- **Centre d'Assistance Dédié (`/support`)** : Page complète regroupant les coordonnées directes (WhatsApp, téléphone, email), les horaires d'assistance (7j/7) et les réponses aux questions techniques fréquentes (installation PWA, sécurité, fonctionnement hors-ligne).
+
+---
+
+## 🚀 9. Guide d'Installation & Commandes Développeur
 
 ### Prérequis
 - Node.js 18.18+ ou 20+
@@ -189,3 +197,4 @@ npm run build
 ---
 
 *Document maintenu pour le projet MonBudget.*
+
