@@ -21,7 +21,9 @@ import {
   Monitor,
   Palette,
   Download,
-  RefreshCw
+  RefreshCw,
+  FileJson,
+  Database
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
@@ -29,6 +31,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useUIStore } from "@/lib/store/ui-store";
 import { InstallButton } from "@/components/pwa/install-button";
+import { buildFullAccountExport, downloadJsonFile } from "@/lib/utils/account-export";
+import { getUserStorageKey } from "@/lib/utils/security";
 
 type TabType = "profile" | "appearance" | "notifications" | "security";
 
@@ -58,7 +62,15 @@ export default function SettingsPage() {
     syncPendingQueue,
     updatePreferences, 
     updateNotifications,
-    resetStore
+    resetStore,
+    categories,
+    transactions,
+    income,
+    baseSalary,
+    incomeEntries,
+    savingsGoals,
+    debts,
+    activeMonth
   } = useUIStore();
 
   const [localAlert, setLocalAlert] = useState(80);
@@ -236,6 +248,60 @@ export default function SettingsPage() {
       });
     } finally {
       setIsUpdatingPassword(false);
+    }
+  };
+
+  const [isExportingAll, setIsExportingAll] = useState(false);
+
+  const handleExportAllData = () => {
+    setIsExportingAll(true);
+    try {
+      const storageKey = getUserStorageKey(userId);
+      const rawCache = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+      const cache = rawCache ? JSON.parse(rawCache) : null;
+
+      const currentMonthKey = `${activeMonth.year}-${String(activeMonth.month).padStart(2, "0")}`;
+      const currentMonthData = {
+        baseSalary: baseSalary || income || 0,
+        income,
+        incomeEntries,
+        categories,
+        transactions,
+      };
+
+      const fullExport = buildFullAccountExport({
+        userId,
+        userEmail: email,
+        fullName: name,
+        currency: storeCurrency || localCurrency,
+        payDay: storePayDay || localPayDay,
+        alertThreshold: alertThreshold || localAlert,
+        notifications: storeNotifications,
+        cache,
+        currentMonthKey,
+        currentMonthData,
+        savingsGoals,
+        debts,
+      });
+
+      const todayStr = new Date().toISOString().split("T")[0];
+      const success = downloadJsonFile(
+        fullExport,
+        `MonBudget_Sauvegarde_Integrale_${todayStr}.json`
+      );
+
+      if (success) {
+        toast.success("Sauvegarde intégrale téléchargée avec succès !", {
+          description: `${fullExport.exportMetadata.totalMonthsExported} mois et ${fullExport.exportMetadata.totalTransactionsExported} transactions consolidés.`,
+        });
+      } else {
+        toast.error("Impossible de générer le fichier de téléchargement.");
+      }
+    } catch (err: any) {
+      console.error("Erreur export intégral :", err);
+      toast.error("Erreur lors de la création de la sauvegarde.");
+    } finally {
+      setIsExportingAll(false);
     }
   };
 
@@ -819,6 +885,49 @@ export default function SettingsPage() {
                       Sécurité par RLS active
                     </span>
                     <span>Données isolées et chiffrées</span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Sauvegarde & Portabilité des Données (Export Intégral RGPD) */}
+              <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                    <Database className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+                    Sauvegarde & Portabilité des Données
+                  </CardTitle>
+                  <CardDescription className="text-slate-500 dark:text-slate-400">
+                    Conformément aux normes de protection des données, vous pouvez télécharger une copie intégrale de l'ensemble de vos données financières à tout moment.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Cette archive consolidée contient l'ensemble de vos <strong>budgets mensuels</strong>, vos <strong>enveloppes</strong>, vos <strong>transactions et justificatifs</strong>, ainsi que vos <strong>cagnottes d'épargne et dettes</strong> au format standard ouvert JSON.
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-sky-300">
+                        <FileJson className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                          Export Complet du Compte (JSON)
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Format universel réutilisable et archivable
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={handleExportAllData}
+                      disabled={isExportingAll}
+                      className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs h-9 gap-2 shadow-xs shrink-0"
+                    >
+                      <Download className={`h-4 w-4 ${isExportingAll ? "animate-bounce" : ""}`} />
+                      {isExportingAll ? "Génération en cours..." : "Télécharger ma sauvegarde complète"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

@@ -209,7 +209,18 @@ MonBudget intègre un espace de direction réservé aux administrateurs pour pil
 
 ---
 
-## 🚀 13. Guide d'Installation & Commandes Développeur
+## 💾 13. Sauvegarde & Portabilité des Données (Export Intégral JSON)
+
+MonBudget garantit la souveraineté et la portabilité intégrale des données pour chaque utilisateur (norme RGPD & sérénité financière) :
+- **Consolidateur Universel ([`src/lib/utils/account-export.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/utils/account-export.ts))** :
+  - Rassemble l'intégralité des données en 1 seul fichier standard JSON horodaté : `MonBudget_Sauvegarde_Integrale_AAAA-MM-JJ.json`.
+  - Contient : profil, préférences, tous les mois budgétisés, enveloppes de dépenses, toutes les transactions avec liens des reçus, objectifs d'épargne avec leurs versements, et dettes/créances avec leurs remboursements.
+- **Accès en 1 Clic dans les Paramètres ([`src/app/(dashboard)/settings/page.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/(dashboard)/settings/page.tsx))** :
+  - Section dédiée dans l'onglet **Sécurité** permettant le téléchargement instantané et sécurisé sans dépendance de serveur tiers.
+
+---
+
+## 🚀 14. Guide d'Installation & Commandes Développeur
 
 ### Prérequis
 - Node.js 18.18+ ou 20+
@@ -239,8 +250,8 @@ npm run dev
 # Vérification des types TypeScript
 npx tsc --noEmit
 
-# Exécution de la suite complète de 38 tests Playwright (calculs, sécurité, emails, reçus, admin)
-npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts tests/receipts.spec.ts tests/admin.spec.ts
+# Exécution de la suite complète de 40 tests Playwright (calculs, sécurité, emails, reçus, admin, export)
+npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts tests/receipts.spec.ts tests/admin.spec.ts tests/export.spec.ts
 
 # Compiler pour la production
 npm run build
