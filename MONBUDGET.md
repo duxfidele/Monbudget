@@ -19,7 +19,14 @@
 5. [Mode Hors-Ligne & PWA (Progressive Web App)](#-5-mode-hors-ligne--pwa)
 6. [Thèmes Visuels (Clair, Sombre, Système)](#-6-thèmes-visuels)
 7. [Sécurité & Confidentialité](#-7-sécurité--confidentialité)
-8. [Guide d'Installation & Commandes Développeur](#-8-guide-dinstallation--commandes-développeur)
+8. [Support Client & Assistance WhatsApp](#-8-support-client--assistance-whatsapp)
+9. [Tâches Automatisées en Arrière-Plan (Vercel Cron Jobs)](#-9-tâches-automatisées-en-arrière-plan-vercel-cron-jobs)
+10. [Système d'Emails Transactionnels (Architecture Résiliente Resend)](#-10-système-demails-transactionnels-architecture-résiliente-resend)
+11. [Justificatifs de Dépenses & Upload de Reçus](#-11-justificatifs-de-dépenses--upload-de-reçus)
+12. [Espace Administrateur & Gouvernance SaaS (`/admin`)](#-12-espace-administrateur--gouvernance-saas-admin)
+13. [Sauvegarde & Portabilité des Données (Export Intégral JSON)](#-13-sauvegarde--portabilité-des-données-export-intégral-json)
+14. [Assistance & Support Client Multi-Canal](#-14-assistance--support-client-multi-canal)
+15. [Guide d'Installation & Commandes Développeur](#-15-guide-dinstallation--commandes-développeur)
 
 ---
 
@@ -220,7 +227,23 @@ MonBudget garantit la souveraineté et la portabilité intégrale des données p
 
 ---
 
-## 🚀 14. Guide d'Installation & Commandes Développeur
+## 🎧 14. Assistance & Support Client Multi-Canal
+
+MonBudget propose un écosystème d'assistance conçu pour être immédiatement accessible et réactif :
+- **Page Support Dédiée ([`src/app/(marketing)/support/page.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/(marketing)/support/page.tsx))** :
+  - Carte WhatsApp prioritaire avec redirection instantanée pré-remplie (`+228 98 37 61 01`).
+  - FAQ interactive répondant aux questions fréquentes (sécurité des données, calculs du budget, mode hors-ligne, multi-devises).
+  - Canaux email officiels et tutoriel d'installation PWA mobile.
+- **Formulaire de Contact Direct & API ([`src/components/support/support-form.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/support/support-form.tsx) & [`src/app/api/support/route.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/api/support/route.ts))** :
+  - Saisie intuitive du nom, email, sujet et description de la demande.
+  - Double action : **Envoi immédiat par email** (acheminé via le service Resend à `support@monbudget.app`) ou **Bascule en 1 clic vers WhatsApp** avec message pré-formaté.
+- **Accessibilité Universelle dans l'Application** :
+  - Entrée directe « **Aide & Support** » dans la barre de navigation latérale ([`src/components/layout/sidebar.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/sidebar.tsx)) et le menu mobile.
+  - Bouton flottant d'assistance WhatsApp ([`src/components/common/whatsapp-button.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/common/whatsapp-button.tsx)) intégré de manière non-obstruante sur l'ensemble du tableau de bord ([`src/app/(dashboard)/layout.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/(dashboard)/layout.tsx)).
+
+---
+
+## 🚀 15. Guide d'Installation & Commandes Développeur
 
 ### Prérequis
 - Node.js 18.18+ ou 20+
@@ -250,8 +273,8 @@ npm run dev
 # Vérification des types TypeScript
 npx tsc --noEmit
 
-# Exécution de la suite complète de 40 tests Playwright (calculs, sécurité, emails, reçus, admin, export)
-npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts tests/receipts.spec.ts tests/admin.spec.ts tests/export.spec.ts
+# Exécution de la suite complète de 45 tests Playwright (calculs, sécurité, emails, reçus, admin, export, support)
+npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts tests/receipts.spec.ts tests/admin.spec.ts tests/export.spec.ts tests/support.spec.ts
 
 # Compiler pour la production
 npm run build

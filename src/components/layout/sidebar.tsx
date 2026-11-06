@@ -16,6 +16,7 @@ import {
   LineChart,
   Settings,
   ShieldCheck,
+  LifeBuoy,
 } from "lucide-react";
 
 const routes = [
@@ -66,6 +67,12 @@ const routes = [
     icon: Settings,
     href: "/settings",
     color: "text-slate-300",
+  },
+  {
+    label: "Aide & Support",
+    icon: LifeBuoy,
+    href: "/support",
+    color: "text-emerald-400",
   },
 ];
 

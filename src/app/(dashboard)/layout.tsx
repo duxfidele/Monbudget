@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/header";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { MobileSidebar } from "@/components/layout/mobile-sidebar";
 import { StoreInitializer } from "@/components/store-initializer";
+import { WhatsAppFloatButton } from "@/components/common/whatsapp-button";
 
 export default function DashboardLayout({
   children,
@@ -26,6 +27,7 @@ export default function DashboardLayout({
         <div className="p-3 sm:p-4 md:p-8 pb-24 md:pb-8 flex-1">{children}</div>
       </main>
       <BottomNav />
+      <WhatsAppFloatButton phoneNumber="22898376101" />
       <StoreInitializer />
     </div>
   );

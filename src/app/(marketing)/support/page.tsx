@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LandingNavbar } from "@/components/landing/navbar";
 import { LandingFooter } from "@/components/landing/footer";
+import { SupportContactForm } from "@/components/support/support-form";
 import { Button } from "@/components/ui/button";
 import {
   MessageCircle,
@@ -197,6 +198,11 @@ export default function SupportPage() {
                 </Link>
               </div>
             </div>
+          </div>
+
+          {/* Formulaire de Contact & Envoi Direct */}
+          <div className="mt-14 max-w-4xl mx-auto">
+            <SupportContactForm />
           </div>
 
           {/* Section FAQ & Questions Fréquentes */}
