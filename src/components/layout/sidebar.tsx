@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { isAdmin } from "@/lib/utils/admin";
 import {
   LayoutDashboard,
   Wallet,
@@ -12,6 +15,7 @@ import {
   Brain,
   LineChart,
   Settings,
+  ShieldCheck,
 } from "lucide-react";
 
 const routes = [
@@ -67,6 +71,16 @@ const routes = [
 
 export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
   const pathname = usePathname();
+  const [isAdminUser, setIsAdminUser] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email && isAdmin(user.email)) {
+        setIsAdminUser(true);
+      }
+    });
+  }, []);
 
   return (
     <div className="space-y-4 py-4 flex flex-col h-full bg-[#1E3A5F] text-white">
@@ -100,6 +114,27 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
               </div>
             </Link>
           ))}
+
+          {/* Espace Administrateur visible uniquement pour l'admin */}
+          {isAdminUser && (
+            <div className="pt-3 mt-3 border-t border-white/10">
+              <Link
+                href="/admin"
+                onClick={onNavigate}
+                className={cn(
+                  "text-sm group flex p-3 w-full justify-start font-medium cursor-pointer hover:text-white hover:bg-white/10 rounded-xl transition",
+                  pathname === "/admin"
+                    ? "text-white bg-sky-500/30 font-semibold shadow-xs border border-sky-400/30"
+                    : "text-sky-300 hover:text-sky-200"
+                )}
+              >
+                <div className="flex items-center flex-1">
+                  <ShieldCheck className="h-5 w-5 mr-3 text-sky-400 transition-transform group-hover:scale-110" />
+                  Administration
+                </div>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </div>

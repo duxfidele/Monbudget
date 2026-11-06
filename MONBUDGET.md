@@ -194,7 +194,22 @@ MonBudget permet aux utilisateurs de photographier ou joindre leurs tickets de c
 
 ---
 
-## 🚀 12. Guide d'Installation & Commandes Développeur
+## 🛡️ 12. Espace Administrateur & Gouvernance SaaS (`/admin`)
+
+MonBudget intègre un espace de direction réservé aux administrateurs pour piloter la plateforme en direct :
+- **Contrôle d'Accès Cryptographique & Rôles ([`src/lib/utils/admin.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/utils/admin.ts))** :
+  - Autorisation par liste d'emails (`ADMIN_EMAILS` et emails de direction par défaut).
+  - Blocage automatique des utilisateurs standards avec redirection immédiate vers `/dashboard`.
+  - Lien discret dans la barre de navigation ([`src/components/layout/sidebar.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/sidebar.tsx)) affiché uniquement si l'utilisateur est administrateur.
+- **Tableau de Bord des Métriques Globales ([`src/app/(dashboard)/admin/page.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/(dashboard)/admin/page.tsx))** :
+  - Compteurs KPI en temps réel : Utilisateurs inscrits, Budgets actifs, Transactions enregistrées, Objectifs d'épargne et créances.
+  - Table des derniers membres inscrits avec date d'inscription et devise.
+  - Surveillance d'infrastructure (base Supabase, audit nocturne Cron 00:00 UTC, connecteur emails Resend).
+  - Déclenchement manuel de l'audit financier nocturne à la demande pour tests.
+
+---
+
+## 🚀 13. Guide d'Installation & Commandes Développeur
 
 ### Prérequis
 - Node.js 18.18+ ou 20+
@@ -224,8 +239,8 @@ npm run dev
 # Vérification des types TypeScript
 npx tsc --noEmit
 
-# Exécution de la suite complète de 32 tests Playwright (calculs, sécurité, emails, reçus)
-npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts tests/receipts.spec.ts
+# Exécution de la suite complète de 38 tests Playwright (calculs, sécurité, emails, reçus, admin)
+npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts tests/receipts.spec.ts tests/admin.spec.ts
 
 # Compiler pour la production
 npm run build

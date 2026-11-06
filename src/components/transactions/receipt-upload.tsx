@@ -262,3 +262,4 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
     </div>
   );
 }
+

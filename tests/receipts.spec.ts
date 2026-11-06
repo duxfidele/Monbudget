@@ -142,3 +142,4 @@ test.describe("Receipt Storage & Justificatifs — SaaS Production Standards", (
     expect(transaction.receiptName).toBe("ticket_supermarche.webp");
   });
 });
+
