@@ -69,3 +69,4 @@ export function GoogleAuthButton({ mode = "signin" }: { mode?: "signin" | "signu
     </Button>
   );
 }
+
