@@ -167,7 +167,18 @@ MonBudget est équipé d'un système de veille automatique planifié dans [`verc
 
 ---
 
-## 🚀 10. Guide d'Installation & Commandes Développeur
+## 📧 10. Système d'Emails Transactionnels (Architecture Résiliente Resend)
+
+MonBudget intègre une infrastructure de communication par email optimisée et sécurisée :
+- **Service d'Envoi Résilient ([`src/lib/email/service.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/email/service.ts))** : Connexion directe à l'API Resend avec fallback gracieux (simulation locale sans crash si `RESEND_API_KEY` n'est pas configuré).
+- **Templates HTML Responsives & Brandés ([`src/lib/email/templates.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/email/templates.ts))** :
+  - *Bienvenue* : Accueil personnalisé, conseils de démarrage et rappel du support WhatsApp.
+  - *Alertes Budgétaires* : Notification visuelle immédiate au seuil de 80% (orange) ou dépassement 100% (rouge) avec barre de progression.
+  - *Bilan Financier Mensuel* : Récapitulatif consolidé des revenus, dépenses réelles, épargne sécurisée et solde restant.
+
+---
+
+## 🚀 11. Guide d'Installation & Commandes Développeur
 
 ### Prérequis
 - Node.js 18.18+ ou 20+
@@ -197,8 +208,8 @@ npm run dev
 # Vérification des types TypeScript
 npx tsc --noEmit
 
-# Exécution des tests unitaires et de sécurité Playwright
-npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts
+# Exécution des tests unitaires, sécurité et emails Playwright
+npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts
 
 # Compiler pour la production
 npm run build
