@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Wallet, AlertCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { GoogleAuthButton } from "@/components/auth/google-button";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -146,6 +147,19 @@ export default function RegisterPage() {
           <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={loading}>
             {loading ? "Création..." : "S'inscrire"}
           </Button>
+
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-200 dark:border-slate-800" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white dark:bg-slate-900 px-2 text-slate-500 font-medium">
+                Ou continuer avec
+              </span>
+            </div>
+          </div>
+
+          <GoogleAuthButton mode="signup" />
         </form>
       </CardContent>
       <CardFooter className="justify-center border-t p-4">
