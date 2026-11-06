@@ -40,6 +40,8 @@ export type Transaction = {
   linkedPaymentId?: string;
   linkedSavingsGoalId?: string;
   linkedContributionId?: string;
+  receiptUrl?: string;
+  receiptName?: string;
 };
 
 export type SavingsContribution = {

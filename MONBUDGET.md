@@ -178,7 +178,23 @@ MonBudget intègre une infrastructure de communication par email optimisée et s
 
 ---
 
-## 🚀 11. Guide d'Installation & Commandes Développeur
+## 📎 11. Justificatifs de Dépenses & Upload de Reçus
+
+MonBudget permet aux utilisateurs de photographier ou joindre leurs tickets de caisse et factures lors de l'enregistrement de dépenses :
+- **Compression Côté Client ([`src/lib/utils/receipt-storage.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/utils/receipt-storage.ts))** :
+  - Réduction automatique des photos smartphone (~5 Mo) à ~150-300 Ko (-90% de poids) via Canvas HTML5 avant l'envoi réseau.
+  - Économie maximale de forfait internet mobile pour les utilisateurs en Afrique.
+- **Sécurité & Isolation Strictes** :
+  - Formats acceptés : JPEG, PNG, WebP et PDF jusqu'à 5 Mo.
+  - Assainissement cryptographique des noms de fichiers contre les attaques de type path traversal.
+  - Partitionnement des dossiers de stockage par utilisateur : `receipts/{userId}/{year}-{month}/{transactionId}_{timestamp}_{filename}`.
+- **Expérience Utilisateur & Visualisation ([`src/components/transactions/receipt-upload.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/transactions/receipt-upload.tsx))** :
+  - Prise de photo directe avec la caméra du smartphone ou sélection de fichier.
+  - Badge interactif « Reçu » dans l'historique des transactions ouvrant un aperçu plein écran (lightbox) en 1 clic.
+
+---
+
+## 🚀 12. Guide d'Installation & Commandes Développeur
 
 ### Prérequis
 - Node.js 18.18+ ou 20+
@@ -208,8 +224,8 @@ npm run dev
 # Vérification des types TypeScript
 npx tsc --noEmit
 
-# Exécution des tests unitaires, sécurité et emails Playwright
-npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts
+# Exécution de la suite complète de 32 tests Playwright (calculs, sécurité, emails, reçus)
+npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts tests/receipts.spec.ts
 
 # Compiler pour la production
 npm run build

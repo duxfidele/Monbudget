@@ -15,11 +15,15 @@ import {
   TrendingDown, 
   Scale,
   Calendar,
-  Zap
+  Zap,
+  Paperclip,
+  Eye
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
+import { ReceiptUpload, ReceiptData } from "@/components/transactions/receipt-upload";
+import { formatFileSize } from "@/lib/utils/receipt-storage";
 import { 
   formatMoney, 
   formatThousands, 
@@ -65,6 +69,8 @@ export default function TransactionsPage() {
   const [newIncomeSource, setNewIncomeSource] = useState<string>(INCOME_SOURCES[0]);
   const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [newType, setNewType] = useState<"expense" | "income">("expense");
+  const [newReceipt, setNewReceipt] = useState<ReceiptData | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<{ url: string; name: string } | null>(null);
 
   // Format active month label
   const activeDate = new Date(activeMonth.year, activeMonth.month - 1, 1);
@@ -171,18 +177,21 @@ export default function TransactionsPage() {
         category: assignedCategory,
         date: newDate,
         type: newType,
+        receiptUrl: newReceipt?.url,
+        receiptName: newReceipt?.name,
       });
       
       toast.success(
         newType === "income" 
           ? `Revenu de ${formatMoney(amount, currency)} ajouté et synchronisé !` 
-          : `Dépense de ${formatMoney(amount, currency)} enregistrée !`
+          : `Dépense de ${formatMoney(amount, currency)} enregistrée ${newReceipt ? "avec reçu !" : "!"}`
       );
       setIsDialogOpen(false);
       
       // Reset form
       setNewLabel("");
       setNewAmountStr("");
+      setNewReceipt(null);
       setNewDate(new Date().toISOString().split("T")[0]);
       if (categories.length > 0) setNewCategory(categories[0].name);
       else setNewCategory("Autre (Hors Budget)");
@@ -364,6 +373,13 @@ export default function TransactionsPage() {
                 </div>
               )}
 
+              {/* Upload de reçu pour les dépenses */}
+              {newType === "expense" && (
+                <div className="pt-1">
+                  <ReceiptUpload receipt={newReceipt} onChange={setNewReceipt} />
+                </div>
+              )}
+
               <Button 
                 onClick={handleAddTransaction} 
                 className={`w-full mt-3 h-10 text-white font-semibold rounded-lg ${newType === "expense" ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
@@ -509,6 +525,20 @@ export default function TransactionsPage() {
                           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${isInc ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"}`}>
                             {isInc ? "Revenu" : (tx.category || "Autre (Hors Budget)")}
                           </span>
+                          {tx.receiptUrl && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewingReceipt({ url: tx.receiptUrl!, name: tx.receiptName || "Justificatif" });
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/70 hover:bg-sky-100 dark:hover:bg-sky-900 border border-sky-200 dark:border-sky-800 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                              title="Cliquer pour afficher le justificatif"
+                            >
+                              <Paperclip className="h-3 w-3" />
+                              <span>Reçu</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -534,6 +564,47 @@ export default function TransactionsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal d'Affichage Plein Écran du Reçu Attaché */}
+      {viewingReceipt && (
+        <Dialog open={!!viewingReceipt} onOpenChange={(open) => !open && setViewingReceipt(null)}>
+          <DialogContent className="max-w-lg p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+            <DialogHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
+              <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+                {viewingReceipt.name}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="mt-3 flex items-center justify-center max-h-[75vh] overflow-auto rounded-xl bg-slate-950 p-2">
+              {viewingReceipt.url.toLowerCase().includes("application/pdf") || viewingReceipt.name.toLowerCase().endsWith(".pdf") ? (
+                <iframe
+                  src={viewingReceipt.url}
+                  className="w-full h-96 rounded-lg border-0"
+                  title="Justificatif PDF"
+                />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={viewingReceipt.url}
+                  alt={viewingReceipt.name}
+                  className="max-h-[70vh] w-auto object-contain rounded-lg"
+                />
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewingReceipt(null)}
+                className="text-xs"
+              >
+                Fermer
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

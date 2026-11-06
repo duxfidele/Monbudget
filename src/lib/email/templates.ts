@@ -199,3 +199,4 @@ export function getMonthlyReportEmailHtml(params: {
 
   return getEmailWrapper(content);
 }
+
