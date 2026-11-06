@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { getSafeRedirectUrl, getUserStorageKey } from "../src/lib/utils/security";
+import { getSafeRedirectUrl, getUserStorageKey, verifyCronSecret } from "../src/lib/utils/security";
 
 test.describe("Security Tests — SaaS Hardening", () => {
   const baseUrl = "https://monbudget.app/auth/confirm";
@@ -31,5 +31,24 @@ test.describe("Security Tests — SaaS Hardening", () => {
     expect(user2Key).toBe("monbudget_cache_user-uuid-2");
     expect(user1Key).not.toBe(user2Key);
     expect(anonKey).toBe("monbudget_local_cache_anon");
+  });
+
+  test("Cron Job Security: enforces Bearer token authentication", () => {
+    const validSecret = "super_secret_cron_token_12345";
+
+    // Cas A : Token invalide ou malformé
+    expect(verifyCronSecret("Bearer wrong_token", validSecret)).toBe(false);
+    expect(verifyCronSecret("Basic wrong_token", validSecret)).toBe(false);
+    expect(verifyCronSecret("super_secret_cron_token_12345", validSecret)).toBe(false);
+
+    // Cas B : En-tête absent ou vide
+    expect(verifyCronSecret(null, validSecret)).toBe(false);
+    expect(verifyCronSecret("", validSecret)).toBe(false);
+
+    // Cas C : Secret serveur non configuré
+    expect(verifyCronSecret("Bearer super_secret_cron_token_12345", undefined)).toBe(false);
+
+    // Cas D : Token Bearer parfaitement authentique
+    expect(verifyCronSecret("Bearer super_secret_cron_token_12345", validSecret)).toBe(true);
   });
 });

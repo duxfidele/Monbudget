@@ -157,7 +157,17 @@ MonBudget intègre une assistance directe pour accompagner les utilisateurs au q
 
 ---
 
-## 🚀 9. Guide d'Installation & Commandes Développeur
+## ⏰ 9. Tâches Automatisées en Arrière-Plan (Vercel Cron Jobs)
+
+MonBudget est équipé d'un système de veille automatique planifié dans [`vercel.json`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/vercel.json) :
+- **Audit Financier Nocturne (`/api/cron/daily-check`)** : Déclenché automatiquement chaque nuit à 00:00 UTC (`0 0 * * *`).
+  - Détection proactive des dettes arrivant à échéance sous 7 jours (J-7) ou dépassées.
+  - Préparation du renouvellement mensuel le 1er de chaque mois.
+- **Sécurité Cryptographique** : L'accès à la route cron est strictement verrouillé par le token d'autorisation `CRON_SECRET` (`Authorization: Bearer <CRON_SECRET>`), bloquant toute tentative d'exécution non autorisée.
+
+---
+
+## 🚀 10. Guide d'Installation & Commandes Développeur
 
 ### Prérequis
 - Node.js 18.18+ ou 20+

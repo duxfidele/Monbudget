@@ -27,3 +27,14 @@ export function getUserStorageKey(userId?: string | null): string {
   return userId ? `monbudget_cache_${userId}` : "monbudget_local_cache_anon";
 }
 
+/**
+ * Valide l'authentification d'une tâche automatisée Cron (Vercel Cron)
+ * Vérifie que l'en-tête Authorization correspond au format Bearer <CRON_SECRET>.
+ */
+export function verifyCronSecret(authHeader: string | null, expectedSecret: string | undefined): boolean {
+  if (!expectedSecret) {
+    return false;
+  }
+  return authHeader === `Bearer ${expectedSecret}`;
+}
+
