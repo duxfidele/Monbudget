@@ -49,7 +49,7 @@ export default function RegisterPage() {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${location.origin}/auth/confirm`,
+          emailRedirectTo: `${location.origin}/auth/confirm?next=/dashboard`,
           data: {
             full_name: name.trim(),
           },
@@ -62,7 +62,7 @@ export default function RegisterPage() {
         setLoading(false);
       } else if (data?.session) {
         toast.success("Compte créé et connecté avec succès !");
-        window.location.href = "/";
+        window.location.href = "/dashboard";
       } else {
         const msg = "Inscription réussie ! Vérifiez votre boîte mail (ou connectez-vous directement).";
         setSuccessMsg(msg);
