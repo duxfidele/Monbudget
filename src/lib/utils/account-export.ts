@@ -144,3 +144,4 @@ export function downloadJsonFile(data: unknown, filename?: string): boolean {
     return false;
   }
 }
+
