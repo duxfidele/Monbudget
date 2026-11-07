@@ -429,13 +429,15 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   installPwa: async () => {
-    if (!deferredInstallPrompt) return false;
+    const prompt = deferredInstallPrompt || (typeof window !== "undefined" ? (window as any).deferredInstallPrompt : null);
+    if (!prompt) return false;
     try {
-      deferredInstallPrompt.prompt();
-      const choice = await deferredInstallPrompt.userChoice;
+      prompt.prompt();
+      const choice = await prompt.userChoice;
       if (choice && choice.outcome === "accepted") {
         set({ canInstallPwa: false, isPwaInstalled: true });
         deferredInstallPrompt = null;
+        if (typeof window !== "undefined") (window as any).deferredInstallPrompt = null;
         toast.success("Application MonBudget installée avec succès !");
         return true;
       }

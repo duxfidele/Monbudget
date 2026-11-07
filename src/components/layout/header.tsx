@@ -1,12 +1,13 @@
 "use client";
 
-import { User, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { MonthSelector } from "@/components/dashboard/month-selector";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NetworkStatus } from "@/components/pwa/network-status";
 import { InstallButton } from "@/components/pwa/install-button";
+import { UserMenu } from "@/components/layout/user-menu";
 import { useUIStore } from "@/lib/store/ui-store";
 
 export const Header = () => {
@@ -47,17 +48,7 @@ export const Header = () => {
         <NetworkStatus />
         <InstallButton variant="header" />
         <ThemeToggle />
-        <Link href="/settings">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-9 w-9 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title="Paramètres"
-            aria-label="Paramètres du compte"
-          >
-            <User className="h-5 w-5" />
-          </Button>
-        </Link>
+        <UserMenu />
       </div>
     </header>
   );

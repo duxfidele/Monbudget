@@ -68,3 +68,4 @@ test.describe("Support & Customer Assistance — Validation & WhatsApp Link", ()
     expect(url.startsWith("https://wa.me/22898376101?text=")).toBe(true);
   });
 });
+

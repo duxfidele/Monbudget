@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { isAdmin } from "@/lib/utils/admin";
+import { useUIStore } from "@/lib/store/ui-store";
+import { toast } from "sonner";
 import {
   LayoutDashboard,
   Wallet,
@@ -17,6 +19,8 @@ import {
   Settings,
   ShieldCheck,
   LifeBuoy,
+  LogOut,
+  User,
 } from "lucide-react";
 
 const routes = [
@@ -78,20 +82,45 @@ const routes = [
 
 export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
   const pathname = usePathname();
+  const router = useRouter();
+  const { resetStore } = useUIStore();
   const [isAdminUser, setIsAdminUser] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email && isAdmin(user.email)) {
-        setIsAdminUser(true);
+      if (user?.email) {
+        setUserEmail(user.email);
+        if (isAdmin(user.email)) {
+          setIsAdminUser(true);
+        }
       }
     });
   }, []);
 
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      if (onNavigate) onNavigate();
+      resetStore();
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      toast.success("Vous avez été déconnecté avec succès.");
+      router.push("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Erreur déconnexion mobile :", error);
+      toast.error("Erreur lors de la déconnexion.");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
-    <div className="space-y-4 py-4 flex flex-col h-full bg-[#1E3A5F] text-white">
-      <div className="px-3 py-2 flex-1">
+    <div className="py-4 flex flex-col h-full bg-[#1E3A5F] text-white">
+      <div className="px-3 py-2 flex-1 overflow-y-auto">
         <Link 
           href="/dashboard" 
           onClick={onNavigate}
@@ -143,6 +172,34 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Section Pied de Page : Utilisateur & Déconnexion rapide */}
+      <div className="p-3 border-t border-white/10 mt-auto bg-black/15 shrink-0">
+        <div className="flex items-center gap-2.5 px-2 py-2 mb-2">
+          <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-xs">
+            {userEmail ? userEmail.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-white truncate">
+              {userEmail || "Mon Compte"}
+            </p>
+            <p className="text-[10px] text-emerald-400 flex items-center gap-1.5 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
+              Connecté
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-600/30 border border-rose-500/30 text-xs font-semibold transition-all active:scale-[0.98] disabled:opacity-50"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>{isLoggingOut ? "Déconnexion..." : "Se déconnecter"}</span>
+        </button>
       </div>
     </div>
   );
