@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -124,12 +125,26 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
         <Link 
           href="/dashboard" 
           onClick={onNavigate}
-          className="flex items-center pl-3 mb-10 transition-opacity hover:opacity-90"
+          className="flex items-center gap-3 pl-2 mb-8 transition-opacity hover:opacity-90 group"
         >
-          <div className="relative w-8 h-8 mr-3 flex items-center justify-center bg-white rounded-lg shadow-xs">
-            <span className="text-[#1E3A5F] font-bold text-base">MB</span>
+          <div className="relative w-10 h-10 shrink-0 rounded-xl overflow-hidden bg-white/10 p-0.5 border border-white/20 shadow-md">
+            <Image
+              src="/logo.png"
+              alt="Logo MonBudget"
+              width={40}
+              height={40}
+              className="w-full h-full object-contain"
+              priority
+            />
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">MonBudget</span>
+          <div className="flex flex-col">
+            <span className="text-lg font-bold tracking-tight text-white leading-tight">
+              Mon<span className="text-emerald-400">Budget</span>
+            </span>
+            <span className="text-[10px] text-slate-300 font-medium tracking-tight">
+              Gérez mieux votre argent
+            </span>
+          </div>
         </Link>
         <div className="space-y-1">
           {routes.map((route) => (

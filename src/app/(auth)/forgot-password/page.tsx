@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Wallet } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { toast } from "sonner";
 
 export default function ForgotPasswordPage() {
@@ -36,9 +37,21 @@ export default function ForgotPasswordPage() {
   return (
     <Card className="w-full max-w-md border-none shadow-xl">
       <CardHeader className="space-y-3 items-center">
-        <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center text-white mb-2 shadow-lg">
-          <Wallet className="h-6 w-6" />
-        </div>
+        <Link href="/" className="flex flex-col items-center gap-2 group mb-1">
+          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg shadow-emerald-500/10 group-hover:scale-105 transition-transform p-0.5">
+            <Image
+              src="/logo.png"
+              alt="MonBudget Logo"
+              width={64}
+              height={64}
+              className="w-full h-full object-contain"
+              priority
+            />
+          </div>
+          <span className="text-xl font-extrabold tracking-tight text-[#1E3A5F] dark:text-white">
+            Mon<span className="text-emerald-500">Budget</span>
+          </span>
+        </Link>
         <CardTitle className="text-2xl font-bold text-center">Mot de passe oublié</CardTitle>
         <CardDescription className="text-center">
           Entrez votre email pour réinitialiser votre mot de passe.

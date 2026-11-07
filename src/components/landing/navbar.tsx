@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Menu, X, ArrowRight, ShieldCheck, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -54,16 +55,24 @@ export function LandingNavbar() {
         <div className="flex items-center justify-between">
           {/* Logo MonBudget */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-sky-500 to-cyan-400 p-[1px] shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-              <div className="w-full h-full bg-[#0A192F] rounded-[11px] flex items-center justify-center">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-cyan-300 font-extrabold text-sm tracking-tight">
-                  MB
-                </span>
-              </div>
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-emerald-500/10 group-hover:scale-105 transition-transform shrink-0">
+              <Image
+                src="/logo.png"
+                alt="MonBudget Logo"
+                width={40}
+                height={40}
+                className="w-full h-full object-contain"
+                priority
+              />
             </div>
-            <span className="text-xl font-bold tracking-tight text-white group-hover:text-sky-300 transition-colors">
-              Mon<span className="text-sky-400">Budget</span>
-            </span>
+            <div className="flex flex-col">
+              <span className="text-xl font-bold tracking-tight text-white group-hover:text-emerald-300 transition-colors leading-none">
+                Mon<span className="text-emerald-400">Budget</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium tracking-tight mt-1 hidden sm:inline">
+                Gérez mieux votre argent
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Navigation Links */}

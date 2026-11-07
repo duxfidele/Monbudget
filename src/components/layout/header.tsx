@@ -3,6 +3,7 @@
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import Image from "next/image";
 import { MonthSelector } from "@/components/dashboard/month-selector";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NetworkStatus } from "@/components/pwa/network-status";
@@ -28,12 +29,19 @@ export const Header = () => {
           <Menu className="h-5 w-5" />
         </Button>
 
-        <Link href="/dashboard" className="flex items-center ml-0.5">
-          <div className="relative w-8 h-8 mr-1.5 flex items-center justify-center bg-[#1E3A5F] dark:bg-sky-500 rounded-lg shadow-xs">
-            <span className="text-white dark:text-slate-950 font-bold text-sm">MB</span>
+        <Link href="/dashboard" className="flex items-center gap-2 ml-0.5 group">
+          <div className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-xs">
+            <Image
+              src="/logo.png"
+              alt="Logo MonBudget"
+              width={32}
+              height={32}
+              className="w-full h-full object-contain"
+              priority
+            />
           </div>
           <span className="text-base font-bold text-[#1E3A5F] dark:text-white tracking-tight hidden sm:inline">
-            MonBudget
+            Mon<span className="text-emerald-500">Budget</span>
           </span>
         </Link>
       </div>
