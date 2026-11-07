@@ -27,6 +27,8 @@
 13. [Sauvegarde & Portabilité des Données (Export Intégral JSON)](#-13-sauvegarde--portabilité-des-données-export-intégral-json)
 14. [Assistance & Support Client Multi-Canal](#-14-assistance--support-client-multi-canal)
 15. [Guide d'Installation & Commandes Développeur](#-15-guide-dinstallation--commandes-développeur)
+16. [Architecture & Expérience Mobile-First](#-16-architecture--expérience-mobile-first)
+17. [Identité Visuelle & Nouveau Branding Officiel](#-17-identité-visuelle--nouveau-branding-officiel)
 
 ---
 
@@ -124,12 +126,16 @@ $$\text{Reste à Allouer} = \text{Revenus Totaux} - \text{Dépenses Prévues dan
 
 ## 📱 5. Mode Hors-Ligne & PWA
 
-MonBudget est certifié **Progressive Web App (PWA)** :
-- **Installation en 1 clic** :
-  - Sur **Android / Chrome** : bouton d'installation natif « Installer l'application ».
-  - Sur **iOS (iPhone/iPad)** : guide interactif pas-à-pas (Partager $\rightarrow$ Sur l'écran d'accueil).
-  - Sur **Desktop (Windows/Mac/Linux)** : installable comme une application de bureau via Chrome, Edge ou Safari.
-- **Fonctionnement Hors-Ligne** : Le Service Worker met en cache les pages et ressources essentielles. En cas de coupure internet, les données locales restent accessibles et modifiables.
+MonBudget est certifié **Progressive Web App (PWA)** autonome, optimisée pour un usage hors-ligne complet et installable en quelques secondes :
+
+### Sélecteur d'Appareil Interactif ([`src/components/pwa/install-button.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/pwa/install-button.tsx))
+La modale d'installation propose une sélection dynamique adaptée à l'équipement de l'utilisateur :
+- **Détection Automatique de l'OS** : L'application détecte automatiquement la plateforme en cours d'utilisation (`navigator.userAgent`) et applique un badge visuel vert *« Votre appareil »* sur la carte correspondante.
+- **Trois Modes Sélectionnables** :
+  1. 💻 **Sur Ordinateur (Chrome, Edge, Brave)** : Explique l'icône dans la barre d'adresse et le raccourci menu.
+  2. 📱 **Sur Android (Chrome)** : Affiche un bouton d'action directe en 1 clic (*« Lancer l'installation sur Android maintenant »*) déclenchant l'invite native `beforeinstallprompt`, ainsi que la procédure alternative via le menu contextuel.
+  3. 🍏 **Sur iPhone / iPad (Safari)** : Affiche la démarche guidée spécifique à iOS (*Bouton Partager* $\rightarrow$ *Sur l'écran d'accueil*).
+- **Fonctionnement Hors-Ligne** : Le Service Worker met en cache les pages et ressources essentielles. En cas de coupure internet, les données locales restent accessibles et modifiables. Dès le retour de la connexion, les données sont synchronisées de manière transparente avec Supabase.
 
 ---
 
@@ -142,8 +148,13 @@ L'application intègre un sélecteur de thème complet :
 
 ---
 
-## 🛡 7. Sécurité & Confidentialité
+## 🛡 7. Sécurité, Profil & Authentification
 
+- **Menu Profil Utilisateur & Déconnexion Multi-Plateforme ([`src/components/layout/user-menu.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/user-menu.tsx))** :
+  - Intégré dans l'en-tête supérieur ([`src/components/layout/header.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/header.tsx)) et la barre latérale ([`src/components/layout/sidebar.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/sidebar.tsx)).
+  - Affiche les identifiants de l'utilisateur (avatar, nom, adresse email, badge de statut/rôle administrateur).
+  - Offre un accès rapide aux Paramètres, au Support client et à la documentation.
+  - Comporte un bouton **« Déconnexion »** rouge entièrement fonctionnel sur mobile et desktop qui invoque `supabase.auth.signOut()`, purge les états de session sensibles et redirige instantanément vers la page de connexion.
 - **Isolation Stricte des Utilisateurs (Row Level Security)** : Chaque table PostgreSQL Supabase (`budgets`, `transactions`, `savings_goals`, `debts`) applique une politique RLS interdisant tout accès aux données d'un autre utilisateur :
   ```sql
   CREATE POLICY "Users can only manage their own data"
@@ -279,6 +290,59 @@ npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email
 # Compiler pour la production
 npm run build
 ```
+
+---
+
+## 📱 16. Architecture & Expérience Mobile-First
+
+MonBudget a été pensé et restructuré comme une application native pour smartphone, utilisable d'une seule main :
+
+### Ergonomie de la Zone du Pouce (*Thumb Zone*)
+- **Barre de Navigation Basse Réorganisée ([`src/components/layout/bottom-nav.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/bottom-nav.tsx))** :
+  - 4 onglets majeurs équilibrés : **Accueil**, **Budget**, **Mouvements** et **Épargne**.
+  - **Bouton Flottant Central Surélevé `+`** : Un FAB (*Floating Action Button*) aux couleurs du dégradé officiel, surélevé au centre de la barre pour enregistrer une opération en 2 secondes depuis n'importe quelle vue de l'application.
+
+### Boîte de Dialogue Universelle d'Ajout Rapide ([`src/components/transactions/quick-add-transaction-dialog.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/transactions/quick-add-transaction-dialog.tsx))
+- **Pavé Numérique Optimisé** : Champ montant à typographie géante avec `inputMode="decimal"` pour faire apparaître directement le pavé numérique avec virgule sur Android et iOS.
+- **Sélecteur Segmenté Dépense / Revenu** : Bascule tactile instantanée entre sortie d'argent ou rentrée imprévue.
+- **Scan & Pièce Jointe** : Intégration du composant de scan de reçu ([`src/components/transactions/receipt-upload.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/transactions/receipt-upload.tsx)) permettant la capture photo immédiate.
+
+### Modales en Feuilles Basses (*Native Bottom Sheets*) ([`src/components/ui/dialog.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/ui/dialog.tsx))
+- Sur écran mobile (`max-sm:`), les fenêtres modales ne s'affichent plus au centre de l'écran mais glissent depuis le bas (*slide-up*) jusqu'à un maximum de 92% de la hauteur de l'écran.
+- Présence d'une poignée tactile d'accroche supérieure (*pill handle*) invitant naturellement au geste de balayage.
+
+### Grille KPI 2x2 Sans Défilement ([`src/app/(dashboard)/dashboard/page.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/(dashboard)/dashboard/page.tsx))
+- Les indicateurs clés (Solde Réel, Budget Quotidien, Dépenses Totales, Épargne du Mois, Dettes à Payer, Créances à Récupérer) sont organisés en grille 2x2 compacte avec typographie contrastée, permettant de consulter l'état de santé financière sans défilement vertical interminable.
+
+### Sélecteur de Mois Condensé ([`src/components/dashboard/month-selector.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/dashboard/month-selector.tsx))
+- Affiche un libellé raccourci sur mobile (ex. *"Nov. 2026"*) et complet sur écran large (ex. *"Novembre 2026"*), économisant l'espace dans l'en-tête pour éviter les retours à la ligne.
+
+### Prise en Compte des Spécificités Matérielles Mobiles
+- **Safe Area Insets** : Déclaration de `viewportFit: "cover"` dans [`src/app/layout.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/layout.tsx) et des utilitaires CSS `@utility pb-safe` / `pt-safe` pour respecter les barres de geste et encoches matérielles (iPhone Dynamic Island, caméras poinçons Android).
+- **Suppression du Zoom Forcé iOS** : Règle CSS imposant une taille minimale de `16px` sur les champs `<input>` et `<textarea>` en dessous de 768px de largeur, empêchant iOS Safari de zoomer de force sur la page lors de la saisie.
+- **Espacement de Sécurité Inférieur** : Marge de `pb-28` sur le corps de page du tableau de bord pour que le contenu ne soit jamais masqué par la barre de navigation basse ni par le bouton d'assistance WhatsApp.
+
+---
+
+## 🎨 17. Identité Visuelle & Nouveau Branding Officiel
+
+MonBudget arbore une identité visuelle professionnelle et inspirante :
+
+### Logo Officiel ([`public/logo.png`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/public/logo.png))
+- **Symbolisme** :
+  - **Portefeuille en cuir bleu marine** : La sécurité, la gestion rigoureuse et la confiance.
+  - **Billet vert FCFA & Pièce dorée** : Ancrage culturel direct dans la zone CFA (UEMOA / CEMAC), rappelant la gestion concrète de l'argent quotidien.
+  - **Courbe ascendante et barres de progression** : La croissance du patrimoine, la réalisation des objectifs d'épargne et l'indépendance financière.
+  - **Slogan** : *« Gérez mieux votre argent »*.
+
+### Palette Graphique
+| Rôle | Teinte | Code Hex | Usage |
+| :--- | :--- | :--- | :--- |
+| **Bleu Nuit Primaire** | Midnight Navy | `#1E3A5F` | En-têtes, boutons principaux, cartes d'action, accents de marque |
+| **Émeraude** | Growth Emerald | `#10B981` | Revenus, budgets sous contrôle, validation, santé financière |
+| **Or / Ambre** | Gold Amber | `#F59E0B` | Alertes budgétaires (80%), pièces FCFA, objectifs d'épargne |
+| **Ciel / Cyan** | Electric Sky | `#0284C7` | Liens interactifs, boutons secondaires, mode sombre |
+| **Rose / Rouge** | Critical Rose | `#EF4444` | Dépassements, dettes échues, déconnexion |
 
 ---
 
