@@ -53,11 +53,17 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed z-50 grid w-full gap-4 bg-popover p-5 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-200 outline-none shadow-2xl",
+          // Mobile Bottom Sheet
+          "max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:max-w-none max-sm:rounded-t-3xl max-sm:rounded-b-none max-sm:border-t max-sm:border-slate-200 dark:max-sm:border-slate-800 max-sm:max-h-[92vh] max-sm:overflow-y-auto max-sm:pb-safe",
+          // Desktop Centered Modal
+          "sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-md sm:rounded-2xl data-open:animate-in data-open:fade-in-0 sm:data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 sm:data-closed:zoom-out-95",
           className
         )}
         {...props}
       >
+        {/* Barre de préhension tactile mobile (Bottom Sheet handle) */}
+        <div className="mx-auto w-12 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700 sm:hidden -mt-1 mb-1 shrink-0" aria-hidden="true" />
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close

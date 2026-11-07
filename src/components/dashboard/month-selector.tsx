@@ -13,13 +13,19 @@ export function MonthSelector() {
   const isCurrentRealMonth = 
     activeMonth.year === currentRealYear && activeMonth.month === currentRealMonth;
 
-  // Format month name
+  // Format month name (long for desktop, short for mobile)
   const dateObj = new Date(activeMonth.year, activeMonth.month - 1, 1);
   const formattedMonth = dateObj.toLocaleDateString("fr-FR", {
     month: "long",
     year: "numeric",
   });
   const capitalizedMonth = formattedMonth.charAt(0).toUpperCase() + formattedMonth.slice(1);
+
+  const shortMonth = dateObj.toLocaleDateString("fr-FR", {
+    month: "short",
+    year: "numeric",
+  });
+  const capitalizedShortMonth = shortMonth.charAt(0).toUpperCase() + shortMonth.slice(1);
 
   const handlePrev = () => {
     if (activeMonth.month === 1) {
@@ -53,9 +59,10 @@ export function MonthSelector() {
         <ChevronLeft className="h-4 w-4" />
       </Button>
 
-      <div className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 select-none">
+      <div className="flex items-center gap-1 sm:gap-1.5 px-1 sm:px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 select-none">
         <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#1E3A5F] dark:text-sky-400 shrink-0" />
-        <span className="truncate max-w-[110px] sm:max-w-none">{capitalizedMonth}</span>
+        <span className="sm:hidden">{capitalizedShortMonth}</span>
+        <span className="hidden sm:inline">{capitalizedMonth}</span>
       </div>
 
       <Button

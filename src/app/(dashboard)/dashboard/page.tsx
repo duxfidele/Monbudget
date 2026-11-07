@@ -23,6 +23,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { QuickAddTransactionDialog } from "@/components/transactions/quick-add-transaction-dialog";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
 import { exportMonthlyReportCSV, exportMonthlyReportPDF } from "@/lib/utils/report-export";
@@ -137,38 +138,46 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-12">
-      {/* En-tête */}
+    <div className="flex flex-col gap-4 sm:gap-6 pb-16">
+      {/* En-tête Mobile-First */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
         <div>
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Tableau de bord</h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm md:text-base">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+            Tableau de bord
+          </h2>
+          <p className="text-slate-500 dark:text-slate-400 mt-0.5 text-xs sm:text-sm">
             Gérez votre salaire au jour le jour pour terminer le mois sereinement.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex-1 sm:flex-none">
+            <QuickAddTransactionDialog
+              customTrigger={
+                <Button className="w-full sm:w-auto bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shadow-sm gap-1.5 text-xs sm:text-sm h-10 px-4 font-bold rounded-xl active:scale-95 transition-all">
+                  <Plus className="h-4 w-4 stroke-[2.5]" />
+                  <span>Ajouter une dépense</span>
+                </Button>
+              }
+            />
+          </div>
           <Button
             onClick={handleDownloadPDF}
             variant="outline"
-            className="flex-1 sm:flex-none border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 gap-1.5 text-xs sm:text-sm h-9"
+            className="border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 gap-1 text-xs h-10 px-3 rounded-xl shrink-0"
+            title="Télécharger le rapport PDF"
           >
             <FileText className="h-4 w-4 text-[#1E3A5F] dark:text-sky-400" />
-            <span>Rapport PDF</span>
+            <span className="hidden sm:inline">PDF</span>
           </Button>
           <Button
             onClick={handleDownloadCSV}
             variant="outline"
-            className="flex-1 sm:flex-none border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/30 hover:bg-emerald-100/80 dark:hover:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 gap-1.5 text-xs sm:text-sm h-9"
+            className="border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 gap-1 text-xs h-10 px-3 rounded-xl shrink-0"
+            title="Télécharger le rapport Excel"
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <span>Excel (CSV)</span>
+            <span className="hidden sm:inline">CSV</span>
           </Button>
-          <Link href="/transactions" className="w-full sm:w-auto">
-            <Button className="w-full sm:w-auto bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shadow-sm gap-1.5 text-xs sm:text-sm h-9">
-              <Plus className="h-4 w-4" />
-              <span>Ajouter une dépense</span>
-            </Button>
-          </Link>
         </div>
       </div>
 
@@ -184,25 +193,25 @@ export default function DashboardPage() {
       )}
 
       {/* HERO CARD : Budget Journalier Conseillé déduit automatiquement */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A5F] via-[#24436E] to-[#152B47] text-white p-6 md:p-8 shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A5F] via-[#24436E] to-[#152B47] text-white p-4 sm:p-6 md:p-8 shadow-xl">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-4 flex-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md border border-white/15 text-blue-200">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
+          <div className="space-y-3 sm:space-y-4 flex-1">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-white/10 backdrop-blur-md border border-white/15 text-blue-200">
               <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-              <span>PILOTAGE QUOTIDIEN DU SALAIRE (DÉDUCTION AUTOMATIQUE)</span>
+              <span>PILOTAGE QUOTIDIEN DU SALAIRE</span>
             </div>
 
             <div>
-              <p className="text-slate-300 text-sm font-medium">Budget journalier conseillé pour aujourd'hui</p>
-              <div className="flex flex-wrap items-baseline gap-2.5 mt-1">
-                <span suppressHydrationWarning className={`text-4xl md:text-5xl font-extrabold tracking-tight ${dailyInfo.isOverDailyBudget ? "text-amber-300" : "text-white"}`}>
+              <p className="text-slate-300 text-xs sm:text-sm font-medium">Budget journalier conseillé pour aujourd&apos;hui</p>
+              <div className="flex flex-wrap items-baseline gap-2 mt-1">
+                <span suppressHydrationWarning className={`text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight ${dailyInfo.isOverDailyBudget ? "text-amber-300" : "text-white"}`}>
                   {formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}
                 </span>
-                <span className="text-slate-300 text-base md:text-lg font-medium">
-                  restant aujourd'hui
+                <span className="text-slate-300 text-sm sm:text-base font-medium">
+                  restant aujourd&apos;hui
                 </span>
-                <span className="text-xs bg-white/10 border border-white/15 px-2.5 py-1 rounded-full text-slate-200">
+                <span className="text-[11px] sm:text-xs bg-white/10 border border-white/15 px-2 py-0.5 rounded-full text-slate-200">
                   Alloué : {formatMoney(dailyInfo.dailyBudget, currency)}/j
                 </span>
               </div>
@@ -293,114 +302,109 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* KPI Cards : Les 6 Indicateurs Financiers Clés (Pilier A) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* KPI Cards : Les 6 Indicateurs Financiers Clés (Format 2x2 optimisé Mobile-First) */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
         {/* 1. Revenus du mois */}
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Revenus du Mois</CardTitle>
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg">
-              <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+        <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Revenus du Mois</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg shrink-0">
+              <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 dark:text-emerald-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+          <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+            <div suppressHydrationWarning className="text-base sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100 truncate">
               {formatMoney(income, currency)}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
               {incomeEntries && incomeEntries.length > 1
-                ? `${incomeEntries.length} sources de revenus actives`
-                : "Salaire & revenus déclarés"}
+                ? `${incomeEntries.length} sources déclarées`
+                : "Salaire & déclarés"}
             </p>
           </CardContent>
         </Card>
 
         {/* 2. Dépenses du mois & Budget Prévu */}
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Dépenses Réalisées</CardTitle>
-            <div className="p-2 bg-red-100 dark:bg-red-950/60 rounded-lg">
-              <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
+        <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Dépenses Réalisées</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-red-100 dark:bg-red-950/60 rounded-lg shrink-0">
+              <TrendingDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-600 dark:text-red-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+          <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+            <div suppressHydrationWarning className="text-base sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100 truncate">
               {formatMoney(depenses, currency)}
             </div>
-            {epargneMois > 0 && (
-              <p className="text-xs text-sky-600 dark:text-sky-400 mt-1 font-medium">
-                dont {formatMoney(epargneMois, currency)} d&apos;épargne mise de côté
+            {epargneMois > 0 ? (
+              <p className="text-[10px] sm:text-xs text-sky-600 dark:text-sky-400 mt-0.5 sm:mt-1 font-medium truncate">
+                dont {formatMoney(epargneMois, currency)} épargnés
+              </p>
+            ) : (
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
+                Prévu : {formatMoney(depensesPrevues, currency)}
               </p>
             )}
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-3 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 sm:h-1.5 mt-2 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${pourcentageDepense > 90 ? 'bg-red-500' : 'bg-blue-600'}`}
                 style={{ width: `${Math.min(pourcentageDepense, 100)}%` }}
               />
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2">
-              <span>{Math.round(pourcentageDepense)}% des revenus</span>
-              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                Prévu : {formatMoney(depensesPrevues, currency)}
-              </span>
-            </div>
           </CardContent>
         </Card>
 
         {/* 3. Solde disponible & Reste à allouer */}
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Solde Disponible</CardTitle>
-            <div className="p-2 bg-sky-100 dark:bg-sky-950/60 rounded-lg">
-              <Receipt className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+        <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Solde Disponible</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-sky-100 dark:bg-sky-950/60 rounded-lg shrink-0">
+              <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-600 dark:text-sky-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className={`text-2xl font-bold ${reste < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
+          <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+            <div suppressHydrationWarning className={`text-base sm:text-2xl font-extrabold truncate ${reste < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
               {formatMoney(reste, currency)}
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2">
-              <span>{reste >= 0 ? "Reste en caisse" : "Déficit constaté"}</span>
-              <span className={`font-semibold ${resteAAllouer < 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'}`}>
-                À allouer : {formatMoney(resteAAllouer, currency)}
-              </span>
-            </div>
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
+              {reste >= 0 ? "Reste en caisse" : "Déficit constaté"}
+            </p>
           </CardContent>
         </Card>
 
         {/* 4. Épargne constituée */}
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Épargne Constituée</CardTitle>
-            <div className="p-2 bg-amber-100 dark:bg-amber-950/60 rounded-lg">
-              <PiggyBank className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Épargne Constituée</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-amber-100 dark:bg-amber-950/60 rounded-lg shrink-0">
+              <PiggyBank className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600 dark:text-amber-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+          <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+            <div suppressHydrationWarning className="text-base sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100 truncate">
               {formatMoney(epargneConstituee > 0 ? epargneConstituee : epargneMois, currency)}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              +{formatMoney(epargneMois, currency)} ce mois • {savingsGoals.length} objectif(s)
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
+              +{formatMoney(epargneMois, currency)} ce mois
             </p>
           </CardContent>
         </Card>
 
         {/* 5. Dettes à rembourser */}
         <Link href="/debts" className="block group">
-          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 group-hover:shadow-md transition-shadow h-full">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Dettes à Rembourser</CardTitle>
-              <div className="p-2 bg-rose-100 dark:bg-rose-950/60 rounded-lg">
-                <HandCoins className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+          <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden group-hover:shadow-md transition-shadow h-full">
+            <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Dettes à Payer</CardTitle>
+              <div className="p-1.5 sm:p-2 bg-rose-100 dark:bg-rose-950/60 rounded-lg shrink-0">
+                <HandCoins className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-600 dark:text-rose-400" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div suppressHydrationWarning className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+            <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+              <div suppressHydrationWarning className="text-base sm:text-2xl font-extrabold text-rose-600 dark:text-rose-400 truncate">
                 {formatMoney(dettesARembourser, currency)}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                {debts.filter((d) => d.type === "payable" && d.remainingAmount > 0).length} personne(s) à rembourser &rarr;
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
+                {debts.filter((d) => d.type === "payable" && d.remainingAmount > 0).length} à solder &rarr;
               </p>
             </CardContent>
           </Card>
@@ -408,19 +412,19 @@ export default function DashboardPage() {
 
         {/* 6. Dettes à récupérer */}
         <Link href="/debts" className="block group">
-          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 group-hover:shadow-md transition-shadow h-full">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Dettes à Récupérer</CardTitle>
-              <div className="p-2 bg-teal-100 dark:bg-teal-950/60 rounded-lg">
-                <ArrowDownLeft className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+          <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden group-hover:shadow-md transition-shadow h-full">
+            <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Créances</CardTitle>
+              <div className="p-1.5 sm:p-2 bg-teal-100 dark:bg-teal-950/60 rounded-lg shrink-0">
+                <ArrowDownLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-teal-600 dark:text-teal-400" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div suppressHydrationWarning className="text-2xl font-bold text-teal-700 dark:text-teal-300">
+            <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+              <div suppressHydrationWarning className="text-base sm:text-2xl font-extrabold text-teal-700 dark:text-teal-300 truncate">
                 {formatMoney(dettesARecuperer, currency)}
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                {debts.filter((d) => d.type === "receivable" && d.remainingAmount > 0).length} personne(s) qui me doivent &rarr;
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
+                {debts.filter((d) => d.type === "receivable" && d.remainingAmount > 0).length} à récupérer &rarr;
               </p>
             </CardContent>
           </Card>
