@@ -401,12 +401,12 @@ function CategoryRowInput({
         </div>
         
         {/* Champ de saisie ergonomique et actions */}
-        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
           <BudgetAmountInput
             value={category.amount}
             onChange={(val) => onUpdateAmount(category.id, val)}
             currency={currency}
-            className="w-36 sm:w-40 md:w-44"
+            className="flex-1 sm:w-40 md:w-44"
             inputClassName="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 h-9 text-sm md:text-base text-slate-900 dark:text-slate-100"
           />
 
@@ -415,7 +415,7 @@ function CategoryRowInput({
             variant="ghost"
             size="icon"
             onClick={() => setShowQuickPills(!showQuickPills)}
-            className={`h-8 w-8 rounded-lg text-slate-400 hover:text-[#1E3A5F] dark:hover:text-sky-300 hover:bg-blue-50 dark:hover:bg-slate-800 ${showQuickPills ? "bg-blue-50 dark:bg-slate-800 text-[#1E3A5F] dark:text-sky-300" : ""}`}
+            className={`h-9 w-9 rounded-lg text-slate-400 hover:text-[#1E3A5F] dark:hover:text-sky-300 hover:bg-blue-50 dark:hover:bg-slate-800 ${showQuickPills ? "bg-blue-50 dark:bg-slate-800 text-[#1E3A5F] dark:text-sky-300" : ""}`}
             title="Ajustements rapides (+ / -)"
           >
             <Zap className="h-4 w-4" />
@@ -425,7 +425,7 @@ function CategoryRowInput({
             variant="ghost" 
             size="icon" 
             onClick={() => onRemove(category.id)}
-            className="text-slate-400 hover:text-red-600 dark:hover:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 h-8 w-8 rounded-lg"
+            className="text-slate-400 hover:text-red-600 dark:hover:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 h-9 w-9 rounded-lg"
             title="Supprimer cette catégorie"
           >
             <Trash2 className="h-4 w-4" />
@@ -477,7 +477,7 @@ function CategoryRowInput({
           <button
             type="button"
             onClick={handleResetToZero}
-            className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-500 font-medium transition ml-auto flex items-center gap-1"
+            className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-rose-950/40 hover:text-red-600 dark:hover:text-rose-400 text-slate-500 font-medium transition ml-auto flex items-center gap-1"
             title="Remettre à 0"
           >
             <RotateCcw className="h-3 w-3" />
@@ -487,9 +487,9 @@ function CategoryRowInput({
       )}
       
       {/* Jauge et indicateur de dépenses */}
-      <div className="flex items-center justify-between text-xs text-slate-500 mt-0.5">
-        <span>Dépensé : <strong className="text-slate-700">{formatMoney(spent, currency)}</strong></span>
-        <span className={progress.isOverBudget ? "text-red-600 font-semibold" : "text-emerald-600 font-semibold"}>
+      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+        <span>Dépensé : <strong className="text-slate-700 dark:text-slate-200">{formatMoney(spent, currency)}</strong></span>
+        <span className={progress.isOverBudget ? "text-red-600 dark:text-rose-400 font-semibold" : "text-emerald-600 dark:text-emerald-400 font-semibold"}>
           {progress.isOverBudget 
             ? `Dépassement : ${formatMoney(Math.abs(progress.remaining), currency)}`
             : `Disponible : ${formatMoney(progress.remaining, currency)}`
@@ -748,13 +748,13 @@ export default function BudgetPage() {
     <div className="flex flex-col gap-8 pb-12">
       {/* Dialogue de confirmation de duplication */}
       <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
-        <DialogContent className="sm:max-w-md bg-white">
+        <DialogContent className="sm:max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-900">
-              <Copy className="h-5 w-5 text-[#1E3A5F]" />
+            <DialogTitle className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+              <Copy className="h-5 w-5 text-[#1E3A5F] dark:text-sky-400" />
               Dupliquer le budget de {formattedPrevMonth} ?
             </DialogTitle>
-            <DialogDescription className="text-slate-600 pt-2 text-sm leading-relaxed">
+            <DialogDescription className="text-slate-600 dark:text-slate-300 pt-2 text-sm leading-relaxed">
               Vous avez déjà configuré des montants pour <strong>{capitalizedActiveMonth}</strong>.
               <br /><br />
               Cette action va reconduire les enveloppes et le salaire du mois précédent en écrasant les plafonds actuels. Voulez-vous continuer ?
@@ -804,23 +804,23 @@ export default function BudgetPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button 
             variant="outline" 
             onClick={handleDuplicateClick} 
             disabled={isDuplicating}
-            className="border-slate-300 text-slate-700 hover:bg-slate-50 shadow-xs gap-1.5"
+            className="flex-1 sm:flex-none border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xs gap-1.5 h-10 text-xs sm:text-sm font-semibold"
             title="Copier les enveloppes et le salaire du mois précédent"
           >
             {isDuplicating ? (
               <RefreshCw className="h-4 w-4 animate-spin text-slate-600" />
             ) : (
-              <Copy className="h-4 w-4 text-[#1E3A5F]" />
+              <Copy className="h-4 w-4 text-[#1E3A5F] dark:text-sky-400" />
             )}
-            <span>Dupliquer {formattedPrevMonth}</span>
+            <span className="truncate">Dupliquer {formattedPrevMonth}</span>
           </Button>
 
-          <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5">
+          <Button onClick={handleSave} className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs gap-1.5 h-10 text-xs sm:text-sm font-bold">
             <Save className="h-4 w-4" />
             <span>Enregistrer</span>
           </Button>
@@ -1001,38 +1001,38 @@ export default function BudgetPage() {
           </Card>
 
           {/* Solde réel restant & Répartition Card */}
-          <Card className={`border-none shadow-sm transition-colors ${resteReel < 0 ? "bg-red-50 border border-red-200" : resteReel === 0 ? "bg-emerald-50 border border-emerald-200" : "bg-white"}`}>
+          <Card className={`border-none shadow-sm transition-colors ${resteReel < 0 ? "bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60" : resteReel === 0 ? "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60" : "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800"}`}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-slate-600">Solde réel restant</CardTitle>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-300">Solde réel restant</CardTitle>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                   Solde disponible réel
                 </span>
               </div>
             </CardHeader>
             <CardContent>
-              <div suppressHydrationWarning className={`text-3xl font-extrabold ${resteReel < 0 ? "text-red-600" : resteReel === 0 ? "text-emerald-600" : "text-slate-800"}`}>
+              <div suppressHydrationWarning className={`text-2xl sm:text-3xl font-extrabold ${resteReel < 0 ? "text-red-600 dark:text-rose-400" : resteReel === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-800 dark:text-slate-100"}`}>
                 {formatMoney(resteReel, currency)}
               </div>
 
-              <div className="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5 text-xs text-slate-600">
+              <div className="mt-3 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
                 <div className="flex items-center justify-between">
                   <span>Dépenses + Épargne déjà sorties :</span>
-                  <strong className="text-slate-800">{formatMoney(totalRealOutflows, currency)}</strong>
+                  <strong className="text-slate-800 dark:text-slate-100">{formatMoney(totalRealOutflows, currency)}</strong>
                 </div>
                 {epargne > 0 && (
-                  <div className="flex items-center justify-between text-emerald-700 text-[11px]">
+                  <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 text-[11px]">
                     <span>• dont Épargne comptabilisée auto :</span>
                     <strong>{formatMoney(epargne, currency)}</strong>
                   </div>
                 )}
-                <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 text-[11px]">
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 dark:border-slate-700 text-[11px]">
                   <span>Réservé dans vos enveloppes restantes :</span>
-                  <strong className="text-amber-700">{formatMoney(reservedInEnvelopes, currency)}</strong>
+                  <strong className="text-amber-700 dark:text-amber-400">{formatMoney(reservedInEnvelopes, currency)}</strong>
                 </div>
                 <div className="flex items-center justify-between text-[11px]">
                   <span>Marge libre non affectée (à allouer) :</span>
-                  <strong className={remaining < 0 ? "text-red-600" : "text-[#1E3A5F]"}>
+                  <strong className={remaining < 0 ? "text-red-600 dark:text-rose-400" : "text-[#1E3A5F] dark:text-sky-300"}>
                     {formatMoney(remaining, currency)}
                   </strong>
                 </div>
@@ -1194,12 +1194,12 @@ export default function BudgetPage() {
         </div>
 
         {/* Répartition par Catégorie (Pilier C) */}
-        <Card className="lg:col-span-2 border-none shadow-sm bg-white">
+        <Card className="lg:col-span-2 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <CardTitle className="text-lg">Enveloppes Budgétaires (Réalité Africaine)</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-lg text-slate-900 dark:text-slate-100">Enveloppes Budgétaires (Réalité Africaine)</CardTitle>
+                <CardDescription className="text-slate-500 dark:text-slate-400">
                   Alimentation, Loyer, Transport, Santé, Scolarité, Électricité & eau, Solidarité, Dîmes...
                 </CardDescription>
               </div>

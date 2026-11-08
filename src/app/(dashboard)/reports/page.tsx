@@ -280,100 +280,100 @@ export default function ReportsPage() {
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
           <Button
             onClick={handleDownloadPDF}
-            className="bg-[#1E3A5F] hover:bg-[#162d4b] text-white shadow-sm flex-1 sm:flex-initial"
+            className="bg-[#1E3A5F] hover:bg-[#162d4b] text-white shadow-sm flex-1 sm:flex-initial text-xs sm:text-sm h-10 font-bold"
           >
-            <FileText className="h-4 w-4 mr-2" />
-            Télécharger Rapport PDF
+            <FileText className="h-4 w-4 mr-1.5 sm:mr-2" />
+            <span>Rapport PDF</span>
           </Button>
           <Button
             onClick={handleDownloadCSV}
             variant="outline"
-            className="border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-800 flex-1 sm:flex-initial"
+            className="border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-800 flex-1 sm:flex-initial text-xs sm:text-sm h-10 font-bold"
           >
-            <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
-            Exporter Excel (CSV)
+            <FileSpreadsheet className="h-4 w-4 mr-1.5 sm:mr-2 text-emerald-600" />
+            <span>Export CSV</span>
           </Button>
         </div>
       </div>
 
-      {/* Cartes KPI Ratios Financiers */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Cartes KPI Ratios Financiers (2x2 sur mobile) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Taux de Dépense</CardTitle>
-            <div className="p-2 bg-red-100 dark:bg-red-950/50 rounded-lg">
-              <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Taux Dépense</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-red-100 dark:bg-red-950/50 rounded-lg shrink-0">
+              <TrendingDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-600 dark:text-red-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+          <CardContent className="p-3 sm:p-5 pt-0 sm:pt-0">
+            <div suppressHydrationWarning className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100">
               {Math.round(tauxDepense)}%
             </div>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-3 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-2 rounded-full overflow-hidden">
               <div 
                 className={`h-full rounded-full ${tauxDepense > 85 ? 'bg-red-500' : 'bg-emerald-500'}`} 
                 style={{ width: `${Math.min(tauxDepense, 100)}%` }} 
               />
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-              {formatMoney(totalExpenses, currency)} engagés {monthlySavings > 0 ? `(dont ${formatMoney(monthlySavings, currency)} d'épargne)` : "sur votre salaire"}
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+              {formatMoney(totalExpenses, currency)} engagés
             </p>
           </CardContent>
         </Card>
 
         <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Reste Disponible</CardTitle>
-            <div className="p-2 bg-sky-100 dark:bg-sky-950/50 rounded-lg">
-              <Wallet className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Disponible</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-sky-100 dark:bg-sky-950/50 rounded-lg shrink-0">
+              <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-600 dark:text-sky-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className={`text-2xl font-bold ${resteAVivre < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
+          <CardContent className="p-3 sm:p-5 pt-0 sm:pt-0">
+            <div suppressHydrationWarning className={`text-lg sm:text-2xl font-extrabold truncate ${resteAVivre < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'}`}>
               {formatMoney(resteAVivre, currency)}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-              {resteAVivre >= 0 ? "Non encore dépensé ce mois" : "Dépassement de budget"}
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+              {resteAVivre >= 0 ? "Non encore dépensé" : "Dépassement"}
             </p>
           </CardContent>
         </Card>
 
         <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Capacité d'Épargne</CardTitle>
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-950/50 rounded-lg">
-              <PiggyBank className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Taux Épargne</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-emerald-100 dark:bg-emerald-950/50 rounded-lg shrink-0">
+              <PiggyBank className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 dark:text-emerald-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+          <CardContent className="p-3 sm:p-5 pt-0 sm:pt-0">
+            <div suppressHydrationWarning className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100">
               {Math.round(tauxEpargne)}%
             </div>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-3 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-2 rounded-full overflow-hidden">
               <div 
                 className="h-full rounded-full bg-emerald-500" 
                 style={{ width: `${Math.min(tauxEpargne, 100)}%` }} 
               />
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-              Total cumulé : {formatMoney(monthlySavings, currency)}
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+              Cumul : {formatMoney(monthlySavings, currency)}
             </p>
           </CardContent>
         </Card>
 
         <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">Catégories Actives</CardTitle>
-            <div className="p-2 bg-indigo-100 dark:bg-indigo-950/50 rounded-lg">
-              <PieIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Postes Actifs</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-indigo-100 dark:bg-indigo-950/50 rounded-lg shrink-0">
+              <PieIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-600 dark:text-indigo-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-              {categoryStats.length} <span className="text-sm font-normal text-slate-400">/ {categories.length}</span>
+          <CardContent className="p-3 sm:p-5 pt-0 sm:pt-0">
+            <div suppressHydrationWarning className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100">
+              {categoryStats.length} <span className="text-xs sm:text-sm font-normal text-slate-400">/ {categories.length}</span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-              Postes ayant enregistré des dépenses
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+              Postes ayant des dépenses
             </p>
           </CardContent>
         </Card>

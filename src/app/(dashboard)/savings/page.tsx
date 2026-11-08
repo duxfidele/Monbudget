@@ -404,56 +404,56 @@ export default function SavingsPage() {
           </p>
         </div>
 
-        <Button onClick={() => setIsNewGoalOpen(true)} className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shadow-xs gap-1.5">
+        <Button onClick={() => setIsNewGoalOpen(true)} className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shadow-xs gap-1.5 w-full sm:w-auto h-10 text-xs sm:text-sm font-bold">
           <Plus className="h-4 w-4" />
           <span>Créer un objectif</span>
         </Button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-none shadow-sm bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Total Épargné</CardTitle>
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <PiggyBank className="h-4 w-4 text-emerald-600" />
+      {/* KPI Cards (2x2 sur mobile) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Total Épargné</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg shrink-0">
+              <PiggyBank className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 dark:text-emerald-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
+          <CardContent className="p-3 sm:p-5 pt-0 sm:pt-0">
+            <div suppressHydrationWarning className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100 truncate">
               {formatMoney(totalSaved, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Cumulé sur tous vos projets</p>
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">Cumulé sur vos projets</p>
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Objectif Global</CardTitle>
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Target className="h-4 w-4 text-blue-600" />
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Objectif Global</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-blue-100 dark:bg-blue-950/60 rounded-lg shrink-0">
+              <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600 dark:text-sky-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
+          <CardContent className="p-3 sm:p-5 pt-0 sm:pt-0">
+            <div suppressHydrationWarning className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100 truncate">
               {formatMoney(totalTarget, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">Somme des cibles visées</p>
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">Somme des cibles visées</p>
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Progression Globale</CardTitle>
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <TrendingUp className="h-4 w-4 text-purple-600" />
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Progression</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-purple-100 dark:bg-purple-950/60 rounded-lg shrink-0">
+              <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600 dark:text-purple-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
+          <CardContent className="p-3 sm:p-5 pt-0 sm:pt-0">
+            <div suppressHydrationWarning className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100">
               {Math.round(globalProgress)}%
             </div>
-            <div className="w-full bg-slate-100 h-1.5 mt-3 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 mt-2 rounded-full overflow-hidden">
               <div 
                 className="bg-purple-600 h-full rounded-full transition-all duration-500" 
                 style={{ width: `${Math.min(globalProgress, 100)}%` }} 
@@ -462,19 +462,19 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Objectifs Complétés</CardTitle>
-            <div className="p-2 bg-amber-100 rounded-lg">
-              <CheckCircle2 className="h-4 w-4 text-amber-600" />
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Complétés</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-amber-100 dark:bg-amber-950/60 rounded-lg shrink-0">
+              <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600 dark:text-amber-400" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div suppressHydrationWarning className="text-2xl font-bold text-slate-800">
-              {completedGoalsCount} <span className="text-sm font-normal text-slate-400">/ {savingsGoals.length}</span>
+          <CardContent className="p-3 sm:p-5 pt-0 sm:pt-0">
+            <div suppressHydrationWarning className="text-lg sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100">
+              {completedGoalsCount} <span className="text-xs sm:text-sm font-normal text-slate-400">/ {savingsGoals.length}</span>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {savingsGoals.length - completedGoalsCount} projet(s) en cours de financement
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
+              {savingsGoals.length - completedGoalsCount} projet(s) en cours
             </p>
           </CardContent>
         </Card>

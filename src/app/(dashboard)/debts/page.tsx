@@ -547,7 +547,7 @@ export default function DebtsPage() {
 
         <Button
           onClick={() => handleOpenAddModal()}
-          className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shadow-xs gap-2"
+          className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white shadow-xs gap-2 w-full sm:w-auto h-10 text-xs sm:text-sm font-bold"
         >
           <Plus className="h-4 w-4" />
           <span>Nouveau dossier</span>
@@ -588,66 +588,64 @@ export default function DebtsPage() {
       )}
 
       {/* Cartes KPI */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="border-none shadow-sm bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <div className="grid gap-2.5 sm:gap-4 grid-cols-1 sm:grid-cols-3">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Dettes à Rembourser (Je dois)
             </CardTitle>
-            <div className="p-2 rounded-lg bg-rose-50 text-rose-600">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400">
               <ArrowUpRight className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-rose-600">
+          <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-extrabold text-rose-600 dark:text-rose-400">
               {formatMoney(totalPayable, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {debts.filter((d) => d.type === "payable" && d.remainingAmount > 0).length} créancier(s)
-              actif(s)
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
+              {debts.filter((d) => d.type === "payable" && d.remainingAmount > 0).length} créancier(s) actif(s)
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Dettes à Récupérer (On me doit)
             </CardTitle>
-            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
               <ArrowDownLeft className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">
+          <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
               {formatMoney(totalReceivable, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {debts.filter((d) => d.type === "receivable" && d.remainingAmount > 0).length}{" "}
-              débiteur(s) actif(s)
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
+              {debts.filter((d) => d.type === "receivable" && d.remainingAmount > 0).length} débiteur(s) actif(s)
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Position Nette (Créances - Dettes)
             </CardTitle>
-            <div className="p-2 rounded-lg bg-blue-50 text-[#1E3A5F]">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-[#1E3A5F] dark:text-sky-300">
               <Scale className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
             <div
-              className={`text-2xl font-bold ${
-                netDebtPosition >= 0 ? "text-slate-900" : "text-rose-600"
+              className={`text-xl sm:text-2xl font-extrabold ${
+                netDebtPosition >= 0 ? "text-slate-900 dark:text-slate-100" : "text-rose-600 dark:text-rose-400"
               }`}
             >
               {netDebtPosition > 0 ? "+" : ""}
               {formatMoney(netDebtPosition, currency)}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
               {alerts.length > 0
                 ? `${alerts.length} échéance(s) proche(s) ou en retard`
                 : "Aucune échéance en retard"}
@@ -691,32 +689,32 @@ export default function DebtsPage() {
       </div>
 
       {/* Onglets de bascule : Dettes à rembourser vs Dettes à récupérer */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-        <Button
-          variant={activeTab === "payable" ? "default" : "outline"}
+      <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+        <button
+          type="button"
           onClick={() => setActiveTab("payable")}
-          className={
+          className={`flex-1 py-2.5 px-2 sm:px-4 rounded-lg font-semibold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 ${
             activeTab === "payable"
-              ? "bg-rose-600 hover:bg-rose-700 text-white gap-2"
-              : "text-slate-700 border-slate-200 gap-2"
-          }
+              ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-sm"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+          }`}
         >
-          <ArrowUpRight className="h-4 w-4" />
-          <span>Personnes auxquelles je dois ({debts.filter((d) => d.type === "payable").length})</span>
-        </Button>
+          <ArrowUpRight className="h-4 w-4 shrink-0" />
+          <span className="truncate">Je dois ({debts.filter((d) => d.type === "payable").length})</span>
+        </button>
 
-        <Button
-          variant={activeTab === "receivable" ? "default" : "outline"}
+        <button
+          type="button"
           onClick={() => setActiveTab("receivable")}
-          className={
+          className={`flex-1 py-2.5 px-2 sm:px-4 rounded-lg font-semibold text-xs sm:text-sm transition flex items-center justify-center gap-1.5 ${
             activeTab === "receivable"
-              ? "bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-              : "text-slate-700 border-slate-200 gap-2"
-          }
+              ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm"
+              : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+          }`}
         >
-          <ArrowDownLeft className="h-4 w-4" />
-          <span>Personnes qui me doivent ({debts.filter((d) => d.type === "receivable").length})</span>
-        </Button>
+          <ArrowDownLeft className="h-4 w-4 shrink-0" />
+          <span className="truncate">On me doit ({debts.filter((d) => d.type === "receivable").length})</span>
+        </button>
       </div>
 
       {/* Liste des dossiers */}

@@ -419,40 +419,40 @@ export default function TransactionsPage() {
       </div>
 
       {/* Cartes KPI Concordantes avec le Tableau de bord */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
         <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Revenus du Mois
             </CardTitle>
-            <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
               <TrendingUp className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+          <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
               +{formatMoney(income, currency)}
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-0.5 sm:mt-1 truncate">
               Salaire ({formatMoney(income - totalIncomes, currency)}) + Extras (+{formatMoney(totalIncomes, currency)})
             </p>
           </CardContent>
         </Card>
 
         <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Dépenses Réelles
             </CardTitle>
-            <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400">
               <TrendingDown className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+          <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">
               -{formatMoney(totalExpenses, currency)}
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-0.5 sm:mt-1 truncate">
               {epargne > 0
                 ? `dont ${formatMoney(epargne, currency)} d'épargne mise de côté`
                 : "Consommées sur vos enveloppes de dépenses"}
@@ -461,19 +461,19 @@ export default function TransactionsPage() {
         </Card>
 
         <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Reste à Vivre Disponible
             </CardTitle>
-            <div className={`p-2 rounded-lg ${reste >= 0 ? "bg-blue-50 dark:bg-blue-950/50 text-[#1E3A5F] dark:text-sky-300" : "bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400"}`}>
+            <div className={`p-1.5 sm:p-2 rounded-lg ${reste >= 0 ? "bg-blue-50 dark:bg-blue-950/50 text-[#1E3A5F] dark:text-sky-300" : "bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400"}`}>
               <Scale className="h-4 w-4" />
             </div>
           </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${reste >= 0 ? "text-[#1E3A5F] dark:text-sky-300" : "text-red-600 dark:text-red-400"}`}>
+          <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
+            <div className={`text-xl sm:text-2xl font-extrabold ${reste >= 0 ? "text-[#1E3A5F] dark:text-sky-300" : "text-red-600 dark:text-red-400"}`}>
               {reste >= 0 ? "+" : ""}{formatMoney(reste, currency)}
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-0.5 sm:mt-1 truncate">
               Soit {formatMoney(dailyInfo.dailyBudget, currency)}/j conseillés jusqu'à la paie
             </p>
           </CardContent>

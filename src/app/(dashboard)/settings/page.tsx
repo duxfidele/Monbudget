@@ -376,14 +376,14 @@ export default function SettingsPage() {
             <span>Sécurité & Accès</span>
           </Button>
 
-          <div className="hidden md:block pt-4 border-t border-slate-200 dark:border-slate-800 mt-4">
+          <div className="pt-2 md:pt-4 border-t border-slate-200 dark:border-slate-800 mt-2 md:mt-4">
             <Button 
               variant="ghost" 
               onClick={handleLogout} 
-              className="w-full justify-start text-red-600 dark:text-rose-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-rose-950/30 text-sm font-medium"
+              className="w-full justify-start text-red-600 dark:text-rose-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-rose-950/30 text-xs sm:text-sm font-semibold h-10"
             >
               <LogOut className="mr-2 h-4 w-4" />
-              Déconnexion
+              <span>Déconnexion</span>
             </Button>
           </div>
         </div>

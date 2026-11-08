@@ -220,8 +220,8 @@ export default function AdvisorPage() {
       </div>
 
       {/* Bandeau Principal : Score + Réalité Temporelle (Jour du mois vs Solde restant) */}
-      <Card className="border-none shadow-md bg-gradient-to-br from-[#1E3A5F] via-slate-900 to-indigo-950 text-white overflow-hidden">
-        <CardContent className="p-6">
+      <Card className="border-none shadow-md bg-gradient-to-br from-[#1E3A5F] via-slate-900 to-indigo-950 text-white overflow-hidden rounded-2xl">
+        <CardContent className="p-4 sm:p-6">
           <div className="grid gap-6 lg:grid-cols-12 items-center">
             {/* Score & Synthèse */}
             <div className="lg:col-span-7 space-y-4">
