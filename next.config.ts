@@ -33,6 +33,30 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["100.115.92.26", "localhost", "127.0.0.1"],
+  async redirects() {
+    return [
+      {
+        source: "/conditions",
+        destination: "/terms",
+        permanent: true,
+      },
+      {
+        source: "/conditions-generales",
+        destination: "/terms",
+        permanent: true,
+      },
+      {
+        source: "/confidentialite",
+        destination: "/privacy",
+        permanent: true,
+      },
+      {
+        source: "/politique-de-confidentialite",
+        destination: "/privacy",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

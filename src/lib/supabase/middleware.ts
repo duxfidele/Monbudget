@@ -15,6 +15,11 @@ export async function updateSession(request: NextRequest) {
 
   const isHomePage = pathname === '/'
   const isSupportPage = pathname.startsWith('/support')
+  const isLegalPage =
+    pathname.startsWith('/terms') ||
+    pathname.startsWith('/privacy') ||
+    pathname.startsWith('/conditions') ||
+    pathname.startsWith('/confidentialite')
   const isApiRoute = pathname.startsWith('/api/')
   const isPwaOrStatic =
     pathname === '/manifest.json' ||
@@ -29,7 +34,7 @@ export async function updateSession(request: NextRequest) {
                       pathname.startsWith('/reset-password') ||
                       pathname.startsWith('/auth/confirm') ||
                       pathname.startsWith('/auth/callback')
-  const isPublicRoute = isHomePage || isSupportPage || isAuthRoute || isPwaOrStatic || isApiRoute
+  const isPublicRoute = isHomePage || isSupportPage || isLegalPage || isAuthRoute || isPwaOrStatic || isApiRoute
 
   const allCookies = request.cookies.getAll()
   const hasAuthCookie = allCookies.some(c => c.name.startsWith('sb-') && c.name.includes('-auth-token'))

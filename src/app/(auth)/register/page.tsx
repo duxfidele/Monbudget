@@ -232,6 +232,18 @@ function RegisterForm() {
           </div>
 
           <GoogleAuthButton mode="signup" />
+
+          <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 mt-4 leading-relaxed">
+            En créant un compte, vous acceptez nos{" "}
+            <Link href="/terms" target="_blank" className="text-emerald-600 dark:text-emerald-400 underline hover:text-emerald-500">
+              Conditions d&apos;utilisation
+            </Link>{" "}
+            et notre{" "}
+            <Link href="/privacy" target="_blank" className="text-emerald-600 dark:text-emerald-400 underline hover:text-emerald-500">
+              Politique de confidentialité
+            </Link>
+            .
+          </p>
         </form>
       </CardContent>
       <CardFooter className="justify-center border-t border-slate-100 dark:border-slate-800 p-4">

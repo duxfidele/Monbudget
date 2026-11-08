@@ -162,6 +162,18 @@ function LoginForm() {
           </div>
 
           <GoogleAuthButton mode="signin" />
+
+          <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 mt-4 leading-relaxed">
+            En vous connectant, vous acceptez nos{" "}
+            <Link href="/terms" target="_blank" className="text-blue-600 dark:text-sky-400 underline hover:text-sky-300">
+              Conditions d&apos;utilisation
+            </Link>{" "}
+            et notre{" "}
+            <Link href="/privacy" target="_blank" className="text-blue-600 dark:text-sky-400 underline hover:text-sky-300">
+              Politique de confidentialité
+            </Link>
+            .
+          </p>
         </form>
       </CardContent>
       <CardFooter className="justify-center border-t border-slate-100 dark:border-slate-800 p-4">

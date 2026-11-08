@@ -113,16 +113,13 @@ export function LandingFooter() {
                 <Link href="/register" className="hover:text-white transition-colors">Créer un compte</Link>
               </li>
               <li>
-                <a href="#tarifs" className="hover:text-white transition-colors">Conditions d&apos;utilisation</a>
+                <Link href="/terms" className="hover:text-white transition-colors">Conditions d&apos;utilisation (CGU)</Link>
               </li>
               <li>
-                <a href="#faq" className="hover:text-white transition-colors">Politique de confidentialité</a>
+                <Link href="/privacy" className="hover:text-white transition-colors">Politique de confidentialité</Link>
               </li>
               <li>
-                <a href="#faq" className="hover:text-white transition-colors">Audit de sécurité SaaS</a>
-              </li>
-              <li>
-                <Link href="/support" className="hover:text-white transition-colors">Centre d&apos;assistance</Link>
+                <Link href="/support" className="hover:text-white transition-colors">Centre d&apos;assistance & Contact</Link>
               </li>
             </ul>
           </div>
@@ -131,7 +128,7 @@ export function LandingFooter() {
         {/* Bottom Bar */}
         <div className="mt-14 pt-8 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <p>
-            &copy; {currentYear} MonBudget. Tous droits réservés.
+            &copy; {currentYear} MonBudget (monbudgetpro.com). Tous droits réservés.
           </p>
           <p className="flex items-center gap-1.5">
             <span>Conçu pour votre liberté financière</span>
