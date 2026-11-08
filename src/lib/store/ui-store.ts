@@ -11,6 +11,8 @@ import {
   getSpentByCategory,
   AFRICAN_EXPENSE_CATEGORIES,
 } from "@/lib/utils/budget-calc";
+import { BillingCycle, SubscriptionPlanId } from "@/lib/moneriz-plans";
+import { isAdmin } from "@/lib/utils/admin";
 
 export type IncomeSourceEntry = {
   id: string;
@@ -117,6 +119,9 @@ export interface LocalCache {
   savingsGoals: SavingsGoal[];
   debts?: DebtItem[];
   pendingSyncQueue?: PendingSyncAction[];
+  subscriptionPlan?: SubscriptionPlanId;
+  billingCycle?: BillingCycle | "none";
+  subscriptionExpiresAt?: string | null;
 }
 
 interface UIState {
@@ -186,6 +191,15 @@ interface UIState {
   removeDebt: (id: string) => Promise<void>;
   addDebtPayment: (debtId: string, amount: number, notes?: string, date?: string) => Promise<void>;
   removeDebtPayment: (paymentId: string, debtId: string) => Promise<void>;
+
+  // Abonnement SaaS (Moneriz)
+  subscriptionPlan: SubscriptionPlanId;
+  billingCycle: BillingCycle | "none";
+  subscriptionExpiresAt: string | null;
+  refreshSubscription: (orderId?: string | null, paymentId?: string | null) => Promise<{
+    planId: SubscriptionPlanId;
+    orderStatus: string | null;
+  }>;
 
   // Preferences & Init
   alertThreshold: number;
@@ -333,6 +347,9 @@ export const useUIStore = create<UIState>((set, get) => ({
       currency: "FCFA",
       payDay: 28,
       notifications: defaultNotifications,
+      subscriptionPlan: "free",
+      billingCycle: "none",
+      subscriptionExpiresAt: null,
     });
   },
 
@@ -402,6 +419,43 @@ export const useUIStore = create<UIState>((set, get) => ({
   currency: (initialCache?.currency && initialCache.currency !== "EUR" && initialCache.currency !== "€") ? initialCache.currency : "FCFA",
   payDay: initialCache?.payDay ?? 28,
   notifications: initialCache?.notifications ? { ...defaultNotifications, ...initialCache.notifications } : defaultNotifications,
+  subscriptionPlan: initialCache?.subscriptionPlan ?? "free",
+  billingCycle: initialCache?.billingCycle ?? "none",
+  subscriptionExpiresAt: initialCache?.subscriptionExpiresAt ?? null,
+  refreshSubscription: async (orderId, paymentId) => {
+    try {
+      const qs = new URLSearchParams();
+      if (orderId) qs.set("orderId", orderId);
+      if (paymentId) qs.set("paymentId", paymentId);
+      const res = await fetch(`/api/checkout/status?${qs.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const sub = data?.subscription;
+        if (sub && sub.planId) {
+          set({
+            subscriptionPlan: sub.planId,
+            billingCycle: sub.billingCycle || "none",
+            subscriptionExpiresAt: sub.currentPeriodEnd || null,
+          });
+          const cache = loadLocalCache();
+          if (cache) {
+            cache.subscriptionPlan = sub.planId;
+            cache.billingCycle = sub.billingCycle || "none";
+            cache.subscriptionExpiresAt = sub.currentPeriodEnd || null;
+            saveLocalCache(cache);
+          }
+          return {
+            planId: sub.planId as SubscriptionPlanId,
+            orderStatus: data?.order?.status || null,
+          };
+        }
+      }
+    } catch {}
+    return { planId: get().subscriptionPlan, orderStatus: null };
+  },
   isLoading: false,
   budget_id: null,
   baseSalary: initialMonthData?.baseSalary || 0,
@@ -573,7 +627,11 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (!user) return;
 
       activeUserId = user.id;
-      set({ userId: user.id });
+      if (isAdmin(user.email) && get().subscriptionPlan === "free") {
+        set({ userId: user.id, subscriptionPlan: "business", billingCycle: "yearly" });
+      } else {
+        set({ userId: user.id });
+      }
 
       // Clean up legacy non-partitioned cache & migrate to user partition if needed
       if (typeof window !== "undefined") {
@@ -1034,6 +1092,11 @@ export const useUIStore = create<UIState>((set, get) => ({
       } catch {
         // La table debts peut ne pas encore être créée sur Supabase ; on garde les dettes locales
       }
+
+      // 8. Abonnement SaaS Moneriz (lecture serveur)
+      try {
+        await get().refreshSubscription();
+      } catch {}
     } catch (e) {
       console.warn("Notice: Offline or local mode active", e);
     }

@@ -23,7 +23,9 @@ import {
   Download,
   RefreshCw,
   FileJson,
-  Database
+  Database,
+  CreditCard,
+  Crown
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
@@ -33,8 +35,10 @@ import { useUIStore } from "@/lib/store/ui-store";
 import { InstallButton } from "@/components/pwa/install-button";
 import { buildFullAccountExport, downloadJsonFile } from "@/lib/utils/account-export";
 import { getUserStorageKey } from "@/lib/utils/security";
+import { SubscriptionPlansWidget } from "@/components/payments/subscription-plans-widget";
+import { MONBUDGET_PLANS } from "@/lib/moneriz-plans";
 
-type TabType = "profile" | "appearance" | "notifications" | "security";
+type TabType = "profile" | "subscription" | "appearance" | "notifications" | "security";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>("profile");
@@ -44,6 +48,29 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab") as TabType | null;
+      if (
+        tabParam &&
+        ["profile", "subscription", "appearance", "notifications", "security"].includes(tabParam)
+      ) {
+        setActiveTab(tabParam);
+      }
+      const orderId = params.get("orderId");
+      const checkoutReturn = params.get("checkout");
+      if (orderId && checkoutReturn === "return") {
+        // Ne jamais activer sur le seul paramètre URL : interroger l'état serveur
+        refreshSubscription(orderId).then((res) => {
+          if (res.orderStatus === "paid") {
+            toast.success("Paiement confirmé par le serveur ! Votre abonnement est actif.");
+          } else {
+            toast.info("Paiement en cours de confirmation serveur...");
+          }
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Profile data
@@ -70,7 +97,11 @@ export default function SettingsPage() {
     incomeEntries,
     savingsGoals,
     debts,
-    activeMonth
+    activeMonth,
+    subscriptionPlan,
+    billingCycle,
+    subscriptionExpiresAt,
+    refreshSubscription,
   } = useUIStore();
 
   const [localAlert, setLocalAlert] = useState(80);
@@ -338,6 +369,19 @@ export default function SettingsPage() {
           </Button>
 
           <Button 
+            variant={activeTab === "subscription" ? "secondary" : "ghost"} 
+            onClick={() => setActiveTab("subscription")}
+            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
+              activeTab === "subscription" 
+                ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+            }`}
+          >
+            <CreditCard className="mr-2 h-4 w-4 shrink-0" />
+            <span>Mon Abonnement</span>
+          </Button>
+
+          <Button 
             variant={activeTab === "appearance" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("appearance")}
             className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
@@ -508,6 +552,67 @@ export default function SettingsPage() {
                     {isSavingPrefs ? "Enregistrement..." : "Sauvegarder les modifications"}
                   </Button>
                 </CardFooter>
+              </Card>
+            </div>
+          )}
+
+          {/* ================= ONGLET : MON ABONNEMENT (MONERIZ) ================= */}
+          {activeTab === "subscription" && (
+            <div className="space-y-6">
+              <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardHeader>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                        <Crown className="h-5 w-5 text-amber-500" />
+                        Formule d&apos;Abonnement Actuelle
+                      </CardTitle>
+                      <CardDescription className="text-slate-500 dark:text-slate-400">
+                        Gérez votre plan MonBudget et vos paiements sécurisés via Moneriz.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        const res = await refreshSubscription();
+                        toast.success(
+                          `Statut vérifié : Plan ${MONBUDGET_PLANS[res.planId].name}`
+                        );
+                      }}
+                      className="text-xs gap-1.5"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      <span>Actualiser mon statut</span>
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#1E3A5F] text-white dark:bg-sky-500 dark:text-slate-950">
+                          Plan {MONBUDGET_PLANS[subscriptionPlan]?.name || "Gratuit"}
+                        </span>
+                        {billingCycle !== "none" && (
+                          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                            • Cycle {billingCycle === "yearly" ? "Annuel (-2 mois offerts)" : "Mensuel"}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+                        {subscriptionPlan === "free"
+                          ? "Accès aux Entrées et Dépenses uniquement. Passez au plan Particulier (1 000 FCFA/mois) ou Entreprise (2 500 FCFA/mois) pour débloquer Budget, Épargne, Dettes, Rapports et IA."
+                          : subscriptionExpiresAt
+                          ? `Valide jusqu'au ${new Date(subscriptionExpiresAt).toLocaleDateString("fr-FR")}`
+                          : "Abonnement actif"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <SubscriptionPlansWidget />
+                </CardContent>
               </Card>
             </div>
           )}

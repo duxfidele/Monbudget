@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
+import { PlanGate } from "@/components/payments/plan-gate";
 import {
   formatMoney,
   getTotalExpenses,
@@ -186,6 +187,11 @@ export default function AdvisorPage() {
   });
 
   return (
+    <PlanGate
+      feature="advisor"
+      featureTitle="Conseiller Financier IA"
+      featureDescription="Bénéficiez d'un audit intelligent en temps réel de vos habitudes financières, d'un simulateur de trésorerie de fin de mois et d'actions correctrices en 1 clic."
+    >
     <div className="flex flex-col gap-6 pb-12">
       {/* En-tête de la page Conseiller IA */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -632,6 +638,7 @@ export default function AdvisorPage() {
         </Card>
       </div>
     </div>
+    </PlanGate>
   );
 }
 

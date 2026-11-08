@@ -1,23 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, AlertCircle } from "lucide-react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { GoogleAuthButton } from "@/components/auth/google-button";
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const supabase = createClient();
+
+  useEffect(() => {
+    const errorFromUrl = searchParams.get("error");
+    if (errorFromUrl) {
+      setErrorMsg(errorFromUrl);
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,18 +41,28 @@ export default function LoginPage() {
       });
 
       if (error) {
-        const msg =
-          error.message === "Invalid login credentials"
-            ? "Email ou mot de passe incorrect. Si vous n'avez pas encore de compte, cliquez sur « S'inscrire » en bas."
-            : error.message.includes("Email not confirmed")
-            ? "Votre adresse email n'est pas encore confirmée. Vérifiez votre boîte mail."
-            : error.message;
+        let msg = error.message;
+        if (error.message === "Invalid login credentials") {
+          msg = "Email ou mot de passe incorrect. Si vous n'avez pas encore de compte, cliquez sur « S'inscrire » ci-dessous.";
+        } else if (error.message.includes("Email not confirmed")) {
+          msg = "Votre adresse email n'a pas encore été confirmée. Veuillez vérifier votre boîte de réception ou dossier spam.";
+        } else if (error.message.includes("rate limit")) {
+          msg = "Trop de tentatives. Veuillez patienter quelques minutes avant de réessayer.";
+        }
         setErrorMsg(msg);
         toast.error(msg);
         setLoading(false);
       } else {
         toast.success("Connexion réussie ! Ouverture de MonBudget...");
-        window.location.href = "/dashboard";
+        const nextParam = searchParams.get("next");
+        const planParam = searchParams.get("plan");
+        let redirectTarget = "/dashboard";
+        if (nextParam && nextParam.startsWith("/")) {
+          redirectTarget = nextParam;
+        } else if (planParam) {
+          redirectTarget = `/settings?tab=subscription&plan=${encodeURIComponent(planParam)}`;
+        }
+        window.location.href = redirectTarget;
       }
     } catch (err: any) {
       const msg = err?.message || "Erreur réseau lors de la connexion.";
@@ -51,6 +71,10 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  const registerHref = searchParams.toString()
+    ? `/register?${searchParams.toString()}`
+    : "/register";
 
   return (
     <Card className="w-full max-w-md border-none shadow-xl">
@@ -72,14 +96,14 @@ export default function LoginPage() {
         </Link>
         <CardTitle className="text-2xl font-bold text-center">Bon retour !</CardTitle>
         <CardDescription className="text-center">
-          Connectez-vous pour accéder à votre budget.
+          Connectez-vous pour accéder à vos finances et votre budget.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleLogin} method="post" className="space-y-4">
           {errorMsg && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600" />
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60 text-red-700 dark:text-rose-200 text-xs sm:text-sm flex items-start gap-2.5">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-rose-400" />
               <span>{errorMsg}</span>
             </div>
           )}
@@ -89,6 +113,7 @@ export default function LoginPage() {
               id="email"
               type="email"
               placeholder="vous@exemple.com"
+              autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -97,19 +122,31 @@ export default function LoginPage() {
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <Label htmlFor="password">Mot de passe</Label>
-              <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+              <Link href="/forgot-password" className="text-xs text-blue-600 dark:text-sky-400 hover:underline">
                 Mot de passe oublié ?
               </Link>
             </div>
-            <Input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
-          <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
+          <Button type="submit" className="w-full bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white font-semibold h-11" disabled={loading}>
             {loading ? "Connexion en cours..." : "Se connecter"}
           </Button>
 
@@ -127,14 +164,22 @@ export default function LoginPage() {
           <GoogleAuthButton mode="signin" />
         </form>
       </CardContent>
-      <CardFooter className="justify-center border-t p-4">
-        <p className="text-sm text-slate-600">
+      <CardFooter className="justify-center border-t border-slate-100 dark:border-slate-800 p-4">
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           Pas encore de compte ?{" "}
-          <Link href="/register" className="text-blue-600 font-semibold hover:underline">
+          <Link href={registerHref} className="text-blue-600 dark:text-sky-400 font-semibold hover:underline">
             S&apos;inscrire
           </Link>
         </p>
       </CardFooter>
     </Card>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Chargement de la connexion...</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -5,25 +5,48 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-export function GoogleAuthButton({ mode = "signin" }: { mode?: "signin" | "signup" }) {
+interface GoogleAuthButtonProps {
+  mode?: "signin" | "signup";
+  nextTarget?: string;
+}
+
+export function GoogleAuthButton({ mode = "signin", nextTarget }: GoogleAuthButtonProps) {
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
 
   const handleGoogleAuth = async () => {
     setLoading(true);
     try {
+      let resolvedNext = nextTarget;
+      if (!resolvedNext && typeof window !== "undefined") {
+        const urlParams = new URLSearchParams(window.location.search);
+        const nextParam = urlParams.get("next");
+        const planParam = urlParams.get("plan");
+        if (nextParam) {
+          resolvedNext = nextParam;
+        } else if (planParam) {
+          resolvedNext = `/settings?tab=subscription&plan=${encodeURIComponent(planParam)}`;
+        } else {
+          resolvedNext = "/dashboard";
+        }
+      }
+
+      const redirectPath = `/auth/callback?next=${encodeURIComponent(resolvedNext || "/dashboard")}`;
+      const redirectTo = `${window.location.origin}${redirectPath}`;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/confirm?next=/dashboard`,
+          redirectTo,
           queryParams: {
             access_type: "offline",
+            prompt: "select_account",
           },
         },
       });
 
       if (error) {
-        toast.error("Erreur d'authentification Google : " + error.message);
+        toast.error("Erreur de connexion Google : " + error.message);
         setLoading(false);
       }
     } catch (err: any) {
@@ -68,4 +91,3 @@ export function GoogleAuthButton({ mode = "signin" }: { mode?: "signin" | "signu
     </Button>
   );
 }
-

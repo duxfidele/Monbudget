@@ -10,11 +10,17 @@ export async function GET(request: NextRequest) {
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
   const next = searchParams.get('next') || '/dashboard'
+  const errorParam = searchParams.get('error_description') || searchParams.get('error')
+
+  if (errorParam) {
+    const errorUrl = new URL(`/login?error=${encodeURIComponent(errorParam)}`, request.url)
+    return NextResponse.redirect(errorUrl)
+  }
+
+  const supabase = await createClient()
 
   if (token_hash && type) {
-    const supabase = await createClient()
-
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       type,
       token_hash,
     })
@@ -23,24 +29,66 @@ export async function GET(request: NextRequest) {
         const redirectUrl = new URL('/reset-password', request.url)
         return NextResponse.redirect(redirectUrl)
       }
-      // Rediriger de manière sécurisée vers un chemin interne uniquement (protection anti-Open Redirect)
+
+      if (data?.user) {
+        try {
+          const user = data.user
+          const fullName =
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email?.split('@')[0] ||
+            'Membre'
+
+          await supabase.from('profiles').upsert(
+            {
+              id: user.id,
+              full_name: fullName,
+              currency: 'FCFA',
+              alert_threshold_percent: 80,
+              pay_day: 28,
+            },
+            { onConflict: 'id', ignoreDuplicates: true }
+          )
+        } catch {}
+      }
+
       const redirectUrl = getSafeRedirectUrl(next, request.url)
       return NextResponse.redirect(redirectUrl)
     }
   } else {
-    // Si c'est l'ancien format avec 'code'
+    // Si c'est l'échange de code OAuth (Google ou magic link)
     const code = searchParams.get('code')
     if (code) {
-      const supabase = await createClient()
-      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code)
       if (!error) {
+        if (data?.user) {
+          try {
+            const user = data.user
+            const fullName =
+              user.user_metadata?.full_name ||
+              user.user_metadata?.name ||
+              user.email?.split('@')[0] ||
+              'Membre'
+
+            await supabase.from('profiles').upsert(
+              {
+                id: user.id,
+                full_name: fullName,
+                currency: 'FCFA',
+                alert_threshold_percent: 80,
+                pay_day: 28,
+              },
+              { onConflict: 'id', ignoreDuplicates: true }
+            )
+          } catch {}
+        }
         const redirectUrl = getSafeRedirectUrl(next, request.url)
         return NextResponse.redirect(redirectUrl)
       }
     }
   }
 
-  // En cas d'erreur de vérification, on redirige vers le login avec une erreur
-  const errorUrl = new URL('/login?error=Échec de la vérification de l\'email', request.url)
+  // En cas d'erreur de vérification, redirection claire vers /login
+  const errorUrl = new URL('/login?error=' + encodeURIComponent("Échec de la validation du lien ou lien expiré."), request.url)
   return NextResponse.redirect(errorUrl)
 }

@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useUIStore, SavingsGoal } from "@/lib/store/ui-store";
+import { PlanGate } from "@/components/payments/plan-gate";
 import {
   formatMoney,
   getTotalExpenses,
@@ -170,6 +171,11 @@ export default function SavingsPage() {
   };
 
   return (
+    <PlanGate
+      feature="savings"
+      featureTitle="Épargne & Projets"
+      featureDescription="Créez des objectifs d'épargne concrets (Fonds d'urgence, Terrain, Scolarité, Voyage...), suivez chaque versement et synchronisez automatiquement votre épargne avec votre budget."
+    >
     <div className="flex flex-col gap-8 pb-12">
       {/* 1. Modale de Création d'Objectif */}
       <Dialog open={isNewGoalOpen} onOpenChange={setIsNewGoalOpen}>
@@ -680,5 +686,6 @@ export default function SavingsPage() {
         )}
       </div>
     </div>
+    </PlanGate>
   );
 }

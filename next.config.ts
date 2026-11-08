@@ -25,6 +25,10 @@ const securityHeaders = [
     key: "X-DNS-Prefetch-Control",
     value: "on",
   },
+  {
+    key: "Content-Security-Policy",
+    value: "frame-src 'self' https://*.moneriz.com https://moneriz.com https://js.stripe.com https://hooks.stripe.com;",
+  },
 ];
 
 const nextConfig: NextConfig = {

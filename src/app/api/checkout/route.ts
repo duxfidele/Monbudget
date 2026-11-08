@@ -1,0 +1,137 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import {
+  createMonerizCheckoutSession,
+  MonerizApiError,
+} from "@/lib/server/moneriz-checkout";
+import {
+  prepareAuthorizedCheckout,
+  saveCheckoutSession,
+} from "@/lib/server/moneriz-app";
+import { BillingCycle, PaidSubscriptionPlanId } from "@/lib/moneriz-plans";
+
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const body = await request.json().catch(() => ({}));
+
+    // Identification de l'utilisateur authentifié (avec support test E2E en environnement hors production)
+    const effectiveUserId =
+      user?.id ||
+      (process.env.NODE_ENV !== "production" && typeof body?.testUserId === "string"
+        ? body.testUserId
+        : null);
+
+    if (!effectiveUserId) {
+      return NextResponse.json(
+        { error: { code: "UNAUTHORIZED", message: "Veuillez vous connecter pour souscrire à un abonnement." } },
+        { status: 401 }
+      );
+    }
+
+    const orderId = typeof body?.orderId === "string" ? body.orderId : undefined;
+    const planId = body?.planId as PaidSubscriptionPlanId | undefined;
+    const billingCycle: BillingCycle = body?.billingCycle === "yearly" ? "yearly" : "monthly";
+    const preferredMode =
+      body?.integrationMode === "redirect" || body?.integrationMode === "iframe"
+        ? body.integrationMode
+        : undefined;
+
+    const requestOrigin = new URL(request.url).origin;
+
+    const { order, existingSession } = await prepareAuthorizedCheckout({
+      userId: effectiveUserId,
+      orderId,
+      planId,
+      billingCycle,
+      requestOrigin,
+      preferredMode,
+    });
+
+    if (existingSession) {
+      return NextResponse.json({
+        orderId: order.id,
+        reference: order.reference,
+        amount: order.amount,
+        currency: order.currency,
+        id: existingSession.id,
+        integrationMode: existingSession.integrationMode,
+        checkoutUrl: existingSession.checkoutUrl,
+        embedUrl: existingSession.embedUrl,
+      });
+    }
+
+    const {
+      session,
+      updatedIdempotencyKey,
+      updatedSnapshot,
+    } = await createMonerizCheckoutSession(order);
+
+    await saveCheckoutSession(
+      order.id,
+      session,
+      updatedIdempotencyKey,
+      updatedSnapshot
+    );
+
+    return NextResponse.json({
+      orderId: order.id,
+      reference: order.reference,
+      amount: order.amount,
+      currency: order.currency,
+      id: session.id,
+      integrationMode: session.integrationMode,
+      checkoutUrl: session.checkoutUrl,
+      embedUrl: session.embedUrl,
+    });
+  } catch (err: any) {
+    if (err instanceof MonerizApiError) {
+      return NextResponse.json(
+        {
+          error: {
+            code: err.code,
+            message: err.message,
+            requestId: err.requestId,
+          },
+        },
+        { status: err.status }
+      );
+    }
+
+    if (err?.message === "FORBIDDEN_ORDER") {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN_ORDER", message: "Cette commande ne vous appartient pas." } },
+        { status: 403 }
+      );
+    }
+
+    if (err?.message === "ORDER_ALREADY_PAID") {
+      return NextResponse.json(
+        { error: { code: "ORDER_ALREADY_PAID", message: "Cette commande a déjà été réglée." } },
+        { status: 409 }
+      );
+    }
+
+    if (err?.message === "INVALID_PLAN") {
+      return NextResponse.json(
+        { error: { code: "INVALID_PLAN", message: "Formule d'abonnement invalide." } },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Une erreur serveur est survenue lors de la préparation du paiement.",
+        },
+      },
+      { status: 500 }
+    );
+  }
+}
+

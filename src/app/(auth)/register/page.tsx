@@ -1,28 +1,38 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { GoogleAuthButton } from "@/components/auth/google-button";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+
+  useEffect(() => {
+    const errorFromUrl = searchParams.get("error");
+    if (errorFromUrl) {
+      setErrorMsg(errorFromUrl);
+    }
+  }, [searchParams]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,14 +40,14 @@ export default function RegisterPage() {
     setSuccessMsg(null);
 
     if (password !== confirmPassword) {
-      const msg = "Les mots de passe ne correspondent pas.";
+      const msg = "Les deux mots de passe ne correspondent pas.";
       setErrorMsg(msg);
       toast.error(msg);
       return;
     }
 
     if (password.length < 6) {
-      const msg = "Le mot de passe doit contenir au moins 6 caractères.";
+      const msg = "Le mot de passe doit comporter au moins 6 caractères.";
       setErrorMsg(msg);
       toast.error(msg);
       return;
@@ -46,11 +56,22 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
+      const planParam = searchParams.get("plan");
+      const nextParam = searchParams.get("next");
+      let redirectNext = "/dashboard";
+      if (nextParam && nextParam.startsWith("/")) {
+        redirectNext = nextParam;
+      } else if (planParam) {
+        redirectNext = `/settings?tab=subscription&plan=${encodeURIComponent(planParam)}`;
+      }
+
+      const emailRedirectTo = `${window.location.origin}/auth/confirm?next=${encodeURIComponent(redirectNext)}`;
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${location.origin}/auth/confirm?next=/dashboard`,
+          emailRedirectTo,
           data: {
             full_name: name.trim(),
           },
@@ -58,18 +79,35 @@ export default function RegisterPage() {
       });
 
       if (error) {
-        setErrorMsg(error.message);
-        toast.error(error.message);
+        let msg = error.message;
+        if (error.message.includes("User already registered") || error.message.includes("already exists")) {
+          msg = "Cette adresse email est déjà enregistrée. Veuillez vous connecter.";
+        } else if (error.message.includes("Password should be at least")) {
+          msg = "Le mot de passe doit comporter au moins 6 caractères.";
+        }
+        setErrorMsg(msg);
+        toast.error(msg);
+        setLoading(false);
+      } else if (data?.user && data.user.identities && data.user.identities.length === 0) {
+        // Supabase sign-up avec email déjà existant
+        const msg = "Cette adresse email est déjà inscrite. Veuillez vous connecter avec votre mot de passe ou via Google.";
+        setErrorMsg(msg);
+        toast.info(msg);
         setLoading(false);
       } else if (data?.session) {
         toast.success("Compte créé et connecté avec succès !");
-        window.location.href = "/dashboard";
+        window.location.href = redirectNext;
       } else {
-        const msg = "Inscription réussie ! Vérifiez votre boîte mail (ou connectez-vous directement).";
+        const msg = "Inscription réussie ! Un email de confirmation vous a été envoyé (vérifiez vos spams).";
         setSuccessMsg(msg);
         toast.success(msg);
         setLoading(false);
-        setTimeout(() => router.push("/login"), 2000);
+        setTimeout(() => {
+          const loginHref = searchParams.toString()
+            ? `/login?${searchParams.toString()}`
+            : "/login";
+          router.push(loginHref);
+        }, 2200);
       }
     } catch (err: any) {
       const msg = err?.message || "Erreur réseau lors de l'inscription.";
@@ -78,6 +116,10 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  const loginHref = searchParams.toString()
+    ? `/login?${searchParams.toString()}`
+    : "/login";
 
   return (
     <Card className="w-full max-w-md border-none shadow-xl">
@@ -99,20 +141,20 @@ export default function RegisterPage() {
         </Link>
         <CardTitle className="text-2xl font-bold text-center">Créer un compte</CardTitle>
         <CardDescription className="text-center">
-          Commencez à gérer votre argent intelligemment.
+          Commencez à gérer votre salaire et vos dépenses intelligemment.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleRegister} method="post" className="space-y-4">
           {errorMsg && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600" />
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60 text-red-700 dark:text-rose-200 text-xs sm:text-sm flex items-start gap-2.5">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-rose-400" />
               <span>{errorMsg}</span>
             </div>
           )}
           {successMsg && (
-            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-2">
-              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 text-emerald-800 dark:text-emerald-200 text-xs sm:text-sm flex items-start gap-2.5">
+              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
               <span>{successMsg}</span>
             </div>
           )}
@@ -122,6 +164,7 @@ export default function RegisterPage() {
               id="name"
               placeholder="Ex: Fidèle Atchadé"
               required
+              autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -133,32 +176,48 @@ export default function RegisterPage() {
               type="email"
               placeholder="vous@exemple.com"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Mot de passe</Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={6}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
             <Input
               id="confirmPassword"
-              type="password"
+              type={showPassword ? "text" : "password"}
               required
+              minLength={6}
+              autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
           </div>
-          <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={loading}>
-            {loading ? "Création..." : "S'inscrire"}
+          <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11" disabled={loading}>
+            {loading ? "Création en cours..." : "S'inscrire"}
           </Button>
 
           <div className="relative my-4">
@@ -175,14 +234,22 @@ export default function RegisterPage() {
           <GoogleAuthButton mode="signup" />
         </form>
       </CardContent>
-      <CardFooter className="justify-center border-t p-4">
-        <p className="text-sm text-slate-600">
+      <CardFooter className="justify-center border-t border-slate-100 dark:border-slate-800 p-4">
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           Vous avez déjà un compte ?{" "}
-          <Link href="/login" className="text-emerald-600 font-semibold hover:underline">
+          <Link href={loginHref} className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline">
             Se connecter
           </Link>
         </p>
       </CardFooter>
     </Card>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Chargement de l&apos;inscription...</div>}>
+      <RegisterForm />
+    </Suspense>
   );
 }

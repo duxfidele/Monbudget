@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore, Category } from "@/lib/store/ui-store";
+import { PlanGate } from "@/components/payments/plan-gate";
 import { 
   formatMoney, 
   getSpentByCategory, 
@@ -745,6 +746,11 @@ export default function BudgetPage() {
   };
 
   return (
+    <PlanGate
+      feature="budget"
+      featureTitle="Budget Mensuel par Enveloppes"
+      featureDescription="Répartissez votre salaire par enveloppes (Alimentation, Loyer, Transport, Scolarité, Solidarité...), suivez votre Reste à vivre journalier jusqu'à la paie et recevez des alertes de dépassement."
+    >
     <div className="flex flex-col gap-8 pb-12">
       {/* Dialogue de confirmation de duplication */}
       <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
@@ -1362,5 +1368,6 @@ export default function BudgetPage() {
         </Card>
       </div>
     </div>
+    </PlanGate>
   );
 }

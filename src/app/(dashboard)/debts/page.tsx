@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
+import { PlanGate } from "@/components/payments/plan-gate";
 import {
   formatMoney,
   formatThousands,
@@ -230,6 +231,11 @@ export default function DebtsPage() {
   };
 
   return (
+    <PlanGate
+      feature="debts"
+      featureTitle="Dettes & Créances"
+      featureDescription="Suivez chaque franc que vous devez rembourser et que l'on vous doit, recevez des alertes d'échéance et enregistrez vos remboursements en un clic."
+    >
     <div className="flex flex-col gap-6 pb-12">
       {/* 1. Modale Création Dette / Créance */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -882,6 +888,7 @@ export default function DebtsPage() {
         )}
       </div>
     </div>
+    </PlanGate>
   );
 }
 

@@ -7,6 +7,12 @@ export async function updateSession(request: NextRequest) {
   })
 
   const pathname = request.nextUrl.pathname
+
+  // Fast-path immédiat pour les webhooks signés (ex: Moneriz) : aucune inspection de cookie ni redirection
+  if (pathname.startsWith('/api/webhooks/')) {
+    return supabaseResponse
+  }
+
   const isHomePage = pathname === '/'
   const isSupportPage = pathname.startsWith('/support')
   const isApiRoute = pathname.startsWith('/api/')
@@ -21,7 +27,8 @@ export async function updateSession(request: NextRequest) {
                                pathname.startsWith('/forgot-password')
   const isAuthRoute = isGuestOnlyAuthRoute ||
                       pathname.startsWith('/reset-password') ||
-                      pathname.startsWith('/auth/confirm')
+                      pathname.startsWith('/auth/confirm') ||
+                      pathname.startsWith('/auth/callback')
   const isPublicRoute = isHomePage || isSupportPage || isAuthRoute || isPwaOrStatic || isApiRoute
 
   const allCookies = request.cookies.getAll()

@@ -36,6 +36,7 @@ import {
   Area
 } from "recharts";
 import { useUIStore } from "@/lib/store/ui-store";
+import { PlanGate } from "@/components/payments/plan-gate";
 import {
   formatMoney,
   getTotalExpenses,
@@ -260,6 +261,11 @@ export default function ReportsPage() {
   }
 
   return (
+    <PlanGate
+      feature="reports"
+      featureTitle="Rapports Financiers & Exports PDF/CSV"
+      featureDescription="Analysez l'évolution de vos revenus, dépenses et épargne sur plusieurs mois et téléchargez vos bilans officiels en PDF et Excel/CSV."
+    >
     <div className="flex flex-col gap-8 pb-12">
       {/* En-tête */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
@@ -600,5 +606,6 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
     </div>
+    </PlanGate>
   );
 }
