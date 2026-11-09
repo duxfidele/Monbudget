@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import fs from "fs";
+import path from "path";
 import { translateAuthError } from "../src/lib/utils/auth-errors";
 
 test.describe("Authentification, Bouton Retour & Anti-Autofill — MonBudget", () => {
@@ -34,5 +36,27 @@ test.describe("Authentification, Bouton Retour & Anti-Autofill — MonBudget", (
 
     expect(translateAuthError("Invalid login credentials")).toContain("Email ou mot de passe incorrect");
     expect(translateAuthError("access_denied")).toContain("Connexion Google annulée");
+  });
+
+  test("4. L'interface intermédiaire /welcome est protégée contre l'accès anonyme (redirige vers /login)", async ({ request }) => {
+    const res = await request.get("/welcome", { maxRedirects: 0 });
+    expect([302, 303, 307, 308]).toContain(res.status());
+    const location = res.headers()["location"] || "";
+    expect(location).toContain("/login");
+  });
+
+  test("5. Le bouton Google OAuth force l'écran consentement ('select_account consent') et passe par /welcome", () => {
+    const googleBtnSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/auth/google-button.tsx"),
+      "utf-8"
+    );
+    expect(googleBtnSrc).toContain('prompt: "select_account consent"');
+    expect(googleBtnSrc).toContain("/welcome?next=");
+
+    const callbackSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/app/auth/callback/route.ts"),
+      "utf-8"
+    );
+    expect(callbackSrc).toContain('searchParams.get("next") || "/welcome"');
   });
 });

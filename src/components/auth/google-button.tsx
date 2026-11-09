@@ -22,7 +22,7 @@ export function GoogleAuthButton({ mode = "signin", nextTarget }: GoogleAuthButt
         const urlParams = new URLSearchParams(window.location.search);
         const nextParam = urlParams.get("next");
         const planParam = urlParams.get("plan");
-        if (nextParam) {
+        if (nextParam && nextParam.startsWith("/")) {
           resolvedNext = nextParam;
         } else if (planParam) {
           resolvedNext = `/settings?tab=subscription&plan=${encodeURIComponent(planParam)}`;
@@ -31,7 +31,12 @@ export function GoogleAuthButton({ mode = "signin", nextTarget }: GoogleAuthButt
         }
       }
 
-      const redirectPath = `/auth/callback?next=${encodeURIComponent(resolvedNext || "/dashboard")}`;
+      const finalDestination = resolvedNext || "/dashboard";
+      const welcomeIntermediate = finalDestination.startsWith("/welcome")
+        ? finalDestination
+        : `/welcome?next=${encodeURIComponent(finalDestination)}`;
+
+      const redirectPath = `/auth/callback?next=${encodeURIComponent(welcomeIntermediate)}`;
       const redirectTo = `${window.location.origin}${redirectPath}`;
 
       const { error } = await supabase.auth.signInWithOAuth({
@@ -40,7 +45,8 @@ export function GoogleAuthButton({ mode = "signin", nextTarget }: GoogleAuthButt
           redirectTo,
           queryParams: {
             access_type: "offline",
-            prompt: "select_account",
+            // Affiche systématiquement la sélection de compte ET l'écran de confirmation Google « Continuer »
+            prompt: "select_account consent",
           },
         },
       });
@@ -49,8 +55,9 @@ export function GoogleAuthButton({ mode = "signin", nextTarget }: GoogleAuthButt
         toast.error("Erreur de connexion Google : " + error.message);
         setLoading(false);
       }
-    } catch (err: any) {
-      toast.error(err?.message || "Impossible de se connecter avec Google.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Impossible de se connecter avec Google.";
+      toast.error(msg);
       setLoading(false);
     }
   };
