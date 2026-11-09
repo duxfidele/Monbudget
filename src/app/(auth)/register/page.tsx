@@ -7,11 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { AlertCircle, CheckCircle2, Eye, EyeOff, X } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 import { GoogleAuthButton } from "@/components/auth/google-button";
+import { translateAuthError } from "@/lib/utils/auth-errors";
 
 function RegisterForm() {
   const [name, setName] = useState("");
@@ -19,6 +20,7 @@ function RegisterForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [inputsUnlocked, setInputsUnlocked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -28,9 +30,21 @@ function RegisterForm() {
   const supabase = createClient();
 
   useEffect(() => {
-    const errorFromUrl = searchParams.get("error");
-    if (errorFromUrl) {
-      setErrorMsg(errorFromUrl);
+    // Bloque le remplissage automatique agressif du navigateur au chargement initial
+    const timer = setTimeout(() => setInputsUnlocked(true), 150);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const rawError = searchParams.get("error_description") || searchParams.get("error");
+    if (rawError) {
+      setErrorMsg(translateAuthError(rawError));
+    } else if (typeof window !== "undefined" && window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const hashError = hashParams.get("error_description") || hashParams.get("error");
+      if (hashError) {
+        setErrorMsg(translateAuthError(hashError));
+      }
     }
   }, [searchParams]);
 
@@ -79,12 +93,7 @@ function RegisterForm() {
       });
 
       if (error) {
-        let msg = error.message;
-        if (error.message.includes("User already registered") || error.message.includes("already exists")) {
-          msg = "Cette adresse email est déjà enregistrée. Veuillez vous connecter.";
-        } else if (error.message.includes("Password should be at least")) {
-          msg = "Le mot de passe doit comporter au moins 6 caractères.";
-        }
+        const msg = translateAuthError(error.message) || error.message;
         setErrorMsg(msg);
         toast.error(msg);
         setLoading(false);
@@ -109,10 +118,10 @@ function RegisterForm() {
           router.push(loginHref);
         }, 2200);
       }
-    } catch (err: any) {
-      const msg = err?.message || "Erreur réseau lors de l'inscription.";
-      setErrorMsg(msg);
-      toast.error(msg);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur réseau lors de l'inscription.";
+      setErrorMsg(message);
+      toast.error(message);
       setLoading(false);
     }
   };
@@ -145,7 +154,7 @@ function RegisterForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleRegister} method="post" className="space-y-4">
+        <form onSubmit={handleRegister} autoComplete="off" className="space-y-4">
           {errorMsg && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60 text-red-700 dark:text-rose-200 text-xs sm:text-sm flex items-start gap-2.5">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-rose-400" />
@@ -159,37 +168,60 @@ function RegisterForm() {
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="name">Nom complet</Label>
+            <Label htmlFor="reg-name">Nom complet</Label>
             <Input
-              id="name"
+              id="reg-name"
+              name="mb_reg_name"
               placeholder="Ex: Fidèle Atchadé"
               required
-              autoComplete="name"
+              autoComplete="off"
+              readOnly={!inputsUnlocked}
+              onFocus={() => setInputsUnlocked(true)}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="vous@exemple.com"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Mot de passe</Label>
+            <Label htmlFor="reg-email">Email</Label>
             <div className="relative">
               <Input
-                id="password"
+                id="reg-email"
+                name="mb_reg_email"
+                type="email"
+                placeholder="vous@exemple.com"
+                required
+                autoComplete="off"
+                readOnly={!inputsUnlocked}
+                onFocus={() => setInputsUnlocked(true)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={email ? "pr-9" : ""}
+              />
+              {email && (
+                <button
+                  type="button"
+                  onClick={() => setEmail("")}
+                  aria-label="Effacer l'email"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none"
+                  tabIndex={-1}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reg-password">Mot de passe</Label>
+            <div className="relative">
+              <Input
+                id="reg-password"
+                name="mb_reg_password"
                 type={showPassword ? "text" : "password"}
                 required
                 minLength={6}
                 autoComplete="new-password"
+                readOnly={!inputsUnlocked}
+                onFocus={() => setInputsUnlocked(true)}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pr-10"
@@ -205,13 +237,16 @@ function RegisterForm() {
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
+            <Label htmlFor="reg-confirmPassword">Confirmer le mot de passe</Label>
             <Input
-              id="confirmPassword"
+              id="reg-confirmPassword"
+              name="mb_reg_confirm_password"
               type={showPassword ? "text" : "password"}
               required
               minLength={6}
               autoComplete="new-password"
+              readOnly={!inputsUnlocked}
+              onFocus={() => setInputsUnlocked(true)}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
             />

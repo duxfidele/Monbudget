@@ -256,6 +256,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP TRIGGER IF EXISTS on_auth_user_created_monbudget ON auth.users;
 CREATE TRIGGER on_auth_user_created_monbudget
   AFTER INSERT ON auth.users
@@ -328,7 +329,7 @@ BEGIN
       u.created_at,
       u.last_sign_in_at
     FROM auth.users u
-    LEFT JOIN public.profiles p ON p.id = u.id
+    LEFT JOIN public.profiles p ON p.id::text = u.id::text
     LEFT JOIN public.user_subscriptions s ON s.user_id = u.id
     ORDER BY u.created_at DESC
     LIMIT 50

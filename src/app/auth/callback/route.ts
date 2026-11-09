@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSafeRedirectUrl } from "@/lib/utils/security";
+import { translateAuthError } from "@/lib/utils/auth-errors";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -9,8 +10,9 @@ export async function GET(request: NextRequest) {
   const errorParam = searchParams.get("error_description") || searchParams.get("error");
 
   if (errorParam) {
+    const friendlyError = translateAuthError(errorParam) || errorParam;
     const errorUrl = new URL(
-      `/login?error=${encodeURIComponent(errorParam)}`,
+      `/login?error=${encodeURIComponent(friendlyError)}`,
       request.url
     );
     return NextResponse.redirect(errorUrl);
@@ -47,6 +49,15 @@ export async function GET(request: NextRequest) {
       const redirectUrl = getSafeRedirectUrl(next, request.url);
       return NextResponse.redirect(redirectUrl);
     }
+
+    if (error) {
+      const friendlyError = translateAuthError(error.message) || error.message;
+      const errorUrl = new URL(
+        `/login?error=${encodeURIComponent(friendlyError)}`,
+        request.url
+      );
+      return NextResponse.redirect(errorUrl);
+    }
   }
 
   const errorUrl = new URL(
@@ -55,4 +66,3 @@ export async function GET(request: NextRequest) {
   );
   return NextResponse.redirect(errorUrl);
 }
-
