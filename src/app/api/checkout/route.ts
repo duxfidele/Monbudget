@@ -178,21 +178,43 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      err?.message === "MISSING_SERVICE_ROLE_KEY" ||
-      err?.message?.startsWith("ORDER_PERSISTENCE_FAILED:") ||
-      err?.message?.startsWith("ORDER_FETCH_FAILED:")
-    ) {
+    if (err?.message === "MISSING_SERVICE_ROLE_KEY") {
+      console.error(
+        "[Checkout] MISSING_SERVICE_ROLE_KEY — NEXT_PUBLIC_SUPABASE_URL:",
+        Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()),
+        "SUPABASE_SERVICE_ROLE_KEY:",
+        Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim())
+      );
       return NextResponse.json(
         {
           error: {
             code: "SERVER_CONFIG_ERROR",
-            message: "Le service de paiement n'est pas encore configuré côté serveur.",
+            message:
+              "Le service de paiement n'est pas encore configuré côté serveur (paramètres serveur absents sur ce déploiement).",
           },
         },
         { status: 503 }
       );
     }
+
+    if (
+      err?.message?.startsWith("ORDER_PERSISTENCE_FAILED:") ||
+      err?.message?.startsWith("ORDER_FETCH_FAILED:")
+    ) {
+      console.error("[Checkout] Supabase subscription_orders error:", err.message);
+      return NextResponse.json(
+        {
+          error: {
+            code: "ORDER_STORAGE_ERROR",
+            message:
+              "Impossible d'enregistrer ou de lire la commande d'abonnement côté base de données.",
+          },
+        },
+        { status: 503 }
+      );
+    }
+
+    console.error("[Checkout] Unexpected error:", err?.message || err);
 
     return NextResponse.json(
       {
