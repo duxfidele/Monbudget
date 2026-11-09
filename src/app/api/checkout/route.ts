@@ -96,7 +96,8 @@ export async function POST(request: Request) {
 
     const { orderId, planId, billingCycle, integrationMode: preferredMode } = parsedBody.data;
 
-    const requestOrigin = new URL(request.url).origin;
+    const headerOrigin = request.headers.get("origin");
+    const requestOrigin = headerOrigin || new URL(request.url).origin;
 
     const { order, existingSession } = await prepareAuthorizedCheckout({
       userId: effectiveUserId,
@@ -107,17 +108,23 @@ export async function POST(request: Request) {
       preferredMode,
     });
 
-    if (existingSession) {
-      return NextResponse.json({
-        orderId: order.id,
-        reference: order.reference,
-        amount: order.amount,
-        currency: order.currency,
-        id: existingSession.id,
-        integrationMode: existingSession.integrationMode,
-        checkoutUrl: existingSession.checkoutUrl,
-        embedUrl: existingSession.embedUrl,
-      });
+    if (
+      existingSession &&
+      (existingSession.integrationMode !== "iframe" || Boolean(existingSession.embedUrl))
+    ) {
+      return NextResponse.json(
+        {
+          orderId: order.id,
+          reference: order.reference,
+          amount: order.amount,
+          currency: order.currency,
+          id: existingSession.id,
+          integrationMode: existingSession.integrationMode,
+          checkoutUrl: existingSession.checkoutUrl,
+          embedUrl: existingSession.embedUrl,
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     const {
@@ -133,16 +140,19 @@ export async function POST(request: Request) {
       updatedSnapshot
     );
 
-    return NextResponse.json({
-      orderId: order.id,
-      reference: order.reference,
-      amount: order.amount,
-      currency: order.currency,
-      id: session.id,
-      integrationMode: session.integrationMode,
-      checkoutUrl: session.checkoutUrl,
-      embedUrl: session.embedUrl,
-    });
+    return NextResponse.json(
+      {
+        orderId: order.id,
+        reference: order.reference,
+        amount: order.amount,
+        currency: order.currency,
+        id: session.id,
+        integrationMode: session.integrationMode,
+        checkoutUrl: session.checkoutUrl,
+        embedUrl: session.embedUrl,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err: any) {
     if (err instanceof MonerizApiError) {
       return NextResponse.json(

@@ -57,20 +57,7 @@ export default function SettingsPage() {
       ) {
         setActiveTab(tabParam);
       }
-      const orderId = params.get("orderId");
-      const checkoutReturn = params.get("checkout");
-      if (orderId && checkoutReturn === "return") {
-        // Ne jamais activer sur le seul paramètre URL : interroger l'état serveur
-        refreshSubscription(orderId).then((res) => {
-          if (res.orderStatus === "paid") {
-            toast.success("Paiement confirmé par le serveur ! Votre abonnement est actif.");
-          } else {
-            toast.info("Paiement en cours de confirmation serveur...");
-          }
-        });
-      }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Profile data

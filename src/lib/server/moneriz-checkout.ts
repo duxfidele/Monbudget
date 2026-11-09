@@ -68,14 +68,14 @@ export function resolveMonerizMode(secretKey: string | undefined = process.env.M
 
 /**
  * Crée une session de paiement Moneriz via POST /v1/checkout-sessions.
- * Respecte l'Idempotency-Key persistée et bascule automatiquement en mode 'redirect'
- * si l'origine iframe n'est pas encore configurée dans le dashboard marchand.
+ * Respecte l'Idempotency-Key persistée et reste strictement dans le mode configuré
+ * (aucun repli silencieux vers redirect lorsque le mode iframe Liveframe est demandé).
  */
 export async function createMonerizCheckoutSession(
   order: MonerizCheckoutOrderRecord
 ): Promise<{
   session: MonerizCheckoutSessionResponse;
-  usedFallbackRedirect: boolean;
+  usedFallbackRedirect: false;
   updatedIdempotencyKey?: string;
   updatedSnapshot?: MonerizCheckoutRequestSnapshot;
 }> {
@@ -88,58 +88,81 @@ export async function createMonerizCheckoutSession(
     );
   }
 
-  const executeCall = async (
-    idempotencyKey: string,
-    snapshot: MonerizCheckoutRequestSnapshot
-  ): Promise<Response> => {
-    return fetch(`${MONERIZ_API_BASE}/v1/checkout-sessions`, {
+  let response: Response;
+  let data: any = null;
+
+  try {
+    response = await fetch(`${MONERIZ_API_BASE}/v1/checkout-sessions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${secretKey}`,
         "Content-Type": "application/json",
-        "Idempotency-Key": idempotencyKey,
+        "Idempotency-Key": order.idempotencyKey,
       },
-      body: JSON.stringify(snapshot),
+      body: JSON.stringify(order.requestSnapshot),
       cache: "no-store",
+      signal: AbortSignal.timeout(8000),
     });
-  };
 
-  let response = await executeCall(order.idempotencyKey, order.requestSnapshot);
-  let data = await response.json().catch(() => null);
-
-  // Si l'origine courante n'est pas encore dans embedOrigins sur le dashboard Moneriz,
-  // repli automatique sécurisé vers integrationMode = "redirect"
-  if (
-    !response.ok &&
-    order.requestSnapshot.integrationMode === "iframe" &&
-    (data?.error?.code === "EMBED_ORIGIN_NOT_ALLOWED" ||
-      data?.error?.code === "EMBED_NOT_CONFIGURED")
-  ) {
-    const fallbackSnapshot: MonerizCheckoutRequestSnapshot = {
-      ...order.requestSnapshot,
-      integrationMode: "redirect",
-    };
-    delete fallbackSnapshot.embedOrigin;
-    const fallbackKey = `${order.idempotencyKey}-redir`.slice(0, 120);
-
-    response = await executeCall(fallbackKey, fallbackSnapshot);
     data = await response.json().catch(() => null);
-
-    if (response.ok && data) {
-      return {
-        session: data as MonerizCheckoutSessionResponse,
-        usedFallbackRedirect: true,
-        updatedIdempotencyKey: fallbackKey,
-        updatedSnapshot: fallbackSnapshot,
-      };
-    }
+  } catch {
+    throw new MonerizApiError(
+      "Délai dépassé lors de la connexion au terminal Moneriz. Veuillez réessayer dans un instant.",
+      503,
+      "CHECKOUT_RESULT_UNKNOWN"
+    );
   }
 
   if (!response.ok || !data) {
+    const errorCode = data?.error?.code || "CHECKOUT_SESSION_FAILED";
+    const requestId = data?.error?.requestId;
+
+    if (
+      order.requestSnapshot.integrationMode === "iframe" &&
+      (errorCode === "EMBED_ORIGIN_NOT_ALLOWED" || errorCode === "EMBED_NOT_CONFIGURED")
+    ) {
+      const originLabel = order.requestSnapshot.embedOrigin || "cette application";
+      throw new MonerizApiError(
+        `Le paiement intégré (Liveframe) n'est pas encore autorisé pour ${originLabel} sur Moneriz. Ajoutez ${originLabel} dans Dashboard Moneriz → Intégration → Sites autorisés.`,
+        400,
+        errorCode,
+        requestId
+      );
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      const message =
+        errorCode === "KYB_REQUIRED"
+          ? "Les paiements en direct ne sont pas encore activés sur l'espace marchand Moneriz (vérification d'identité requise)."
+          : "Le service de paiement Moneriz est momentanément indisponible côté serveur.";
+      throw new MonerizApiError(message, 503, errorCode, requestId);
+    }
+
     throw new MonerizApiError(
       data?.error?.message || "Impossible de créer la session de paiement Moneriz.",
       response.status,
-      data?.error?.code || "CHECKOUT_SESSION_FAILED",
+      errorCode,
+      requestId
+    );
+  }
+
+  // Vérification d'intégrité stricte de la session retournée par Moneriz
+  if (
+    typeof data.id !== "string" ||
+    !data.id.startsWith("cs_") ||
+    data.mode !== order.mode ||
+    Number(data.amount) !== order.amount ||
+    data.currency !== order.currency ||
+    data.reference !== order.reference ||
+    data.integrationMode !== order.requestSnapshot.integrationMode ||
+    typeof data.checkoutUrl !== "string" ||
+    (order.requestSnapshot.integrationMode === "iframe" &&
+      (typeof data.embedUrl !== "string" || !data.embedUrl))
+  ) {
+    throw new MonerizApiError(
+      "Réponse de session Moneriz incohérente. Veuillez réessayer.",
+      503,
+      "CHECKOUT_RESULT_UNKNOWN",
       data?.error?.requestId
     );
   }
@@ -173,6 +196,7 @@ export async function fetchMonerizPaymentById(paymentId: string): Promise<{
         Accept: "application/json",
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!response.ok) return null;

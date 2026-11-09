@@ -17,6 +17,10 @@ import {
   parseMonerizEvent,
   prepareAuthorizedCheckout,
 } from "../src/lib/server/moneriz-app";
+import {
+  createMonerizCheckoutSession,
+  MonerizApiError,
+} from "../src/lib/server/moneriz-checkout";
 
 test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d'États", () => {
   test("1. Grille tarifaire officielle (Gratuit, Particulier 1 000 FCFA, Entreprise 2 500 FCFA + -2 mois annuel)", () => {
@@ -283,6 +287,138 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(hardeningSql).toContain("FROM PUBLIC, anon, authenticated");
     expect(hardeningSql).toContain("TO service_role");
     expect(hardeningSql).toContain("FORBIDDEN_SERVICE_ROLE_REQUIRED");
+  });
+
+  test("6. Mode Liveframe strict : sans repli redirect, séparation commandes redirect/iframe, origines autorisées & successUrl /dashboard", async () => {
+    const env = process.env as Record<string, string | undefined>;
+    const prevEmbedOrigin = env.MONERIZ_EMBED_ORIGIN;
+    const prevSecret = env.MONERIZ_SECRET_KEY;
+    env.MONERIZ_EMBED_ORIGIN = "https://monbudgetpro.com";
+    env.MONERIZ_SECRET_KEY = "izp_test_sk_dummy_for_unit_test";
+
+    const originalFetch = globalThis.fetch;
+
+    try {
+      const userLiveframe = `user-liveframe-${Date.now()}`;
+
+      // 6a. Création préalable en mode redirect puis passage à iframe -> crée une nouvelle commande sans réutiliser redirect
+      const redirectAttempt = await prepareAuthorizedCheckout({
+        userId: userLiveframe,
+        planId: "personal",
+        billingCycle: "monthly",
+        requestOrigin: "https://monbudgetpro.com",
+        preferredMode: "redirect",
+      });
+      expect(redirectAttempt.order.requestSnapshot.integrationMode).toBe("redirect");
+
+      const iframeAttempt = await prepareAuthorizedCheckout({
+        userId: userLiveframe,
+        planId: "personal",
+        billingCycle: "monthly",
+        requestOrigin: "https://www.monbudgetpro.com",
+        preferredMode: "iframe",
+      });
+      expect(iframeAttempt.order.id).not.toBe(redirectAttempt.order.id);
+      expect(iframeAttempt.order.reference).not.toBe(redirectAttempt.order.reference);
+      expect(iframeAttempt.order.requestSnapshot.integrationMode).toBe("iframe");
+      expect(iframeAttempt.order.requestSnapshot.embedOrigin).toBe("https://www.monbudgetpro.com");
+      expect(iframeAttempt.order.requestSnapshot.successUrl).toContain("/dashboard?orderId=");
+
+      // 6b. Une origine non autorisée (spoofing Origin) est ignorée au profit de MONERIZ_EMBED_ORIGIN
+      const spoofAttempt = await prepareAuthorizedCheckout({
+        userId: `user-spoof-${Date.now()}`,
+        planId: "business",
+        billingCycle: "monthly",
+        requestOrigin: "https://attacker.example.com",
+        preferredMode: "iframe",
+      });
+      expect(spoofAttempt.order.requestSnapshot.embedOrigin).toBe("https://monbudgetpro.com");
+
+      // 6c. Si Moneriz rejette embedOrigin (EMBED_ORIGIN_NOT_ALLOWED), aucun repli silencieux vers redirect
+      let fetchCalls = 0;
+      globalThis.fetch = (async () => {
+        fetchCalls += 1;
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "EMBED_ORIGIN_NOT_ALLOWED",
+              message: "Origin not allowed",
+              requestId: "req_test_embed_denied",
+            },
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }) as typeof fetch;
+
+      await expect(
+        createMonerizCheckoutSession(iframeAttempt.order)
+      ).rejects.toMatchObject({
+        name: "MonerizApiError",
+        code: "EMBED_ORIGIN_NOT_ALLOWED",
+        status: 400,
+      } satisfies Partial<MonerizApiError>);
+      expect(fetchCalls).toBe(1);
+
+      // 6d. Session iframe valide conservée intacte
+      globalThis.fetch = (async () => {
+        return new Response(
+          JSON.stringify({
+            id: "cs_test_liveframe_ok",
+            mode: "test",
+            status: "open",
+            integrationMode: "iframe",
+            checkoutUrl: "https://moneriz.com/payer/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-AbCdE",
+            embedUrl: "https://moneriz.com/integrer/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-AbCdE",
+            amount: iframeAttempt.order.amount,
+            currency: "XOF",
+            title: iframeAttempt.order.title,
+            reference: iframeAttempt.order.reference,
+            expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } }
+        );
+      }) as typeof fetch;
+
+      const created = await createMonerizCheckoutSession(iframeAttempt.order);
+      expect(created.usedFallbackRedirect).toBe(false);
+      expect(created.session.integrationMode).toBe("iframe");
+      expect(created.session.embedUrl).toContain("/integrer/");
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (prevEmbedOrigin === undefined) delete env.MONERIZ_EMBED_ORIGIN;
+      else env.MONERIZ_EMBED_ORIGIN = prevEmbedOrigin;
+      if (prevSecret === undefined) delete env.MONERIZ_SECRET_KEY;
+      else env.MONERIZ_SECRET_KEY = prevSecret;
+    }
+  });
+
+  test("7. Contrat UI Liveframe v1 & redirection immédiate vers /dashboard après paiement confirmé", () => {
+    const liveframeSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/payments/moneriz-liveframe.tsx"),
+      "utf8"
+    );
+    const widgetSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/payments/subscription-plans-widget.tsx"),
+      "utf8"
+    );
+    const initializerSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/store-initializer.tsx"),
+      "utf8"
+    );
+
+    // Liveframe ne redirige jamais silencieusement hors de l'application
+    expect(liveframeSrc).not.toContain("window.location.assign");
+    expect(liveframeSrc).toContain('record.source !== "moneriz"');
+    expect(liveframeSrc).toContain('type: "moneriz.init"');
+    expect(liveframeSrc).toContain("record.resumeUrl");
+    expect(liveframeSrc).toContain("allow-popups-to-escape-sandbox");
+    expect(liveframeSrc).toContain('referrerPolicy="no-referrer"');
+    expect(liveframeSrc).toContain('router.push("/dashboard")');
+
+    // Widget & retour dashboard
+    expect(widgetSrc).toContain('router.push("/dashboard")');
+    expect(initializerSrc).toContain('refreshSubscription(rawOrderId, validPaymentId)');
+    expect(initializerSrc).toContain('router.replace("/dashboard")');
   });
 });
 

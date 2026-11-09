@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, Lock, Sparkles, ShieldCheck, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,9 +29,19 @@ export function SubscriptionPlansWidget({
   highlightPlan,
   compact = false,
 }: SubscriptionPlansWidgetProps) {
+  const router = useRouter();
   const { subscriptionPlan, billingCycle: activeCycle } = useUIStore();
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("monthly");
   const [checkoutTarget, setCheckoutTarget] = useState<PaidSubscriptionPlanId | null>(null);
+  const redirectTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current !== null) {
+        window.clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   const plansList = [
     MONBUDGET_PLANS.free,
@@ -244,7 +255,13 @@ export function SubscriptionPlansWidget({
       <Dialog
         open={checkoutTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setCheckoutTarget(null);
+          if (!open) {
+            if (redirectTimerRef.current !== null) {
+              window.clearTimeout(redirectTimerRef.current);
+              redirectTimerRef.current = null;
+            }
+            setCheckoutTarget(null);
+          }
         }}
       >
         <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
@@ -253,7 +270,7 @@ export function SubscriptionPlansWidget({
               Paiement Sécurisé Moneriz
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Réglez votre abonnement en FCFA (XOF) par Mobile Money ou Carte Bancaire. Votre accès sera débloqué dès confirmation serveur.
+              Réglez directement dans MonBudget en FCFA (XOF) par Mobile Money ou Carte Bancaire. Votre accès au tableau de bord sera ouvert dès confirmation serveur.
             </DialogDescription>
           </DialogHeader>
 
@@ -262,9 +279,22 @@ export function SubscriptionPlansWidget({
               planId={checkoutTarget}
               billingCycle={selectedCycle}
               onSuccess={() => {
-                setTimeout(() => setCheckoutTarget(null), 1800);
+                if (redirectTimerRef.current !== null) {
+                  window.clearTimeout(redirectTimerRef.current);
+                }
+                redirectTimerRef.current = window.setTimeout(() => {
+                  setCheckoutTarget(null);
+                  router.push("/dashboard");
+                  router.refresh();
+                }, 1200);
               }}
-              onCancel={() => setCheckoutTarget(null)}
+              onCancel={() => {
+                if (redirectTimerRef.current !== null) {
+                  window.clearTimeout(redirectTimerRef.current);
+                  redirectTimerRef.current = null;
+                }
+                setCheckoutTarget(null);
+              }}
             />
           )}
         </DialogContent>

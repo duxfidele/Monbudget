@@ -85,20 +85,97 @@ async function getOptionalSessionSupabase() {
   return await createSessionSupabaseClient().catch(() => null);
 }
 
-function buildAppOrigin(requestOrigin?: string): string {
-  const configured =
-    process.env.MONERIZ_EMBED_ORIGIN ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    requestOrigin ||
-    "http://localhost:3000";
-  return new URL(configured).origin;
+const BUILTIN_TRUSTED_HOSTS = new Set([
+  "monbudgetpro.com",
+  "www.monbudgetpro.com",
+  "monbudget-sable.vercel.app",
+]);
+
+function tryNormalizeOrigin(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw.trim());
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
 }
 
-function isSessionReusable(session: MonerizCheckoutSessionResponse | null | undefined): boolean {
+function isTrustedAppOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    const isLocalHost = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
+
+    if (parsed.protocol === "http:") {
+      return !isProductionRuntime() && isLocalHost;
+    }
+    if (parsed.protocol !== "https:") return false;
+
+    if (BUILTIN_TRUSTED_HOSTS.has(parsed.hostname)) return true;
+    if (parsed.hostname.endsWith(".monbudgetpro.com")) return true;
+    if (!isProductionRuntime() && (isLocalHost || parsed.hostname.endsWith(".vercel.app"))) {
+      return true;
+    }
+
+    const extraOrigins = [
+      process.env.MONERIZ_EMBED_ORIGIN,
+      process.env.NEXT_PUBLIC_APP_URL,
+      ...(process.env.MONERIZ_EMBED_ORIGINS || "").split(","),
+    ]
+      .map((item) => tryNormalizeOrigin(item))
+      .filter((item): item is string => Boolean(item));
+
+    return extraOrigins.includes(parsed.origin);
+  } catch {
+    return false;
+  }
+}
+
+function buildAppOrigin(requestOrigin?: string): string {
+  const normalizedRequestOrigin = tryNormalizeOrigin(requestOrigin);
+  if (normalizedRequestOrigin && isTrustedAppOrigin(normalizedRequestOrigin)) {
+    return normalizedRequestOrigin;
+  }
+
+  const configured =
+    tryNormalizeOrigin(process.env.MONERIZ_EMBED_ORIGIN) ||
+    tryNormalizeOrigin(process.env.NEXT_PUBLIC_APP_URL) ||
+    "http://localhost:3000";
+  return configured;
+}
+
+function isSessionReusable(
+  session: MonerizCheckoutSessionResponse | null | undefined,
+  expectedIntegrationMode?: "iframe" | "redirect"
+): boolean {
   if (!session || session.status !== "open" || !session.expiresAt) return false;
+  if (expectedIntegrationMode && session.integrationMode !== expectedIntegrationMode) {
+    return false;
+  }
+  if (session.integrationMode === "iframe" && !session.embedUrl) {
+    return false;
+  }
   const expiresMs = new Date(session.expiresAt).getTime();
   // Marge de sécurité de 60 secondes avant expiration
   return Number.isFinite(expiresMs) && expiresMs - Date.now() > 60_000;
+}
+
+function doesOrderSnapshotMatch(
+  order: MonerizCheckoutOrderRecord,
+  integrationMode: "iframe" | "redirect",
+  appOrigin: string
+): boolean {
+  const snap = order.requestSnapshot;
+  if (!snap || snap.integrationMode !== integrationMode) return false;
+  if (integrationMode === "iframe" && snap.embedOrigin !== appOrigin) return false;
+  return Boolean(snap.successUrl?.includes("/dashboard"));
+}
+
+function isRecentInFlightOrder(updatedAtIso?: string | null): boolean {
+  if (!updatedAtIso) return false;
+  const ts = new Date(updatedAtIso).getTime();
+  return Number.isFinite(ts) && Date.now() - ts < 15_000;
 }
 
 /**
@@ -153,7 +230,16 @@ export async function prepareAuthorizedCheckout(params: {
       throw new Error("ORDER_ALREADY_PAID");
     }
 
-    if (isSessionReusable(existingOrder.checkoutSession)) {
+    const snapshotMatches = doesOrderSnapshotMatch(
+      existingOrder,
+      integrationMode,
+      appOrigin
+    );
+
+    if (
+      snapshotMatches &&
+      isSessionReusable(existingOrder.checkoutSession, integrationMode)
+    ) {
       return { order: existingOrder, existingSession: existingOrder.checkoutSession! };
     }
 
@@ -163,9 +249,11 @@ export async function prepareAuthorizedCheckout(params: {
       !existingOrder.requestSnapshot ||
       existingOrder.status === "failed" ||
       existingOrder.status === "expired" ||
-      (existingOrder.checkoutSession && !isSessionReusable(existingOrder.checkoutSession));
+      (!existingOrder.checkoutSession && !snapshotMatches) ||
+      (existingOrder.checkoutSession &&
+        !isSessionReusable(existingOrder.checkoutSession, integrationMode));
 
-    if (needNewAttempt) {
+    if (needNewAttempt && !existingOrder.checkoutSession) {
       const attemptId = crypto.randomUUID().slice(0, 8);
       const idempotencyKey = `checkout-${existingOrder.id}-${attemptId}`;
       const snapshot = buildRequestSnapshot({
@@ -203,9 +291,18 @@ export async function prepareAuthorizedCheckout(params: {
       } else {
         fallbackOrders.set(existingOrder.id, existingOrder);
       }
+      return { order: existingOrder };
     }
 
-    return { order: existingOrder };
+    if (snapshotMatches) {
+      return { order: existingOrder };
+    }
+    // Si une ancienne session incompatible existait déjà sur cette référence,
+    // on poursuit ci-dessous pour générer une commande fraîche compatible avec le mode demandé.
+    if (!params.planId) {
+      params.planId = existingOrder.planId;
+      params.billingCycle = existingOrder.billingCycle;
+    }
   }
 
   // 2. Sinon, valider planId et billingCycle côté serveur
@@ -216,7 +313,7 @@ export async function prepareAuthorizedCheckout(params: {
     throw new Error("INVALID_PLAN");
   }
 
-  // Chercher s'il existe déjà une commande pending réutilisable pour ce même plan et cycle
+  // Chercher s'il existe déjà une commande pending réutilisable ET compatible (mode + origine + URL retour)
   if (adminSupabase) {
     const { data: pendingRow, error: pendingError } = await adminSupabase
       .from("subscription_orders")
@@ -236,10 +333,14 @@ export async function prepareAuthorizedCheckout(params: {
 
     if (pendingRow) {
       const existingPending = mapRowToOrder(pendingRow);
-      if (isSessionReusable(existingPending.checkoutSession)) {
-        return { order: existingPending, existingSession: existingPending.checkoutSession! };
+      if (doesOrderSnapshotMatch(existingPending, integrationMode, appOrigin)) {
+        if (isSessionReusable(existingPending.checkoutSession, integrationMode)) {
+          return { order: existingPending, existingSession: existingPending.checkoutSession! };
+        }
+        if (!existingPending.checkoutSession && isRecentInFlightOrder(pendingRow.updated_at || pendingRow.created_at)) {
+          return { order: existingPending };
+        }
       }
-      return { order: existingPending };
     }
   } else {
     for (const cached of fallbackOrders.values()) {
@@ -248,12 +349,15 @@ export async function prepareAuthorizedCheckout(params: {
         cached.planId === planId &&
         cached.billingCycle === billingCycle &&
         cached.mode === mode &&
-        cached.status === "pending"
+        cached.status === "pending" &&
+        doesOrderSnapshotMatch(cached, integrationMode, appOrigin)
       ) {
-        if (isSessionReusable(cached.checkoutSession)) {
+        if (isSessionReusable(cached.checkoutSession, integrationMode)) {
           return { order: cached, existingSession: cached.checkoutSession! };
         }
-        return { order: cached };
+        if (!cached.checkoutSession) {
+          return { order: cached };
+        }
       }
     }
   }
@@ -335,7 +439,7 @@ function buildRequestSnapshot(params: {
     title: params.title,
     reference: params.reference,
     integrationMode: params.integrationMode,
-    successUrl: `${params.appOrigin}/settings?tab=subscription&orderId=${encodeURIComponent(params.orderId)}&checkout=return`,
+    successUrl: `${params.appOrigin}/dashboard?orderId=${encodeURIComponent(params.orderId)}&checkout=return`,
     cancelUrl: `${params.appOrigin}/settings?tab=subscription&orderId=${encodeURIComponent(params.orderId)}&checkout=cancel`,
     metadata: {
       orderId: params.orderId,
