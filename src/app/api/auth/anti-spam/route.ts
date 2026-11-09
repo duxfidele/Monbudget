@@ -7,6 +7,7 @@ import {
   validateHumanSubmission,
   verifyTurnstileToken,
 } from "@/lib/server/anti-spam";
+import { authAntiSpamRequestSchema } from "@/lib/validations";
 
 type AuthAntiSpamAction = "register" | "login" | "forgot-password";
 
@@ -21,21 +22,23 @@ const RATE_LIMIT_CONFIG: Record<
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => null);
-    if (!body || typeof body !== "object") {
+    const rawBody = await req.json().catch(() => null);
+    if (!rawBody || typeof rawBody !== "object") {
       return NextResponse.json(
         { error: "Requête invalide.", code: "INVALID_PAYLOAD" },
         { status: 400 }
       );
     }
 
-    const action = body.action as string;
-    if (action !== "register" && action !== "login" && action !== "forgot-password") {
+    const rawAction = (rawBody as Record<string, unknown>).action;
+    if (rawAction !== "register" && rawAction !== "login" && rawAction !== "forgot-password") {
       return NextResponse.json(
         { error: "Action d'authentification non reconnue.", code: "INVALID_ACTION" },
         { status: 400 }
       );
     }
+
+    const action: AuthAntiSpamAction = rawAction;
 
     const clientIp = getClientIp(req);
     const limitRule = RATE_LIMIT_CONFIG[action];
@@ -58,6 +61,19 @@ export async function POST(req: Request) {
       );
     }
 
+    const parsedBody = authAntiSpamRequestSchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        {
+          error: parsedBody.error.issues[0]?.message || "Requête invalide.",
+          code: "INVALID_PAYLOAD",
+        },
+        { status: 400 }
+      );
+    }
+
+    const body = parsedBody.data;
+
     const humanCheck = validateHumanSubmission({
       honeypot: body.honeypot,
       formLoadedAt: body.formLoadedAt,
@@ -76,7 +92,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const email = typeof body.email === "string" ? body.email.trim() : "";
+    const email = (body.email || "").trim();
     if (!isValidEmailFormat(email)) {
       return NextResponse.json(
         {

@@ -10,6 +10,7 @@ import {
   validateHumanSubmission,
   verifyTurnstileToken,
 } from "@/lib/server/anti-spam";
+import { supportRequestSchema } from "@/lib/validations";
 
 export async function POST(req: Request) {
   try {
@@ -73,36 +74,35 @@ export async function POST(req: Request) {
       );
     }
 
-    const { name, email, topic, message } = body;
-
-    // 2. Validation stricte des champs obligatoires
-    if (!name || typeof name !== "string" || name.trim().length < 2) {
+    // 2. Validation Zod stricte des champs obligatoires et bornes
+    const parsedSupport = supportRequestSchema.safeParse(body);
+    if (!parsedSupport.success) {
       return NextResponse.json(
-        { error: "Veuillez renseigner votre nom complet." },
+        {
+          error:
+            parsedSupport.error.issues[0]?.message ||
+            "Veuillez vérifier les informations saisies.",
+          code: "INVALID_PAYLOAD",
+        },
         { status: 400 }
       );
     }
 
-    if (!email || typeof email !== "string" || !isValidEmailFormat(email)) {
+    const { name, email, topic, message } = parsedSupport.data;
+
+    if (!isValidEmailFormat(email)) {
       return NextResponse.json(
         { error: "Veuillez renseigner une adresse email valide." },
         { status: 400 }
       );
     }
 
-    if (!message || typeof message !== "string" || message.trim().length < 5) {
-      return NextResponse.json(
-        { error: "Veuillez écrire un message d'au moins 5 caractères." },
-        { status: 400 }
-      );
-    }
-
-    const cleanName = name.trim().slice(0, 120);
+    const cleanName = name.slice(0, 120);
     const cleanEmail = sanitizeEmailHeader(email);
     const cleanTopic = sanitizeEmailHeader(
-      typeof topic === "string" && topic.trim() ? topic : "Demande d'assistance générale"
+      topic && topic.length > 0 ? topic : "Demande d'assistance générale"
     ).slice(0, 160);
-    const cleanMessage = message.trim();
+    const cleanMessage = message;
 
     // 3. Filtrage heuristique du contenu spam (liens multiples, BBCode, scripts, répétitions)
     const spamCheck = detectSpamContent(`${cleanTopic}\n${cleanMessage}`);

@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/moneriz-app";
 import { resolveMonerizMode } from "@/lib/server/moneriz-checkout";
 import { BillingCycle, SubscriptionPlanId } from "@/lib/moneriz-plans";
+import { adminSetSubscriptionSchema } from "@/lib/validations";
 
 export async function GET() {
   try {
@@ -288,10 +289,10 @@ export async function GET() {
       recentUsers,
       recentOrders,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Erreur API Admin Metrics :", error);
     return NextResponse.json(
-      { error: error.message || "Erreur interne lors de la collecte des métriques." },
+      { error: "Erreur interne lors de la collecte des métriques." },
       { status: 500 }
     );
   }
@@ -318,35 +319,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
-    const body = await request.json().catch(() => ({}));
-    const targetUserId = body?.targetUserId;
-    const planId = body?.planId as SubscriptionPlanId | undefined;
-    const billingCycle = (body?.billingCycle as BillingCycle | undefined) || "monthly";
-
-    if (
-      typeof targetUserId !== "string" ||
-      !targetUserId ||
-      (planId !== "free" && planId !== "personal" && planId !== "business")
-    ) {
+    const rawBody = await request.json().catch(() => null);
+    const parsedBody = adminSetSubscriptionSchema.safeParse(rawBody);
+    if (!parsedBody.success) {
       return NextResponse.json(
-        { error: "Paramètres invalides (targetUserId et planId requis)." },
+        {
+          error:
+            parsedBody.error.issues[0]?.message ||
+            "Paramètres invalides (targetUserId UUID et planId requis).",
+        },
         { status: 400 }
       );
     }
 
+    const { targetUserId, planId, billingCycle } = parsedBody.data;
+    const effectiveCycle: BillingCycle = billingCycle === "yearly" ? "yearly" : "monthly";
+
     const updated = await adminSetUserSubscription({
       targetUserId,
       planId,
-      billingCycle,
+      billingCycle: effectiveCycle,
     });
 
     return NextResponse.json({
       success: true,
       subscription: updated,
     });
-  } catch (err: any) {
+  } catch (err) {
+    console.error("Erreur POST Admin Metrics :", err);
     return NextResponse.json(
-      { error: err?.message || "Impossible de modifier l'abonnement." },
+      { error: "Impossible de modifier l'abonnement pour le moment." },
       { status: 500 }
     );
   }

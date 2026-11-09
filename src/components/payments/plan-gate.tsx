@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { Lock, ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/lib/store/ui-store";
-import { createClient } from "@/lib/supabase/client";
-import { isAdmin } from "@/lib/utils/admin";
 import {
   canAccessFeature,
   getRequiredPlanForFeature,
@@ -28,19 +26,9 @@ export function PlanGate({
   featureDescription,
   children,
 }: PlanGateProps) {
-  const { subscriptionPlan } = useUIStore();
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const { subscriptionPlan, isAdminUser } = useUIStore();
 
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email && isAdmin(user.email)) {
-        setIsSuperAdmin(true);
-      }
-    });
-  }, []);
-
-  const isAllowed = isSuperAdmin || canAccessFeature(subscriptionPlan, feature);
+  const isAllowed = isAdminUser || canAccessFeature(subscriptionPlan, feature);
   if (isAllowed) {
     return <>{children}</>;
   }

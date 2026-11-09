@@ -257,8 +257,8 @@ export default function SettingsPage() {
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 6) {
-      toast.error("Le mot de passe doit comporter au moins 6 caractères.");
+    if (!newPassword || newPassword.length < 8) {
+      toast.error("Le mot de passe doit comporter au moins 8 caractères.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -933,11 +933,11 @@ export default function SettingsPage() {
                       <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Nouveau mot de passe</label>
                       <Input 
                         type="password" 
-                        placeholder="Au moins 6 caractères" 
+                        placeholder="Au moins 8 caractères" 
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
-                        minLength={6}
+                        minLength={8}
                         className="dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                       />
                     </div>
@@ -949,7 +949,7 @@ export default function SettingsPage() {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
-                        minLength={6}
+                        minLength={8}
                         className="dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100"
                       />
                     </div>

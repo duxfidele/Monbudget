@@ -90,4 +90,32 @@ test.describe("Admin Access Control & Metrics — SaaS Governance", () => {
     expect(allowed.status).toBe(200);
     expect(allowed.error).toBeUndefined();
   });
+
+  test("server endpoints /api/auth/admin-status, /api/checkout/status & /api/admin/metrics fail closed without admin session", async ({
+    request,
+  }) => {
+    // 1. /api/auth/admin-status renvoie false sans exposer la liste des emails
+    const statusRes = await request.get("/api/auth/admin-status");
+    expect(statusRes.status()).toBe(200);
+    const statusJson = await statusRes.json();
+    expect(statusJson).toEqual({ authenticated: false, isAdmin: false });
+
+    // 2. /api/checkout/status (en mode test hors prod) indique isAdmin: false pour un non-admin
+    const checkoutStatusRes = await request.get("/api/checkout/status?testUserId=user-non-admin");
+    expect(checkoutStatusRes.status()).toBe(200);
+    const checkoutStatusJson = await checkoutStatusRes.json();
+    expect(checkoutStatusJson.isAdmin).toBe(false);
+
+    // 3. /api/admin/metrics (GET et POST) refusent l'accès anonyme (401)
+    const metricsGetRes = await request.get("/api/admin/metrics");
+    expect(metricsGetRes.status()).toBe(401);
+
+    const metricsPostRes = await request.post("/api/admin/metrics", {
+      data: {
+        targetUserId: "00000000-0000-0000-0000-000000000001",
+        planId: "business",
+      },
+    });
+    expect(metricsPostRes.status()).toBe(401);
+  });
 });

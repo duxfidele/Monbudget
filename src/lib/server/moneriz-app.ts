@@ -57,13 +57,32 @@ const fallbackSubscriptions =
   globalForMoneriz.__monbudgetSubscriptions ??
   (globalForMoneriz.__monbudgetSubscriptions = new Map<string, UserSubscriptionRecord>());
 
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
 function getAdminSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !serviceKey) return null;
   return createSupabaseAdminOrServerClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+function requireAdminSupabaseOrNonProdFallback() {
+  const adminSupabase = getAdminSupabase();
+  if (!adminSupabase && isProductionRuntime()) {
+    throw new Error("MISSING_SERVICE_ROLE_KEY");
+  }
+  return adminSupabase;
+}
+
+async function getOptionalSessionSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!url || !anonKey) return null;
+  return await createSessionSupabaseClient().catch(() => null);
 }
 
 function buildAppOrigin(requestOrigin?: string): string {
@@ -103,22 +122,27 @@ export async function prepareAuthorizedCheckout(params: {
     (process.env.MONERIZ_INTEGRATION_MODE === "redirect" ? "redirect" : "iframe");
   const appOrigin = buildAppOrigin(params.requestOrigin);
 
-  const supabase = await createSessionSupabaseClient().catch(() => getAdminSupabase());
+  const adminSupabase = requireAdminSupabaseOrNonProdFallback();
 
   // 1. Si un orderId est fourni, rechercher la commande existante et vérifier la propriété
   if (params.orderId) {
-    let existingOrder: MonerizCheckoutOrderRecord | null = fallbackOrders.get(params.orderId) || null;
+    let existingOrder: MonerizCheckoutOrderRecord | null = null;
 
-    if (supabase) {
-      const { data: row } = await supabase
+    if (adminSupabase) {
+      const { data: row, error: fetchError } = await adminSupabase
         .from("subscription_orders")
         .select("*")
         .eq("id", params.orderId)
         .maybeSingle();
 
+      if (fetchError) {
+        throw new Error(`ORDER_FETCH_FAILED:${fetchError.message}`);
+      }
       if (row) {
         existingOrder = mapRowToOrder(row);
       }
+    } else {
+      existingOrder = fallbackOrders.get(params.orderId) || null;
     }
 
     if (!existingOrder || existingOrder.userId !== params.userId) {
@@ -161,9 +185,8 @@ export async function prepareAuthorizedCheckout(params: {
       existingOrder.requestSnapshot = snapshot;
       existingOrder.checkoutSession = null;
 
-      fallbackOrders.set(existingOrder.id, existingOrder);
-      if (supabase) {
-        await supabase
+      if (adminSupabase) {
+        const { error: updateError } = await adminSupabase
           .from("subscription_orders")
           .update({
             status: "pending",
@@ -173,6 +196,12 @@ export async function prepareAuthorizedCheckout(params: {
             updated_at: new Date().toISOString(),
           })
           .eq("id", existingOrder.id);
+
+        if (updateError) {
+          throw new Error(`ORDER_PERSISTENCE_FAILED:${updateError.message}`);
+        }
+      } else {
+        fallbackOrders.set(existingOrder.id, existingOrder);
       }
     }
 
@@ -188,18 +217,44 @@ export async function prepareAuthorizedCheckout(params: {
   }
 
   // Chercher s'il existe déjà une commande pending réutilisable pour ce même plan et cycle
-  for (const cached of fallbackOrders.values()) {
-    if (
-      cached.userId === params.userId &&
-      cached.planId === planId &&
-      cached.billingCycle === billingCycle &&
-      cached.mode === mode &&
-      cached.status === "pending"
-    ) {
-      if (isSessionReusable(cached.checkoutSession)) {
-        return { order: cached, existingSession: cached.checkoutSession! };
+  if (adminSupabase) {
+    const { data: pendingRow, error: pendingError } = await adminSupabase
+      .from("subscription_orders")
+      .select("*")
+      .eq("user_id", params.userId)
+      .eq("plan_id", planId)
+      .eq("billing_cycle", billingCycle)
+      .eq("mode", mode)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pendingError) {
+      throw new Error(`ORDER_FETCH_FAILED:${pendingError.message}`);
+    }
+
+    if (pendingRow) {
+      const existingPending = mapRowToOrder(pendingRow);
+      if (isSessionReusable(existingPending.checkoutSession)) {
+        return { order: existingPending, existingSession: existingPending.checkoutSession! };
       }
-      return { order: cached };
+      return { order: existingPending };
+    }
+  } else {
+    for (const cached of fallbackOrders.values()) {
+      if (
+        cached.userId === params.userId &&
+        cached.planId === planId &&
+        cached.billingCycle === billingCycle &&
+        cached.mode === mode &&
+        cached.status === "pending"
+      ) {
+        if (isSessionReusable(cached.checkoutSession)) {
+          return { order: cached, existingSession: cached.checkoutSession! };
+        }
+        return { order: cached };
+      }
     }
   }
 
@@ -237,27 +292,27 @@ export async function prepareAuthorizedCheckout(params: {
     checkoutSession: null,
   };
 
-  fallbackOrders.set(orderId, newOrder);
+  if (adminSupabase) {
+    const { error: insertError } = await adminSupabase.from("subscription_orders").insert({
+      id: newOrder.id,
+      user_id: newOrder.userId,
+      plan_id: newOrder.planId,
+      billing_cycle: newOrder.billingCycle,
+      mode: newOrder.mode,
+      reference: newOrder.reference,
+      amount: newOrder.amount,
+      currency: newOrder.currency,
+      title: newOrder.title,
+      status: newOrder.status,
+      idempotency_key: newOrder.idempotencyKey,
+      request_snapshot: newOrder.requestSnapshot,
+    });
 
-  if (supabase) {
-    try {
-      await supabase.from("subscription_orders").insert({
-        id: newOrder.id,
-        user_id: newOrder.userId,
-        plan_id: newOrder.planId,
-        billing_cycle: newOrder.billingCycle,
-        mode: newOrder.mode,
-        reference: newOrder.reference,
-        amount: newOrder.amount,
-        currency: newOrder.currency,
-        title: newOrder.title,
-        status: newOrder.status,
-        idempotency_key: newOrder.idempotencyKey,
-        request_snapshot: newOrder.requestSnapshot,
-      });
-    } catch {
-      // Fallback mémoire conservé si la table n'est pas encore migrée
+    if (insertError) {
+      throw new Error(`ORDER_PERSISTENCE_FAILED:${insertError.message}`);
     }
+  } else {
+    fallbackOrders.set(orderId, newOrder);
   }
 
   return { order: newOrder };
@@ -306,27 +361,31 @@ export async function saveCheckoutSession(
   updatedIdempotencyKey?: string,
   updatedSnapshot?: MonerizCheckoutRequestSnapshot
 ): Promise<void> {
+  const adminSupabase = requireAdminSupabaseOrNonProdFallback();
+
+  if (adminSupabase) {
+    const { error } = await adminSupabase
+      .from("subscription_orders")
+      .update({
+        checkout_session: session,
+        ...(updatedIdempotencyKey ? { idempotency_key: updatedIdempotencyKey } : {}),
+        ...(updatedSnapshot ? { request_snapshot: updatedSnapshot } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", orderId);
+
+    if (error) {
+      throw new Error(`ORDER_PERSISTENCE_FAILED:${error.message}`);
+    }
+    return;
+  }
+
   const cached = fallbackOrders.get(orderId);
   if (cached) {
     cached.checkoutSession = session;
     if (updatedIdempotencyKey) cached.idempotencyKey = updatedIdempotencyKey;
     if (updatedSnapshot) cached.requestSnapshot = updatedSnapshot;
     fallbackOrders.set(orderId, cached);
-  }
-
-  const supabase = await createSessionSupabaseClient().catch(() => getAdminSupabase());
-  if (supabase) {
-    try {
-      await supabase
-        .from("subscription_orders")
-        .update({
-          checkout_session: session,
-          ...(updatedIdempotencyKey ? { idempotency_key: updatedIdempotencyKey } : {}),
-          ...(updatedSnapshot ? { request_snapshot: updatedSnapshot } : {}),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", orderId);
-    } catch {}
   }
 }
 
@@ -386,62 +445,172 @@ export async function commitMonerizInbox(event: MonerizWebhookEvent): Promise<{
     throw new Error("MODE_MISMATCH");
   }
 
-  // 1. Tenter d'exécuter la fonction transactionnelle PostgreSQL (RPC) si disponible
-  const adminSupabase = getAdminSupabase();
+  // 1. Exiger service_role en production (aucun fallback RAM / anon silencieux)
+  const adminSupabase = requireAdminSupabaseOrNonProdFallback();
   if (adminSupabase) {
-    try {
-      const { data, error } = await adminSupabase.rpc("process_moneriz_webhook_event", {
-        p_event_id: event.id,
-        p_event_type: event.type,
-        p_mode: event.mode,
-        p_payment_id: event.payment.id,
-        p_reference: event.payment.reference,
-        p_amount: event.payment.amount,
-        p_currency: event.payment.currency,
-        p_payment_status: event.payment.status,
-        p_occurred_at: event.occurredAt,
-        p_payload: event,
-      });
+    const { data, error } = await adminSupabase.rpc("process_moneriz_webhook_event", {
+      p_event_id: event.id,
+      p_event_type: event.type,
+      p_mode: event.mode,
+      p_payment_id: event.payment.id,
+      p_reference: event.payment.reference,
+      p_amount: event.payment.amount,
+      p_currency: event.payment.currency,
+      p_payment_status: event.payment.status,
+      p_occurred_at: event.occurredAt,
+      p_payload: event,
+    });
 
-      if (!error && data) {
-        // Synchroniser également le cache mémoire serveur
-        syncFallbackMemoryWithEvent(event);
-        return {
-          duplicate: Boolean(data.duplicate),
-          orderStatus: data.order_status || "processed",
-          planId: data.plan_id,
-        };
+    if (!error && data) {
+      return {
+        duplicate: Boolean(data.duplicate),
+        orderStatus: data.order_status || "processed",
+        planId: data.plan_id,
+      };
+    }
+
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("ORDER_NOT_FOUND:")) {
+        throw new Error(`ORDER_NOT_FOUND:${event.payment.reference}`);
       }
-    } catch {
-      // Fallback ci-dessous si la fonction RPC n'est pas encore créée
+      if (msg.includes("AMOUNT_OR_CURRENCY_MISMATCH")) {
+        throw new Error("AMOUNT_OR_CURRENCY_MISMATCH");
+      }
+      if (msg.includes("FORBIDDEN_")) {
+        throw new Error(msg);
+      }
+
+      // Repli contrôlé vers les tables SQL uniquement si la fonction RPC n'est pas encore déployée
+      const isMissingRpc =
+        error.code === "PGRST202" ||
+        error.code === "42883" ||
+        /could not find the function|does not exist/i.test(msg);
+
+      if (!isMissingRpc) {
+        throw new Error(`WEBHOOK_RPC_FAILED:${msg}`);
+      }
+
+      // 1b. Déduplication & écriture directe via service_role si la RPC n'existe pas encore
+      const { data: existingInbox, error: inboxReadError } = await adminSupabase
+        .from("moneriz_webhook_inbox")
+        .select("event_id")
+        .eq("event_id", event.id)
+        .maybeSingle();
+
+      if (inboxReadError) {
+        throw new Error(`WEBHOOK_INBOX_READ_FAILED:${inboxReadError.message}`);
+      }
+      if (existingInbox) {
+        return { duplicate: true, orderStatus: "unchanged" };
+      }
+
+      const { data: orderRow, error: orderFetchError } = await adminSupabase
+        .from("subscription_orders")
+        .select("*")
+        .eq("mode", event.mode)
+        .eq("reference", event.payment.reference)
+        .maybeSingle();
+
+      if (orderFetchError) {
+        throw new Error(`ORDER_FETCH_FAILED:${orderFetchError.message}`);
+      }
+      if (!orderRow) {
+        throw new Error(`ORDER_NOT_FOUND:${event.payment.reference}`);
+      }
+
+      const targetOrder = mapRowToOrder(orderRow);
+      if (
+        targetOrder.amount !== event.payment.amount ||
+        targetOrder.currency !== event.payment.currency
+      ) {
+        throw new Error("AMOUNT_OR_CURRENCY_MISMATCH");
+      }
+
+      const { error: inboxInsertError } = await adminSupabase
+        .from("moneriz_webhook_inbox")
+        .insert({
+          event_id: event.id,
+          event_type: event.type,
+          mode: event.mode,
+          payment_id: event.payment.id,
+          reference: event.payment.reference,
+          payload: event,
+        });
+
+      if (inboxInsertError) {
+        if (inboxInsertError.code === "23505") {
+          return { duplicate: true, orderStatus: "unchanged" };
+        }
+        throw new Error(`WEBHOOK_INBOX_WRITE_FAILED:${inboxInsertError.message}`);
+      }
+
+      const result = syncFallbackMemoryWithEvent(event, targetOrder);
+
+      const { error: orderUpdateError } = await adminSupabase
+        .from("subscription_orders")
+        .update({
+          status: targetOrder.status,
+          last_payment_id: event.payment.id,
+          ...(targetOrder.status === "paid" ? { paid_at: event.payment.paidAt || event.occurredAt } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", targetOrder.id);
+
+      if (orderUpdateError) {
+        throw new Error(`ORDER_UPDATE_FAILED:${orderUpdateError.message}`);
+      }
+
+      if (event.type === "payment.succeeded" && event.payment.status === "paid") {
+        const sub = fallbackSubscriptions.get(targetOrder.userId);
+        if (sub) {
+          const { error: subUpsertError } = await adminSupabase
+            .from("user_subscriptions")
+            .upsert({
+              user_id: sub.userId,
+              plan_id: sub.planId,
+              billing_cycle: sub.billingCycle,
+              status: sub.status,
+              current_period_end: sub.currentPeriodEnd,
+              last_order_id: sub.lastOrderId,
+              updated_at: new Date().toISOString(),
+            });
+
+          if (subUpsertError) {
+            throw new Error(`SUBSCRIPTION_UPSERT_FAILED:${subUpsertError.message}`);
+          }
+        }
+      } else if (event.type === "payment.reversed") {
+        const { error: subCancelError } = await adminSupabase
+          .from("user_subscriptions")
+          .update({
+            plan_id: "free",
+            billing_cycle: "none",
+            status: "canceled",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", targetOrder.userId)
+          .eq("last_order_id", targetOrder.id);
+
+        if (subCancelError) {
+          throw new Error(`SUBSCRIPTION_REVERSAL_FAILED:${subCancelError.message}`);
+        }
+      }
+
+      return result;
     }
   }
 
-  // 2. Traitement atomique avec déduplication sur event.id
+  // 2. Mode mémoire hors production uniquement (tests unitaires / dev local sans SUPABASE_SERVICE_ROLE_KEY)
   if (fallbackInbox.has(event.id)) {
     return { duplicate: true, orderStatus: "unchanged" };
   }
 
-  // Rechercher la commande par (mode, reference)
   let targetOrder: MonerizCheckoutOrderRecord | null = null;
   for (const order of fallbackOrders.values()) {
     if (order.mode === event.mode && order.reference === event.payment.reference) {
       targetOrder = order;
       break;
-    }
-  }
-
-  if (!targetOrder && adminSupabase) {
-    const { data: row } = await adminSupabase
-      .from("subscription_orders")
-      .select("*")
-      .eq("mode", event.mode)
-      .eq("reference", event.payment.reference)
-      .maybeSingle();
-
-    if (row) {
-      targetOrder = mapRowToOrder(row);
-      fallbackOrders.set(targetOrder.id, targetOrder);
     }
   }
 
@@ -456,51 +625,8 @@ export async function commitMonerizInbox(event: MonerizWebhookEvent): Promise<{
     throw new Error("AMOUNT_OR_CURRENCY_MISMATCH");
   }
 
-  // Enregistrer l'event_id dans l'inbox après validation
   fallbackInbox.add(event.id);
-
-  const result = syncFallbackMemoryWithEvent(event, targetOrder);
-
-  // Synchroniser les tables Supabase si présentes
-  if (adminSupabase) {
-    try {
-      await adminSupabase.from("moneriz_webhook_inbox").upsert({
-        event_id: event.id,
-        event_type: event.type,
-        mode: event.mode,
-        payment_id: event.payment.id,
-        reference: event.payment.reference,
-        payload: event,
-      });
-
-      await adminSupabase
-        .from("subscription_orders")
-        .update({
-          status: targetOrder.status,
-          last_payment_id: event.payment.id,
-          ...(targetOrder.status === "paid" ? { paid_at: event.payment.paidAt || event.occurredAt } : {}),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", targetOrder.id);
-
-      if (targetOrder.status === "paid") {
-        const sub = fallbackSubscriptions.get(targetOrder.userId);
-        if (sub) {
-          await adminSupabase.from("user_subscriptions").upsert({
-            user_id: sub.userId,
-            plan_id: sub.planId,
-            billing_cycle: sub.billingCycle,
-            status: sub.status,
-            current_period_end: sub.currentPeriodEnd,
-            last_order_id: sub.lastOrderId,
-            updated_at: new Date().toISOString(),
-          });
-        }
-      }
-    } catch {}
-  }
-
-  return result;
+  return syncFallbackMemoryWithEvent(event, targetOrder);
 }
 
 function syncFallbackMemoryWithEvent(
@@ -605,14 +731,16 @@ export async function getOrderAndSubscriptionStatus(params: {
     status: string;
   } | null;
   subscription: UserSubscriptionRecord;
+  isAdmin: boolean;
 }> {
-  const supabase = await createSessionSupabaseClient().catch(() => getAdminSupabase());
+  const isSuperAdmin = isAdmin(params.userEmail);
+  const adminSupabase = getAdminSupabase();
+  const readClient = adminSupabase || (await getOptionalSessionSupabase());
 
   let order: MonerizCheckoutOrderRecord | null = null;
   if (params.orderId) {
-    order = fallbackOrders.get(params.orderId) || null;
-    if (!order && supabase) {
-      const { data: row } = await supabase
+    if (readClient) {
+      const { data: row } = await readClient
         .from("subscription_orders")
         .select("*")
         .eq("id", params.orderId)
@@ -620,18 +748,20 @@ export async function getOrderAndSubscriptionStatus(params: {
         .maybeSingle();
       if (row) {
         order = mapRowToOrder(row);
-        fallbackOrders.set(order.id, order);
       }
+    } else if (!isProductionRuntime()) {
+      order = fallbackOrders.get(params.orderId) || null;
     }
+
     if (order && order.userId !== params.userId) {
       order = null;
     }
   }
 
-  let sub: UserSubscriptionRecord | null = fallbackSubscriptions.get(params.userId) || null;
-  if (!sub && supabase) {
+  let sub: UserSubscriptionRecord | null = null;
+  if (readClient) {
     try {
-      const { data: subRow } = await supabase
+      const { data: subRow } = await readClient
         .from("user_subscriptions")
         .select("*")
         .eq("user_id", params.userId)
@@ -645,13 +775,13 @@ export async function getOrderAndSubscriptionStatus(params: {
           currentPeriodEnd: subRow.current_period_end || null,
           lastOrderId: subRow.last_order_id || null,
         };
-        fallbackSubscriptions.set(params.userId, sub);
       }
     } catch {}
+  } else if (!isProductionRuntime()) {
+    sub = fallbackSubscriptions.get(params.userId) || null;
   }
 
   if (!sub) {
-    const isSuperAdmin = isAdmin(params.userEmail);
     sub = {
       userId: params.userId,
       planId: isSuperAdmin ? "business" : "free",
@@ -675,6 +805,7 @@ export async function getOrderAndSubscriptionStatus(params: {
         }
       : null,
     subscription: sub,
+    isAdmin: isSuperAdmin,
   };
 }
 
@@ -711,31 +842,46 @@ export async function adminSetUserSubscription(params: {
     lastOrderId: null,
   };
 
-  fallbackSubscriptions.set(params.targetUserId, record);
+  const sessionSupabase = await getOptionalSessionSupabase();
+  const adminClient = getAdminSupabase();
 
-  const supabase = await createSessionSupabaseClient().catch(() => getAdminSupabase());
-  if (supabase) {
-    try {
-      await supabase.rpc("admin_set_user_subscription", {
-        p_target_user_id: params.targetUserId,
-        p_plan_id: params.planId,
-        p_billing_cycle: effectiveCycle === "none" ? "monthly" : effectiveCycle,
-      });
-    } catch {}
+  let persisted = false;
+  let lastError: string | null = null;
 
-    const adminClient = getAdminSupabase();
-    if (adminClient) {
-      try {
-        await adminClient.from("user_subscriptions").upsert({
-          user_id: params.targetUserId,
-          plan_id: params.planId,
-          billing_cycle: effectiveCycle,
-          status: "active",
-          current_period_end: periodEnd,
-          updated_at: now.toISOString(),
-        });
-      } catch {}
+  if (sessionSupabase) {
+    const { error: rpcError } = await sessionSupabase.rpc("admin_set_user_subscription", {
+      p_target_user_id: params.targetUserId,
+      p_plan_id: params.planId,
+      p_billing_cycle: effectiveCycle === "none" ? "monthly" : effectiveCycle,
+    });
+    if (!rpcError) {
+      persisted = true;
+    } else {
+      lastError = rpcError.message;
     }
+  }
+
+  if (!persisted && adminClient) {
+    const { error: upsertError } = await adminClient.from("user_subscriptions").upsert({
+      user_id: params.targetUserId,
+      plan_id: params.planId,
+      billing_cycle: effectiveCycle,
+      status: "active",
+      current_period_end: periodEnd,
+      updated_at: now.toISOString(),
+    });
+    if (!upsertError) {
+      persisted = true;
+    } else {
+      lastError = upsertError.message;
+    }
+  }
+
+  if (!persisted) {
+    if (isProductionRuntime() || adminClient || sessionSupabase) {
+      throw new Error(lastError || "MISSING_SERVICE_ROLE_KEY");
+    }
+    fallbackSubscriptions.set(params.targetUserId, record);
   }
 
   return record;

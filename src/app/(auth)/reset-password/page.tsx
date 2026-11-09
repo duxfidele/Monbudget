@@ -20,6 +20,10 @@ export default function ResetPasswordPage() {
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!password || password.length < 8) {
+      toast.error("Le mot de passe doit comporter au moins 8 caractères.");
+      return;
+    }
     setLoading(true);
 
     const { error } = await supabase.auth.updateUser({
@@ -68,7 +72,7 @@ export default function ResetPasswordPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              minLength={6}
+              minLength={8}
             />
           </div>
           <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>

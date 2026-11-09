@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
 import {
   canAccessFeature,
   getRequiredPlanForFeature,
@@ -215,6 +217,72 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     await expect(commitMonerizInbox(mismatchedAmountEvent)).rejects.toThrow(
       "AMOUNT_OR_CURRENCY_MISMATCH"
     );
+  });
+
+  test("5. Durcissement sécurité Étape 1 : refus du fallback RAM/anon en production et verrouillage SQL RPC/RLS", async () => {
+    const monerizAppSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/server/moneriz-app.ts"),
+      "utf8"
+    );
+    // getAdminSupabase ne doit jamais retomber sur la clé publique anon
+    const adminFnMatch = monerizAppSource.match(/function getAdminSupabase\(\)[\s\S]*?\n\}/);
+    expect(adminFnMatch?.[0]).toBeTruthy();
+    expect(adminFnMatch?.[0]).not.toContain("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+
+    // En production sans SUPABASE_SERVICE_ROLE_KEY, aucun fallback RAM toléré
+    const env = process.env as Record<string, string | undefined>;
+    const prevNodeEnv = env.NODE_ENV;
+    const prevServiceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+    env.NODE_ENV = "production";
+    delete env.SUPABASE_SERVICE_ROLE_KEY;
+
+    try {
+      await expect(
+        prepareAuthorizedCheckout({
+          userId: "user-prod-guard",
+          planId: "personal",
+          billingCycle: "monthly",
+        })
+      ).rejects.toThrow("MISSING_SERVICE_ROLE_KEY");
+
+      const prodEvent = parseMonerizEvent(
+        JSON.stringify({
+          id: "evt_prod_guard_1",
+          type: "payment.succeeded",
+          mode: "test",
+          occurredAt: new Date().toISOString(),
+          payment: {
+            id: "pay_prod_guard_1",
+            mode: "test",
+            status: "paid",
+            amount: 1000,
+            currency: "XOF",
+            reference: "MB-TEST-PER-PRODGUARD",
+            paidAt: new Date().toISOString(),
+          },
+        })
+      );
+
+      await expect(commitMonerizInbox(prodEvent)).rejects.toThrow(
+        "MISSING_SERVICE_ROLE_KEY"
+      );
+    } finally {
+      if (prevNodeEnv === undefined) delete env.NODE_ENV;
+      else env.NODE_ENV = prevNodeEnv;
+      if (prevServiceKey === undefined) delete env.SUPABASE_SERVICE_ROLE_KEY;
+      else env.SUPABASE_SERVICE_ROLE_KEY = prevServiceKey;
+    }
+
+    // La migration SQL de durcissement doit révoquer EXECUTE public/anon/authenticated sur process_moneriz_webhook_event
+    const hardeningSql = fs.readFileSync(
+      path.join(process.cwd(), "supabase/migrations/20261110_security_hardening_moneriz.sql"),
+      "utf8"
+    );
+    expect(hardeningSql).toContain("ENABLE ROW LEVEL SECURITY");
+    expect(hardeningSql).toContain('DROP POLICY IF EXISTS "Users can update their own pending orders"');
+    expect(hardeningSql).toContain("FROM PUBLIC, anon, authenticated");
+    expect(hardeningSql).toContain("TO service_role");
+    expect(hardeningSql).toContain("FORBIDDEN_SERVICE_ROLE_REQUIRED");
   });
 });
 

@@ -1,10 +1,14 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   validateReceiptFile,
+  validateReceiptBuffer,
   generateReceiptStoragePath,
   formatFileSize,
 } from "@/lib/utils/receipt-storage";
+
+const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 jours
 
 export async function POST(req: Request) {
   try {
@@ -23,7 +27,11 @@ export async function POST(req: Request) {
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const transactionId = (formData.get("transactionId") as string) || `tx_${Date.now()}`;
+    const rawTransactionId = formData.get("transactionId");
+    const transactionId =
+      typeof rawTransactionId === "string" && rawTransactionId.trim()
+        ? rawTransactionId.trim().slice(0, 64)
+        : `tx_${Date.now()}`;
 
     if (!file) {
       return NextResponse.json(
@@ -32,7 +40,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validation du fichier
+    // 1. Validation des métadonnées (taille, MIME déclaré, extension, nom)
     const validation = validateReceiptFile({
       name: file.name,
       size: file.size,
@@ -46,57 +54,86 @@ export async function POST(req: Request) {
       );
     }
 
-    const storagePath = generateReceiptStoragePath(
-      user.id,
-      transactionId,
+    // 2. Lecture binaire et validation stricte par magic bytes (empêche faux JPEG/PDF contenant HTML/JS)
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const bufferValidation = validateReceiptBuffer(
+      buffer,
+      file.type,
       validation.sanitizedName || file.name
     );
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    // Tentative d'upload vers Supabase Storage dans le bucket "receipts"
-    try {
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("receipts")
-        .upload(storagePath, buffer, {
-          contentType: file.type,
-          upsert: true,
-        });
-
-      if (!uploadError && uploadData) {
-        const { data: publicUrlData } = supabase.storage
-          .from("receipts")
-          .getPublicUrl(storagePath);
-
-        return NextResponse.json({
-          success: true,
-          url: publicUrlData.publicUrl,
-          path: storagePath,
-          fileName: validation.sanitizedName || file.name,
-          sizeFormatted: formatFileSize(file.size),
-        });
-      }
-    } catch (storageErr) {
-      console.warn("Supabase Storage bucket 'receipts' non accessible, fallback data-url activé.", storageErr);
+    if (!bufferValidation.valid || !bufferValidation.detectedMime) {
+      return NextResponse.json(
+        { error: bufferValidation.error || "Contenu du fichier invalide." },
+        { status: 400 }
+      );
     }
 
-    // Mode Fallback Gracieux : Si le bucket Supabase n'est pas encore créé,
-    // on renvoie un data URL pour que l'utilisateur puisse immédiatement visualiser son reçu sans bloquer l'application
+    const safeFileName = bufferValidation.sanitizedName || validation.sanitizedName || file.name;
+    const uniqueTxToken = `${transactionId}_${crypto.randomUUID().slice(0, 8)}`;
+    const storagePath = generateReceiptStoragePath(
+      user.id,
+      uniqueTxToken,
+      safeFileName
+    );
+
+    // 3. Upload privé vers Supabase Storage (upsert: false pour éviter tout écrasement)
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("receipts")
+      .upload(storagePath, buffer, {
+        contentType: bufferValidation.detectedMime,
+        upsert: false,
+      });
+
+    if (!uploadError && uploadData) {
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from("receipts")
+        .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
+
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        return NextResponse.json(
+          { error: "Justificatif enregistré mais impossible de générer son lien privé." },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        url: signedUrlData.signedUrl,
+        path: storagePath,
+        mimeType: bufferValidation.detectedMime,
+        fileName: safeFileName,
+        sizeFormatted: formatFileSize(buffer.length),
+      });
+    }
+
+    // En production, ne jamais masquer une erreur Storage par un fallback base64
+    if (process.env.NODE_ENV === "production") {
+      console.error("Erreur upload Supabase Storage 'receipts' :", uploadError?.message);
+      return NextResponse.json(
+        { error: "Impossible d'enregistrer le justificatif sur le stockage sécurisé." },
+        { status: 503 }
+      );
+    }
+
+    // Hors production (dév local si le bucket 'receipts' n'est pas encore provisionné) : data URL avec MIME réel vérifié
+    console.warn("Bucket 'receipts' non accessible en dév, fallback data-url vérifié activé.", uploadError?.message);
     const base64Data = buffer.toString("base64");
-    const dataUrl = `data:${file.type};base64,${base64Data}`;
+    const dataUrl = `data:${bufferValidation.detectedMime};base64,${base64Data}`;
 
     return NextResponse.json({
       success: true,
       url: dataUrl,
       path: storagePath,
-      fileName: validation.sanitizedName || file.name,
-      sizeFormatted: formatFileSize(file.size),
+      mimeType: bufferValidation.detectedMime,
+      fileName: safeFileName,
+      sizeFormatted: formatFileSize(buffer.length),
       fallback: true,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Erreur upload reçu :", error);
     return NextResponse.json(
-      { error: error.message || "Erreur interne lors du traitement du justificatif." },
+      { error: "Erreur interne lors du traitement du justificatif." },
       { status: 500 }
     );
   }

@@ -12,7 +12,6 @@ import {
   AFRICAN_EXPENSE_CATEGORIES,
 } from "@/lib/utils/budget-calc";
 import { BillingCycle, SubscriptionPlanId } from "@/lib/moneriz-plans";
-import { isAdmin } from "@/lib/utils/admin";
 
 export type IncomeSourceEntry = {
   id: string;
@@ -192,13 +191,15 @@ interface UIState {
   addDebtPayment: (debtId: string, amount: number, notes?: string, date?: string) => Promise<void>;
   removeDebtPayment: (paymentId: string, debtId: string) => Promise<void>;
 
-  // Abonnement SaaS (Moneriz)
+  // Abonnement SaaS (Moneriz) & Rôle Admin (évalué côté serveur uniquement)
+  isAdminUser: boolean;
   subscriptionPlan: SubscriptionPlanId;
   billingCycle: BillingCycle | "none";
   subscriptionExpiresAt: string | null;
   refreshSubscription: (orderId?: string | null, paymentId?: string | null) => Promise<{
     planId: SubscriptionPlanId;
     orderStatus: string | null;
+    isAdmin: boolean;
   }>;
 
   // Preferences & Init
@@ -347,6 +348,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       currency: "FCFA",
       payDay: 28,
       notifications: defaultNotifications,
+      isAdminUser: false,
       subscriptionPlan: "free",
       billingCycle: "none",
       subscriptionExpiresAt: null,
@@ -419,6 +421,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   currency: (initialCache?.currency && initialCache.currency !== "EUR" && initialCache.currency !== "€") ? initialCache.currency : "FCFA",
   payDay: initialCache?.payDay ?? 28,
   notifications: initialCache?.notifications ? { ...defaultNotifications, ...initialCache.notifications } : defaultNotifications,
+  isAdminUser: false,
   subscriptionPlan: initialCache?.subscriptionPlan ?? "free",
   billingCycle: initialCache?.billingCycle ?? "none",
   subscriptionExpiresAt: initialCache?.subscriptionExpiresAt ?? null,
@@ -434,8 +437,10 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         const sub = data?.subscription;
+        const serverIsAdmin = Boolean(data?.isAdmin);
         if (sub && sub.planId) {
           set({
+            isAdminUser: serverIsAdmin,
             subscriptionPlan: sub.planId,
             billingCycle: sub.billingCycle || "none",
             subscriptionExpiresAt: sub.currentPeriodEnd || null,
@@ -450,11 +455,17 @@ export const useUIStore = create<UIState>((set, get) => ({
           return {
             planId: sub.planId as SubscriptionPlanId,
             orderStatus: data?.order?.status || null,
+            isAdmin: serverIsAdmin,
           };
         }
+        set({ isAdminUser: serverIsAdmin });
       }
     } catch {}
-    return { planId: get().subscriptionPlan, orderStatus: null };
+    return {
+      planId: get().subscriptionPlan,
+      orderStatus: null,
+      isAdmin: get().isAdminUser,
+    };
   },
   isLoading: false,
   budget_id: null,
@@ -627,11 +638,8 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (!user) return;
 
       activeUserId = user.id;
-      if (isAdmin(user.email) && get().subscriptionPlan === "free") {
-        set({ userId: user.id, subscriptionPlan: "business", billingCycle: "yearly" });
-      } else {
-        set({ userId: user.id });
-      }
+      set({ userId: user.id });
+      const subscriptionPromise = get().refreshSubscription().catch(() => {});
 
       // Clean up legacy non-partitioned cache & migrate to user partition if needed
       if (typeof window !== "undefined") {
@@ -663,8 +671,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         set({ currency: "FCFA", alertThreshold: 80, payDay: 28 });
       } else {
         let cur = profile.currency && profile.currency.trim() ? profile.currency.trim() : "FCFA";
-        // Migration automatique des comptes avec devise historique EUR (notamment degladux@gmail.com) vers FCFA
-        if (cur === "EUR" || cur === "€" || (user.email && user.email.toLowerCase().includes("degladux"))) {
+        // Migration automatique des comptes avec devise historique EUR vers FCFA
+        if (cur === "EUR" || cur === "€") {
           cur = "FCFA";
           supabase.from("profiles").update({ currency: "FCFA" }).eq("id", user.id).then();
         }
@@ -1093,10 +1101,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         // La table debts peut ne pas encore être créée sur Supabase ; on garde les dettes locales
       }
 
-      // 8. Abonnement SaaS Moneriz (lecture serveur)
-      try {
-        await get().refreshSubscription();
-      } catch {}
+      // 8. Abonnement SaaS Moneriz & statut admin (lecture serveur)
+      await subscriptionPromise;
     } catch (e) {
       console.warn("Notice: Offline or local mode active", e);
     }

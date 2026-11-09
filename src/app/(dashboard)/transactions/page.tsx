@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
 import { ReceiptUpload, ReceiptData } from "@/components/transactions/receipt-upload";
 import { formatFileSize } from "@/lib/utils/receipt-storage";
+import { escapeCsvCell } from "@/lib/utils/security";
 import { 
   formatMoney, 
   formatThousands, 
@@ -213,10 +214,12 @@ export default function TransactionsPage() {
       tx.label,
       tx.amount.toString(),
     ]);
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((e) => e.map((item) => `"${item}"`).join(",")),
-    ].join("\n");
+    const csvContent =
+      "\uFEFF" +
+      [
+        headers.map(escapeCsvCell).join(";"),
+        ...rows.map((e) => e.map((item) => escapeCsvCell(item)).join(";")),
+      ].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

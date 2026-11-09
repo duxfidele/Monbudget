@@ -67,8 +67,8 @@ function RegisterForm() {
       return;
     }
 
-    if (password.length < 6) {
-      const msg = "Le mot de passe doit comporter au moins 6 caractères.";
+    if (password.length < 8) {
+      const msg = "Le mot de passe doit comporter au moins 8 caractères.";
       setErrorMsg(msg);
       toast.error(msg);
       return;
@@ -264,7 +264,7 @@ function RegisterForm() {
                 name="mb_reg_password"
                 type={showPassword ? "text" : "password"}
                 required
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
                 readOnly={!inputsUnlocked}
                 onFocus={() => setInputsUnlocked(true)}
@@ -289,7 +289,7 @@ function RegisterForm() {
               name="mb_reg_confirm_password"
               type={showPassword ? "text" : "password"}
               required
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
               readOnly={!inputsUnlocked}
               onFocus={() => setInputsUnlocked(true)}

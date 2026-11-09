@@ -5,6 +5,7 @@ import {
   getOrderAndSubscriptionStatus,
 } from "@/lib/server/moneriz-app";
 import { fetchMonerizPaymentById } from "@/lib/server/moneriz-checkout";
+import { checkoutStatusQuerySchema } from "@/lib/validations";
 
 export async function GET(request: Request) {
   try {
@@ -14,10 +15,31 @@ export async function GET(request: Request) {
     } = await supabase.auth.getUser();
 
     const { searchParams } = new URL(request.url);
-    const orderId = searchParams.get("orderId");
-    const paymentId = searchParams.get("paymentId");
+    const parsedQuery = checkoutStatusQuerySchema.safeParse({
+      orderId: searchParams.get("orderId") || undefined,
+      paymentId: searchParams.get("paymentId") || undefined,
+      testUserId:
+        process.env.NODE_ENV !== "production"
+          ? searchParams.get("testUserId") || undefined
+          : undefined,
+    });
+
+    if (!parsedQuery.success) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "INVALID_QUERY",
+            message: parsedQuery.error.issues[0]?.message || "Paramètres de requête invalides.",
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    const orderId = parsedQuery.data.orderId ?? null;
+    const paymentId = parsedQuery.data.paymentId ?? null;
     const testUserId =
-      process.env.NODE_ENV !== "production" ? searchParams.get("testUserId") : null;
+      process.env.NODE_ENV !== "production" ? parsedQuery.data.testUserId ?? null : null;
 
     const effectiveUserId = user?.id || testUserId;
 

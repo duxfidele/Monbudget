@@ -93,8 +93,15 @@ export function checkRateLimit(
 }
 
 export function getClientIp(request: Request): string {
-  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
-  if (cfIp) return cfIp;
+  // Priorité aux en-têtes définis par l'infrastructure d'hébergement (non falsifiables sur Vercel)
+  const vercelForwarded = request.headers.get("x-vercel-forwarded-for");
+  if (vercelForwarded) {
+    const first = vercelForwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
 
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
@@ -102,8 +109,8 @@ export function getClientIp(request: Request): string {
     if (first) return first;
   }
 
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
+  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (cfIp) return cfIp;
 
   return "unknown";
 }

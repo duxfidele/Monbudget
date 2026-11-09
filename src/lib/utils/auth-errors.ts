@@ -16,7 +16,9 @@ export function translateAuthError(rawError: string | null | undefined): string 
     return "Cette adresse email est déjà enregistrée. Veuillez vous connecter.";
   }
   if (lower.includes("password should be at least")) {
-    return "Le mot de passe doit comporter au moins 6 caractères.";
+    const match = msg.match(/at least (\d+)/i);
+    const minChars = match?.[1] || "8";
+    return `Le mot de passe doit comporter au moins ${minChars} caractères.`;
   }
   if (lower.includes("access_denied") || lower.includes("access denied")) {
     return "Connexion Google annulée ou accès refusé. Veuillez réessayer avec un compte autorisé.";

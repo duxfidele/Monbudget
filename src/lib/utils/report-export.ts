@@ -9,6 +9,7 @@ import {
   generateFinancialAIAnalysis,
   type DebtItem,
 } from "@/lib/utils/budget-calc";
+import { escapeCsvCell, escapeHtml } from "@/lib/utils/security";
 import type { Category, Transaction, SavingsGoal, IncomeSourceEntry } from "@/lib/store/ui-store";
 
 export interface ReportExportPayload {
@@ -24,11 +25,7 @@ export interface ReportExportPayload {
   debts: DebtItem[];
 }
 
-function escapeCsvCell(val: string | number | undefined | null): string {
-  if (val === undefined || val === null) return '""';
-  const str = String(val).replace(/"/g, '""');
-  return `"${str}"`;
-}
+export { escapeCsvCell };
 
 /**
  * Télécharge un rapport financier complet au format CSV compatible Excel francophone (UTF-8 BOM + séparateur point-virgule)
@@ -254,11 +251,16 @@ export function exportMonthlyReportPDF(payload: ReportExportPayload): void {
     currency,
   });
 
+  const safeMonthLabel = escapeHtml(monthLabel);
+  const safeCurrency = escapeHtml(currency);
+  const safeHealthLabel = escapeHtml(aiAnalysis.healthLabel);
+  const safeAiSummary = escapeHtml(aiAnalysis.summary);
+
   const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Rapport Financier MonBudget - ${monthLabel}</title>
+  <title>Rapport Financier MonBudget - ${safeMonthLabel}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -365,66 +367,66 @@ export function exportMonthlyReportPDF(payload: ReportExportPayload): void {
 </head>
 <body>
   <div class="no-print" style="margin-bottom:16px; padding:10px 14px; background:#1E3A5F; color:#fff; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-    <span>📄 <strong>Aperçu du Rapport PDF (${monthLabel})</strong> — Choisissez « Enregistrer au format PDF » dans la fenêtre d'impression.</span>
+    <span>📄 <strong>Aperçu du Rapport PDF (${safeMonthLabel})</strong> — Choisissez « Enregistrer au format PDF » dans la fenêtre d'impression.</span>
     <button onclick="window.print()" style="background:#10b981; color:#fff; border:none; padding:6px 14px; border-radius:6px; font-weight:700; cursor:pointer;">Imprimer / Enregistrer en PDF</button>
   </div>
 
   <div class="header">
     <div>
       <div class="brand">MonBudget — Rapport Financier Mensuel</div>
-      <div class="subtitle">Période : <strong>${monthLabel}</strong></div>
+      <div class="subtitle">Période : <strong>${safeMonthLabel}</strong></div>
     </div>
     <div class="meta">
-      <div>Édité le ${new Date().toLocaleDateString("fr-FR")}</div>
-      <div>Devise : <strong>${currency}</strong></div>
-      <div>Score Santé IA : <strong>${aiAnalysis.healthScore}/100 (${aiAnalysis.healthLabel})</strong></div>
+      <div>Édité le ${escapeHtml(new Date().toLocaleDateString("fr-FR"))}</div>
+      <div>Devise : <strong>${safeCurrency}</strong></div>
+      <div>Score Santé IA : <strong>${Number(aiAnalysis.healthScore) || 0}/100 (${safeHealthLabel})</strong></div>
     </div>
   </div>
 
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-label">1. Revenus du mois</div>
-      <div class="kpi-value" style="color:#059669;">${formatMoney(income, currency)}</div>
+      <div class="kpi-value" style="color:#059669;">${escapeHtml(formatMoney(income, currency))}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">2. Dépenses du mois</div>
-      <div class="kpi-value" style="color:#dc2626;">${formatMoney(totalExpenses, currency)}</div>
+      <div class="kpi-value" style="color:#dc2626;">${escapeHtml(formatMoney(totalExpenses, currency))}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">3. Solde disponible</div>
-      <div class="kpi-value" style="color:${remaining < 0 ? "#dc2626" : "#1E3A5F"};">${formatMoney(remaining, currency)}</div>
+      <div class="kpi-value" style="color:${remaining < 0 ? "#dc2626" : "#1E3A5F"};">${escapeHtml(formatMoney(remaining, currency))}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">4. Épargne constituée</div>
-      <div class="kpi-value" style="color:#0284c7;">${formatMoney(totalSavingsAccumulated, currency)}</div>
+      <div class="kpi-value" style="color:#0284c7;">${escapeHtml(formatMoney(totalSavingsAccumulated, currency))}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">5. Dettes à rembourser</div>
-      <div class="kpi-value" style="color:#e11d48;">${formatMoney(payableDebts, currency)}</div>
+      <div class="kpi-value" style="color:#e11d48;">${escapeHtml(formatMoney(payableDebts, currency))}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">6. Dettes à récupérer</div>
-      <div class="kpi-value" style="color:#d97706;">${formatMoney(receivableDebts, currency)}</div>
+      <div class="kpi-value" style="color:#d97706;">${escapeHtml(formatMoney(receivableDebts, currency))}</div>
     </div>
   </div>
 
   <div class="ai-box">
     <div style="font-weight:800; color:#312e81; margin-bottom:4px;">
-      🤖 Diagnostic de l'Intelligence Artificielle Financière (${aiAnalysis.healthScore}/100 — ${aiAnalysis.healthLabel})
+      🤖 Diagnostic de l'Intelligence Artificielle Financière (${Number(aiAnalysis.healthScore) || 0}/100 — ${safeHealthLabel})
     </div>
-    <div style="margin-bottom:8px;">${aiAnalysis.summary}</div>
+    <div style="margin-bottom:8px;">${safeAiSummary}</div>
     ${aiAnalysis.recommendations
       .map(
         (rec) => `
       <div class="ai-rec">
-        <strong>${rec.title} :</strong> ${rec.description}
+        <strong>${escapeHtml(rec.title)} :</strong> ${escapeHtml(rec.description)}
       </div>`
       )
       .join("")}
   </div>
 
   <div class="section">
-    <div class="section-title">B. Sources de Revenus (${monthLabel})</div>
+    <div class="section-title">B. Sources de Revenus (${safeMonthLabel})</div>
     <table>
       <thead>
         <tr>
@@ -440,9 +442,9 @@ export function exportMonthlyReportPDF(payload: ReportExportPayload): void {
                 .map(
                   (inc) => `
           <tr>
-            <td>${inc.sourceType || "Salaire"}</td>
-            <td>${inc.label || "Revenu"}</td>
-            <td class="right"><strong>${formatMoney(inc.amount, currency)}</strong></td>
+            <td>${escapeHtml(inc.sourceType || "Salaire")}</td>
+            <td>${escapeHtml(inc.label || "Revenu")}</td>
+            <td class="right"><strong>${escapeHtml(formatMoney(inc.amount, currency))}</strong></td>
           </tr>`
                 )
                 .join("")
@@ -450,7 +452,7 @@ export function exportMonthlyReportPDF(payload: ReportExportPayload): void {
           <tr>
             <td>Revenu principal</td>
             <td>Revenu mensuel déclaré</td>
-            <td class="right"><strong>${formatMoney(income, currency)}</strong></td>
+            <td class="right"><strong>${escapeHtml(formatMoney(income, currency))}</strong></td>
           </tr>`
         }
       </tbody>
@@ -478,10 +480,10 @@ export function exportMonthlyReportPDF(payload: ReportExportPayload): void {
             const pct = allocated > 0 ? Math.round((spent / allocated) * 100) : spent > 0 ? 100 : 0;
             return `
           <tr>
-            <td>${cat.name}</td>
-            <td class="right">${formatMoney(allocated, currency)}</td>
-            <td class="right">${formatMoney(spent, currency)}</td>
-            <td class="right" style="color:${diff < 0 ? "#dc2626" : "#059669"};">${formatMoney(diff, currency)}</td>
+            <td>${escapeHtml(cat.name)}</td>
+            <td class="right">${escapeHtml(formatMoney(allocated, currency))}</td>
+            <td class="right">${escapeHtml(formatMoney(spent, currency))}</td>
+            <td class="right" style="color:${diff < 0 ? "#dc2626" : "#059669"};">${escapeHtml(formatMoney(diff, currency))}</td>
             <td class="right">${pct}%</td>
           </tr>`;
           })
@@ -510,10 +512,10 @@ export function exportMonthlyReportPDF(payload: ReportExportPayload): void {
                   const pct = g.target > 0 ? Math.min(100, Math.round((g.current / g.target) * 100)) : 0;
                   return `
           <tr>
-            <td>${g.name}</td>
-            <td class="right">${formatMoney(g.target, currency)}</td>
-            <td class="right">${formatMoney(g.current, currency)}</td>
-            <td class="right">${formatMoney(Math.max(0, g.target - g.current), currency)}</td>
+            <td>${escapeHtml(g.name)}</td>
+            <td class="right">${escapeHtml(formatMoney(g.target, currency))}</td>
+            <td class="right">${escapeHtml(formatMoney(g.current, currency))}</td>
+            <td class="right">${escapeHtml(formatMoney(Math.max(0, g.target - g.current), currency))}</td>
             <td class="right"><strong>${pct}%</strong></td>
           </tr>`;
                 })
@@ -545,10 +547,10 @@ export function exportMonthlyReportPDF(payload: ReportExportPayload): void {
                   (d) => `
           <tr>
             <td>${d.type === "payable" ? "Je dois (Dette)" : "On me doit (Créance)"}</td>
-            <td>${d.personName}</td>
-            <td class="right">${formatMoney(d.totalAmount, currency)}</td>
-            <td class="right"><strong>${formatMoney(d.remainingAmount, currency)}</strong></td>
-            <td>${d.dueDate || "-"}</td>
+            <td>${escapeHtml(d.personName)}</td>
+            <td class="right">${escapeHtml(formatMoney(d.totalAmount, currency))}</td>
+            <td class="right"><strong>${escapeHtml(formatMoney(d.remainingAmount, currency))}</strong></td>
+            <td>${escapeHtml(d.dueDate || "-")}</td>
             <td>${d.status === "paid" ? "Soldé" : d.status === "partial" ? "Partiel" : "En cours"}</td>
           </tr>`
                 )

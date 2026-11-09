@@ -117,4 +117,43 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
     });
     expect(reportRes.success).toBe(true);
   });
+
+  test("neutralizes XSS and javascript: URLs in email templates", () => {
+    const xssPayload = `<script>alert("xss")</script>`;
+    const welcome = getWelcomeEmailHtml({
+      name: xssPayload,
+      dashboardUrl: "javascript:alert(1)",
+    });
+    expect(welcome).not.toContain("<script>alert");
+    expect(welcome).toContain("&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;");
+    expect(welcome).not.toContain('href="javascript:');
+    expect(welcome).toContain('href="https://monbudget.app/dashboard"');
+
+    const alert = getBudgetAlertEmailHtml({
+      name: `<img src=x onerror=alert(1)>`,
+      categoryName: `<svg onload=alert(2)>`,
+      spent: 90000,
+      allocated: 100000,
+      percent: 90,
+      currency: `<b>FCFA</b>`,
+      dashboardUrl: "javascript:evil()",
+    });
+    expect(alert).not.toContain("<img src=x");
+    expect(alert).not.toContain("<svg onload");
+    expect(alert).not.toContain("<b>FCFA</b>");
+    expect(alert).not.toContain("javascript:evil()");
+
+    const monthly = getMonthlyReportEmailHtml({
+      monthName: `<script>steal()</script>`,
+      income: 100000,
+      totalExpenses: 50000,
+      savings: 10000,
+      remaining: 50000,
+      currency: `"><script>x()</script>`,
+      dashboardUrl: "data:text/html,xss",
+    });
+    expect(monthly).not.toContain("<script>steal");
+    expect(monthly).not.toContain("<script>x()</script>");
+    expect(monthly).toContain('href="https://monbudget.app/dashboard"');
+  });
 });

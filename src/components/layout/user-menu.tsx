@@ -11,23 +11,20 @@ import {
   ShieldCheck,
   LogOut,
   ChevronDown,
-  Sparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/lib/store/ui-store";
-import { isAdmin } from "@/lib/utils/admin";
 import { toast } from "sonner";
 
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
-  const [isAdminUser, setIsAdminUser] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { resetStore } = useUIStore();
+  const { resetStore, isAdminUser } = useUIStore();
 
   useEffect(() => {
     const supabase = createClient();
@@ -36,9 +33,6 @@ export function UserMenu() {
         setUserEmail(user.email || null);
         const metadataName = user.user_metadata?.full_name || user.user_metadata?.name;
         setUserName(metadataName || user.email?.split("@")[0] || "Membre");
-        if (user.email && isAdmin(user.email)) {
-          setIsAdminUser(true);
-        }
       }
     });
   }, []);

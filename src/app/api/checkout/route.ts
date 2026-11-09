@@ -8,8 +8,8 @@ import {
   prepareAuthorizedCheckout,
   saveCheckoutSession,
 } from "@/lib/server/moneriz-app";
-import { BillingCycle, PaidSubscriptionPlanId } from "@/lib/moneriz-plans";
 import { checkRateLimit, getClientIp } from "@/lib/server/anti-spam";
+import { checkoutRequestSchema } from "@/lib/validations";
 
 export async function POST(request: Request) {
   try {
@@ -39,14 +39,20 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const body = await request.json().catch(() => ({}));
+    const rawBody = await request.json().catch(() => null);
+    if (!rawBody || typeof rawBody !== "object") {
+      return NextResponse.json(
+        { error: { code: "INVALID_PAYLOAD", message: "Corps de requête JSON invalide." } },
+        { status: 400 }
+      );
+    }
 
     // Identification de l'utilisateur authentifié (avec support test E2E en environnement hors production)
-    const effectiveUserId =
-      user?.id ||
-      (process.env.NODE_ENV !== "production" && typeof body?.testUserId === "string"
-        ? body.testUserId
-        : null);
+    const testUserIdRaw =
+      process.env.NODE_ENV !== "production" && typeof (rawBody as Record<string, unknown>).testUserId === "string"
+        ? ((rawBody as Record<string, unknown>).testUserId as string)
+        : null;
+    const effectiveUserId = user?.id || testUserIdRaw;
 
     if (!effectiveUserId) {
       return NextResponse.json(
@@ -75,13 +81,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const orderId = typeof body?.orderId === "string" ? body.orderId : undefined;
-    const planId = body?.planId as PaidSubscriptionPlanId | undefined;
-    const billingCycle: BillingCycle = body?.billingCycle === "yearly" ? "yearly" : "monthly";
-    const preferredMode =
-      body?.integrationMode === "redirect" || body?.integrationMode === "iframe"
-        ? body.integrationMode
-        : undefined;
+    const parsedBody = checkoutRequestSchema.safeParse(rawBody);
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "INVALID_PAYLOAD",
+            message: parsedBody.error.issues[0]?.message || "Paramètres de commande invalides.",
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    const { orderId, planId, billingCycle, integrationMode: preferredMode } = parsedBody.data;
 
     const requestOrigin = new URL(request.url).origin;
 
@@ -162,6 +175,22 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: { code: "INVALID_PLAN", message: "Formule d'abonnement invalide." } },
         { status: 400 }
+      );
+    }
+
+    if (
+      err?.message === "MISSING_SERVICE_ROLE_KEY" ||
+      err?.message?.startsWith("ORDER_PERSISTENCE_FAILED:") ||
+      err?.message?.startsWith("ORDER_FETCH_FAILED:")
+    ) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "SERVER_CONFIG_ERROR",
+            message: "Le service de paiement n'est pas encore configuré côté serveur.",
+          },
+        },
+        { status: 503 }
       );
     }
 

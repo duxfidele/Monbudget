@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getSafeRedirectUrl } from "@/lib/utils/security";
+import { getSafeRedirectUrl, getSafeRequestOrigin } from "@/lib/utils/security";
 import { translateAuthError } from "@/lib/utils/auth-errors";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+  const requestOrigin = getSafeRequestOrigin(request);
   const code = searchParams.get("code");
   const next = searchParams.get("next") || "/welcome";
   const errorParam = searchParams.get("error_description") || searchParams.get("error");
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
     const friendlyError = translateAuthError(errorParam) || errorParam;
     const errorUrl = new URL(
       `/login?error=${encodeURIComponent(friendlyError)}`,
-      request.url
+      requestOrigin
     );
     return NextResponse.redirect(errorUrl);
   }
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
         console.warn("Notice: could not pre-create profile in callback", profileErr);
       }
 
-      const redirectUrl = getSafeRedirectUrl(next, request.url);
+      const redirectUrl = getSafeRedirectUrl(next, requestOrigin);
       return NextResponse.redirect(redirectUrl);
     }
 
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
       const friendlyError = translateAuthError(error.message) || error.message;
       const errorUrl = new URL(
         `/login?error=${encodeURIComponent(friendlyError)}`,
-        request.url
+        requestOrigin
       );
       return NextResponse.redirect(errorUrl);
     }
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
 
   const errorUrl = new URL(
     "/login?error=" + encodeURIComponent("Échec de la connexion. Veuillez réessayer."),
-    request.url
+    requestOrigin
   );
   return NextResponse.redirect(errorUrl);
 }

@@ -6,7 +6,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/lib/store/ui-store";
-import { isAdmin } from "@/lib/utils/admin";
 import { MONBUDGET_PLANS } from "@/lib/moneriz-plans";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +44,7 @@ function WelcomeContent() {
 
   const {
     subscriptionPlan,
+    isAdminUser,
     refreshSubscription,
     updatePreferences,
     resetStore,
@@ -80,7 +80,6 @@ function WelcomeContent() {
         }
 
         const userEmail = user.email || "";
-        const adminFlag = isAdmin(userEmail);
         const metaName =
           user.user_metadata?.full_name ||
           user.user_metadata?.name ||
@@ -89,23 +88,24 @@ function WelcomeContent() {
         const metaAvatar =
           user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("full_name, currency, pay_day")
-          .eq("id", user.id)
-          .maybeSingle();
+        const [{ data: profile }, subStatus] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select("full_name, currency, pay_day")
+            .eq("id", user.id)
+            .maybeSingle(),
+          refreshSubscription().catch(() => null),
+        ]);
 
         if (mounted) {
           setEmail(userEmail);
-          setIsSuperAdmin(adminFlag);
+          setIsSuperAdmin(Boolean(subStatus?.isAdmin));
           setAvatarUrl(metaAvatar);
           setFullName(profile?.full_name || metaName);
           setCurrency(profile?.currency && profile.currency.trim() ? profile.currency.trim() : "FCFA");
           setPayDay(profile?.pay_day ? Number(profile.pay_day) : 28);
           setLoadingUser(false);
         }
-
-        await refreshSubscription().catch(() => {});
       } catch {
         if (mounted) router.replace("/login");
       }
@@ -152,7 +152,8 @@ function WelcomeContent() {
     }
   };
 
-  const planLabel = isSuperAdmin
+  const effectiveIsAdmin = isSuperAdmin || isAdminUser;
+  const planLabel = effectiveIsAdmin
     ? "Super-Admin"
     : `Plan ${MONBUDGET_PLANS[subscriptionPlan]?.name || "Gratuit"}`;
 
@@ -231,7 +232,7 @@ function WelcomeContent() {
               </span>
               <span
                 className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${
-                  isSuperAdmin
+                  effectiveIsAdmin
                     ? "bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
                     : "bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800"
                 }`}

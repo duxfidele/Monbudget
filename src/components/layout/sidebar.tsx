@@ -6,7 +6,6 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
-import { isAdmin } from "@/lib/utils/admin";
 import { useUIStore } from "@/lib/store/ui-store";
 import { MONBUDGET_PLANS } from "@/lib/moneriz-plans";
 import { toast } from "sonner";
@@ -86,8 +85,7 @@ const routes = [
 export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { resetStore, subscriptionPlan } = useUIStore();
-  const [isAdminUser, setIsAdminUser] = useState(false);
+  const { resetStore, subscriptionPlan, isAdminUser } = useUIStore();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -98,9 +96,6 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
       if (user) {
         if (user.email) {
           setUserEmail(user.email);
-          if (isAdmin(user.email)) {
-            setIsAdminUser(true);
-          }
         }
         const metaName =
           user.user_metadata?.full_name || user.user_metadata?.name || null;

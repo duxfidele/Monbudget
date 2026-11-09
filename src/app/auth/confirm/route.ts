@@ -1,19 +1,20 @@
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getSafeRedirectUrl } from '@/lib/utils/security'
+import { getSafeRedirectUrl, getSafeRequestOrigin } from '@/lib/utils/security'
 
 export { getSafeRedirectUrl }
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
+  const requestOrigin = getSafeRequestOrigin(request)
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
   const next = searchParams.get('next') || '/dashboard'
   const errorParam = searchParams.get('error_description') || searchParams.get('error')
 
   if (errorParam) {
-    const errorUrl = new URL(`/login?error=${encodeURIComponent(errorParam)}`, request.url)
+    const errorUrl = new URL(`/login?error=${encodeURIComponent(errorParam)}`, requestOrigin)
     return NextResponse.redirect(errorUrl)
   }
 
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     })
     if (!error) {
       if (type === 'recovery') {
-        const redirectUrl = new URL('/reset-password', request.url)
+        const redirectUrl = new URL('/reset-password', requestOrigin)
         return NextResponse.redirect(redirectUrl)
       }
 
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
         } catch {}
       }
 
-      const redirectUrl = getSafeRedirectUrl(next, request.url)
+      const redirectUrl = getSafeRedirectUrl(next, requestOrigin)
       return NextResponse.redirect(redirectUrl)
     }
   } else {
@@ -82,13 +83,13 @@ export async function GET(request: NextRequest) {
             )
           } catch {}
         }
-        const redirectUrl = getSafeRedirectUrl(next, request.url)
+        const redirectUrl = getSafeRedirectUrl(next, requestOrigin)
         return NextResponse.redirect(redirectUrl)
       }
     }
   }
 
   // En cas d'erreur de vérification, redirection claire vers /login
-  const errorUrl = new URL('/login?error=' + encodeURIComponent("Échec de la validation du lien ou lien expiré."), request.url)
+  const errorUrl = new URL('/login?error=' + encodeURIComponent("Échec de la validation du lien ou lien expiré."), requestOrigin)
   return NextResponse.redirect(errorUrl)
 }

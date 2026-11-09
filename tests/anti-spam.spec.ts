@@ -3,6 +3,7 @@ import {
   checkRateLimit,
   detectSpamContent,
   escapeHtml,
+  getClientIp,
   isDisposableEmail,
   resetRateLimitStore,
   sanitizeEmailHeader,
@@ -273,5 +274,25 @@ test.describe("Protection Anti-Spam & Anti-Bot — Tests Unitaires & API", () =>
     });
     expect(limited.status()).toBe(429);
     expect((await limited.json()).error?.code).toBe("RATE_LIMITED");
+  });
+
+  test("9. Extraction IP résiste au spoofing de cf-connecting-ip lorsque les en-têtes proxy fiables sont présents", () => {
+    const reqWithVercel = new Request("https://monbudget.app/api/support", {
+      headers: {
+        "cf-connecting-ip": "1.2.3.4",
+        "x-real-ip": "198.51.100.2",
+        "x-vercel-forwarded-for": "203.0.113.9, 10.0.0.1",
+      },
+    });
+    expect(getClientIp(reqWithVercel)).toBe("203.0.113.9");
+
+    const reqWithRealIp = new Request("https://monbudget.app/api/support", {
+      headers: {
+        "cf-connecting-ip": "1.2.3.4",
+        "x-forwarded-for": "198.51.100.77, 10.0.0.1",
+        "x-real-ip": "192.0.2.50",
+      },
+    });
+    expect(getClientIp(reqWithRealIp)).toBe("192.0.2.50");
   });
 });

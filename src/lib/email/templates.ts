@@ -1,6 +1,7 @@
 /**
  * Templates HTML professionnels et réactifs pour les emails transactionnels de MonBudget
  */
+import { escapeHtml, sanitizeHttpUrl } from "@/lib/utils/security";
 
 interface BaseTemplateOptions {
   appName?: string;
@@ -9,7 +10,9 @@ interface BaseTemplateOptions {
 
 export function getEmailWrapper(content: string, options: BaseTemplateOptions = {}): string {
   const currentYear = new Date().getFullYear();
-  const supportUrl = options.supportUrl || "https://monbudget.app/support";
+  const supportUrl = escapeHtml(
+    sanitizeHttpUrl(options.supportUrl, "https://monbudget.app/support")
+  );
 
   return `
 <!DOCTYPE html>
@@ -60,8 +63,10 @@ export function getWelcomeEmailHtml(params: {
   name?: string;
   dashboardUrl?: string;
 }): string {
-  const userName = params.name ? params.name : "cher membre";
-  const dashboardUrl = params.dashboardUrl || "https://monbudget.app/dashboard";
+  const userName = escapeHtml(params.name ? params.name : "cher membre");
+  const dashboardUrl = escapeHtml(
+    sanitizeHttpUrl(params.dashboardUrl, "https://monbudget.app/dashboard")
+  );
 
   const content = `
     <h1 class="title">Bienvenue sur MonBudget, ${userName} ! 🎉</h1>
@@ -102,12 +107,16 @@ export function getBudgetAlertEmailHtml(params: {
   currency?: string;
   dashboardUrl?: string;
 }): string {
-  const userName = params.name ? params.name : "Bonjour";
-  const currency = params.currency || "FCFA";
+  const userName = escapeHtml(params.name ? params.name : "Bonjour");
+  const safeCategoryName = escapeHtml(params.categoryName);
+  const currency = escapeHtml(params.currency || "FCFA");
   const isOver = params.percent >= 100;
   const alertColor = isOver ? "#EF4444" : "#F59E0B";
   const alertTitle = isOver ? "🚨 Alerte Dépassement de Budget" : "⚠️ Vigilance : Seuil de 80% atteint";
-  const dashboardUrl = params.dashboardUrl || "https://monbudget.app/dashboard";
+  const dashboardUrl = escapeHtml(
+    sanitizeHttpUrl(params.dashboardUrl, "https://monbudget.app/dashboard")
+  );
+  const safePercent = Math.max(0, Math.round(Number(params.percent) || 0));
 
   const formattedSpent = new Intl.NumberFormat("fr-FR").format(params.spent);
   const formattedAllocated = new Intl.NumberFormat("fr-FR").format(params.allocated);
@@ -118,17 +127,17 @@ export function getBudgetAlertEmailHtml(params: {
     
     <div class="card" style="border-left: 4px solid ${alertColor};">
       <div style="font-size: 18px; font-weight: bold; color: #FFFFFF; margin-bottom: 8px;">
-        ${params.categoryName}
+        ${safeCategoryName}
       </div>
       <div style="display: flex; justify-content: space-between; font-size: 14px; color: #CBD5E1; margin-bottom: 12px;">
         <span>Dépensé : <strong>${formattedSpent} ${currency}</strong></span>
         <span>Alloué : <strong>${formattedAllocated} ${currency}</strong></span>
       </div>
       <div style="background-color: #0A192F; height: 10px; border-radius: 5px; overflow: hidden; border: 1px solid #1E293B;">
-        <div style="background-color: ${alertColor}; width: ${Math.min(params.percent, 100)}%; height: 100%;"></div>
+        <div style="background-color: ${alertColor}; width: ${Math.min(safePercent, 100)}%; height: 100%;"></div>
       </div>
       <div style="margin-top: 8px; font-size: 12px; color: ${alertColor}; font-weight: 600;">
-        ${params.percent}% du budget consommé
+        ${safePercent}% du budget consommé
       </div>
     </div>
 
@@ -161,12 +170,15 @@ export function getMonthlyReportEmailHtml(params: {
   currency?: string;
   dashboardUrl?: string;
 }): string {
-  const currency = params.currency || "FCFA";
-  const dashboardUrl = params.dashboardUrl || "https://monbudget.app/dashboard";
+  const safeMonthName = escapeHtml(params.monthName);
+  const currency = escapeHtml(params.currency || "FCFA");
+  const dashboardUrl = escapeHtml(
+    sanitizeHttpUrl(params.dashboardUrl, "https://monbudget.app/dashboard")
+  );
   const format = (v: number) => new Intl.NumberFormat("fr-FR").format(v);
 
   const content = `
-    <h1 class="title">Bilan Financier — ${params.monthName} 📊</h1>
+    <h1 class="title">Bilan Financier — ${safeMonthName} 📊</h1>
     <p>Voici la synthèse consolidée de votre gestion budgétaire pour le mois écoulé :</p>
     
     <div class="card">

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { isAdmin } from "@/lib/utils/admin";
 import {
   ShieldAlert,
   ShieldCheck,
@@ -97,11 +96,16 @@ export default function AdminPage() {
     try {
       setRefreshing(true);
       const res = await fetch("/api/admin/metrics", { cache: "no-store" });
+      if (res.status === 401 || res.status === 403) {
+        setAuthorized(false);
+        return;
+      }
       if (!res.ok) {
         throw new Error("Impossible de récupérer les métriques d'administration");
       }
       const data = await res.json();
       setMetrics(data);
+      setAuthorized(true);
     } catch (err: any) {
       console.error("Erreur métriques admin :", err);
       toast.error(err.message || "Erreur chargement métriques");
@@ -124,12 +128,18 @@ export default function AdminPage() {
 
         setUserEmail(user.email);
         setCurrentUserId(user.id);
-        const hasAccess = isAdmin(user.email);
-        setAuthorized(hasAccess);
 
-        if (hasAccess) {
-          await loadMetrics();
+        const res = await fetch("/api/admin/metrics", { cache: "no-store" });
+        if (res.status === 401 || res.status === 403) {
+          setAuthorized(false);
+          return;
         }
+        if (!res.ok) {
+          throw new Error("Impossible de récupérer les métriques d'administration");
+        }
+        const data = await res.json();
+        setMetrics(data);
+        setAuthorized(true);
       } catch (err) {
         console.error("Erreur checkAuth admin :", err);
         setAuthorized(false);

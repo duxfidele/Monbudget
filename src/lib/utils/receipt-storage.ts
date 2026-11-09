@@ -20,6 +20,137 @@ export interface FileValidationResult {
   sanitizedName?: string;
 }
 
+export interface BufferValidationResult extends FileValidationResult {
+  detectedMime?: AllowedReceiptMimeType;
+}
+
+const EXTENSION_BY_MIME: Record<AllowedReceiptMimeType, readonly string[]> = {
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/webp": [".webp"],
+  "application/pdf": [".pdf"],
+};
+
+function normalizeDeclaredMime(mime: string | undefined | null): string {
+  const lower = (mime || "").trim().toLowerCase();
+  if (lower === "image/jpg") return "image/jpeg";
+  return lower;
+}
+
+function getLowerExtension(filename: string): string | null {
+  const dotIdx = filename.lastIndexOf(".");
+  if (dotIdx <= 0 || dotIdx === filename.length - 1) return null;
+  return filename.slice(dotIdx).toLowerCase();
+}
+
+/**
+ * Inspecte les octets magiques (magic bytes) d'un buffer pour identifier le format réel,
+ * indépendamment de l'extension ou de l'en-tête Content-Type déclaré par le client.
+ */
+export function detectMagicBytesMimeType(bytes: Uint8Array): AllowedReceiptMimeType | null {
+  if (!bytes || bytes.length < 4) return null;
+
+  // JPEG : FF D8 FF
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+
+  // PNG : 89 50 4E 47 0D 0A 1A 0A
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+
+  // WebP : RIFF....WEBP
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+
+  // PDF : %PDF-
+  if (
+    bytes.length >= 5 &&
+    bytes[0] === 0x25 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x44 &&
+    bytes[3] === 0x46 &&
+    bytes[4] === 0x2d
+  ) {
+    return "application/pdf";
+  }
+
+  return null;
+}
+
+/**
+ * Valide le contenu binaire réel d'un justificatif côté serveur (magic bytes + taille + extension).
+ */
+export function validateReceiptBuffer(
+  bytes: Uint8Array,
+  declaredMime: string,
+  filename: string
+): BufferValidationResult {
+  if (!bytes || bytes.length <= 0) {
+    return { valid: false, error: "Le fichier reçu est vide." };
+  }
+
+  if (bytes.length > MAX_RECEIPT_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `La taille du fichier (${formatFileSize(bytes.length)}) dépasse le maximum autorisé de 5 Mo.`,
+    };
+  }
+
+  const detectedMime = detectMagicBytesMimeType(bytes);
+  if (!detectedMime) {
+    return {
+      valid: false,
+      error: "Signature de fichier invalide ou dangereuse. Formats réels acceptés : JPEG, PNG, WebP, PDF.",
+    };
+  }
+
+  const normalizedDeclared = normalizeDeclaredMime(declaredMime);
+  if (normalizedDeclared && normalizedDeclared !== detectedMime) {
+    return {
+      valid: false,
+      error: "Incohérence détectée entre le type déclaré et le contenu réel du fichier.",
+    };
+  }
+
+  const cleanName = sanitizeFilename(filename);
+  const ext = getLowerExtension(cleanName);
+  if (ext && !EXTENSION_BY_MIME[detectedMime].includes(ext)) {
+    return {
+      valid: false,
+      error: "L'extension du fichier ne correspond pas au contenu réel du justificatif.",
+    };
+  }
+
+  return {
+    valid: true,
+    detectedMime,
+    sanitizedName: cleanName,
+  };
+}
+
 /**
  * Valide le type MIME, la taille et le nom d'un justificatif
  */
@@ -45,8 +176,9 @@ export function validateReceiptFile(file: {
   }
 
   // 2. Vérification du type MIME
+  const normalizedMime = normalizeDeclaredMime(file.type);
   const isAllowedMime = (ALLOWED_RECEIPT_MIME_TYPES as readonly string[]).includes(
-    file.type.toLowerCase()
+    normalizedMime
   );
   if (!isAllowedMime) {
     return {
@@ -59,6 +191,15 @@ export function validateReceiptFile(file: {
   const cleanName = sanitizeFilename(file.name);
   if (!cleanName) {
     return { valid: false, error: "Nom de fichier invalide." };
+  }
+
+  const ext = getLowerExtension(cleanName);
+  const typedMime = normalizedMime as AllowedReceiptMimeType;
+  if (ext && !EXTENSION_BY_MIME[typedMime].includes(ext)) {
+    return {
+      valid: false,
+      error: "Format de fichier non autorisé : l'extension ne correspond pas au type MIME déclaré.",
+    };
   }
 
   return { valid: true, sanitizedName: cleanName };
