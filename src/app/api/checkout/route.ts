@@ -9,9 +9,31 @@ import {
   saveCheckoutSession,
 } from "@/lib/server/moneriz-app";
 import { BillingCycle, PaidSubscriptionPlanId } from "@/lib/moneriz-plans";
+import { checkRateLimit, getClientIp } from "@/lib/server/anti-spam";
 
 export async function POST(request: Request) {
   try {
+    const clientIp = getClientIp(request);
+    const ipRate = checkRateLimit(`checkout:ip:${clientIp}`, {
+      maxRequests: 25,
+      windowMs: 10 * 60 * 1000,
+    });
+
+    if (!ipRate.allowed) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "RATE_LIMITED",
+            message: "Trop de tentatives de paiement détectées. Veuillez patienter quelques minutes.",
+          },
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(ipRate.retryAfterSeconds) },
+        }
+      );
+    }
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -30,6 +52,26 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: { code: "UNAUTHORIZED", message: "Veuillez vous connecter pour souscrire à un abonnement." } },
         { status: 401 }
+      );
+    }
+
+    const userRate = checkRateLimit(`checkout:user:${effectiveUserId}`, {
+      maxRequests: 15,
+      windowMs: 10 * 60 * 1000,
+    });
+
+    if (!userRate.allowed) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "RATE_LIMITED",
+            message: "Trop de sessions de paiement créées récemment. Veuillez patienter quelques minutes.",
+          },
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(userRate.retryAfterSeconds) },
+        }
       );
     }
 

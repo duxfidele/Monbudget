@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -13,6 +13,8 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { GoogleAuthButton } from "@/components/auth/google-button";
 import { translateAuthError } from "@/lib/utils/auth-errors";
+import { HoneypotField } from "@/components/security/honeypot-field";
+import { TurnstileWidget, isTurnstileConfigured } from "@/components/security/turnstile-widget";
 
 function RegisterForm() {
   const [name, setName] = useState("");
@@ -21,6 +23,10 @@ function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [inputsUnlocked, setInputsUnlocked] = useState(false);
+  const [honeypot, setHoneypot] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const mountedAtRef = useRef<number>(0);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -30,6 +36,7 @@ function RegisterForm() {
   const supabase = createClient();
 
   useEffect(() => {
+    mountedAtRef.current = Date.now();
     // Bloque le remplissage automatique agressif du navigateur au chargement initial
     const timer = setTimeout(() => setInputsUnlocked(true), 150);
     return () => clearTimeout(timer);
@@ -67,9 +74,41 @@ function RegisterForm() {
       return;
     }
 
+    if (isTurnstileConfigured && !turnstileToken) {
+      const msg = "Veuillez patienter pendant la vérification de sécurité.";
+      setErrorMsg(msg);
+      toast.error(msg);
+      return;
+    }
+
     setLoading(true);
 
     try {
+      const formLoadedAt = mountedAtRef.current;
+      const antiSpamRes = await fetch("/api/auth/anti-spam", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "register",
+          email: email.trim(),
+          honeypot,
+          formLoadedAt,
+          formElapsedMs: formLoadedAt > 0 ? Math.max(0, Date.now() - formLoadedAt) : 0,
+          turnstileToken,
+        }),
+      });
+
+      if (!antiSpamRes.ok) {
+        const antiSpamData = await antiSpamRes.json().catch(() => ({}));
+        const msg = antiSpamData.error || "Inscription bloquée par la protection anti-spam.";
+        setErrorMsg(msg);
+        toast.error(msg);
+        setTurnstileToken("");
+        setTurnstileResetKey((k) => k + 1);
+        setLoading(false);
+        return;
+      }
+
       const planParam = searchParams.get("plan");
       const nextParam = searchParams.get("next");
       let redirectNext = "/dashboard";
@@ -96,12 +135,16 @@ function RegisterForm() {
         const msg = translateAuthError(error.message) || error.message;
         setErrorMsg(msg);
         toast.error(msg);
+        setTurnstileToken("");
+        setTurnstileResetKey((k) => k + 1);
         setLoading(false);
       } else if (data?.user && data.user.identities && data.user.identities.length === 0) {
         // Supabase sign-up avec email déjà existant
         const msg = "Cette adresse email est déjà inscrite. Veuillez vous connecter avec votre mot de passe ou via Google.";
         setErrorMsg(msg);
         toast.info(msg);
+        setTurnstileToken("");
+        setTurnstileResetKey((k) => k + 1);
         setLoading(false);
       } else if (data?.session) {
         toast.success("Compte créé et connecté avec succès !");
@@ -122,6 +165,8 @@ function RegisterForm() {
       const message = err instanceof Error ? err.message : "Erreur réseau lors de l'inscription.";
       setErrorMsg(message);
       toast.error(message);
+      setTurnstileToken("");
+      setTurnstileResetKey((k) => k + 1);
       setLoading(false);
     }
   };
@@ -154,7 +199,8 @@ function RegisterForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleRegister} autoComplete="off" className="space-y-4">
+        <form onSubmit={handleRegister} autoComplete="off" className="space-y-4 relative">
+          <HoneypotField value={honeypot} onChange={setHoneypot} id="mb_register_hp" />
           {errorMsg && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60 text-red-700 dark:text-rose-200 text-xs sm:text-sm flex items-start gap-2.5">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-rose-400" />
@@ -251,6 +297,11 @@ function RegisterForm() {
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
           </div>
+          <TurnstileWidget
+            resetKey={turnstileResetKey}
+            onVerify={setTurnstileToken}
+            onExpire={() => setTurnstileToken("")}
+          />
           <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11" disabled={loading}>
             {loading ? "Création en cours..." : "S'inscrire"}
           </Button>

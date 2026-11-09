@@ -1,18 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Send, MessageCircle, CheckCircle2, Loader2, Sparkles, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { HoneypotField } from "@/components/security/honeypot-field";
+import { TurnstileWidget, isTurnstileConfigured } from "@/components/security/turnstile-widget";
 
 export function SupportContactForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [topic, setTopic] = useState("Assistance générale");
   const [message, setMessage] = useState("");
+  const [honeypot, setHoneypot] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const mountedAtRef = useRef<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSent, setIsSent] = useState(false);
+
+  useEffect(() => {
+    mountedAtRef.current = Date.now();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,8 +42,16 @@ export function SupportContactForm() {
       return;
     }
 
+    if (isTurnstileConfigured && !turnstileToken) {
+      toast.error("Veuillez patienter pendant la vérification de sécurité.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const formLoadedAt = mountedAtRef.current;
+      const formElapsedMs = formLoadedAt > 0 ? Math.max(0, Date.now() - formLoadedAt) : 0;
+
       const res = await fetch("/api/support", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -42,6 +60,10 @@ export function SupportContactForm() {
           email: email.trim(),
           topic,
           message: message.trim(),
+          honeypot,
+          formLoadedAt,
+          formElapsedMs,
+          turnstileToken,
         }),
       });
 
@@ -59,9 +81,14 @@ export function SupportContactForm() {
       setName("");
       setEmail("");
       setMessage("");
+      setHoneypot("");
+      setTurnstileToken("");
+      setTurnstileResetKey((k) => k + 1);
     } catch (err: any) {
       console.error("Erreur envoi ticket :", err);
       toast.error(err.message || "Impossible d'envoyer le message pour le moment.");
+      setTurnstileToken("");
+      setTurnstileResetKey((k) => k + 1);
     } finally {
       setIsSubmitting(false);
     }
@@ -104,7 +131,10 @@ export function SupportContactForm() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsSent(false)}
+              onClick={() => {
+                mountedAtRef.current = Date.now();
+                setIsSent(false);
+              }}
               className="text-xs border-slate-700 text-slate-300 hover:text-white"
             >
               Envoyer un autre message
@@ -112,7 +142,8 @@ export function SupportContactForm() {
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 relative">
+          <HoneypotField value={honeypot} onChange={setHoneypot} id="mb_support_hp" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
@@ -174,6 +205,12 @@ export function SupportContactForm() {
               className="flex min-h-[100px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
             />
           </div>
+
+          <TurnstileWidget
+            resetKey={turnstileResetKey}
+            onVerify={setTurnstileToken}
+            onExpire={() => setTurnstileToken("")}
+          />
 
           <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
             <Button

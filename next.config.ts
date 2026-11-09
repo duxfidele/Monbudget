@@ -27,7 +27,7 @@ const securityHeaders = [
   },
   {
     key: "Content-Security-Policy",
-    value: "frame-src 'self' https://*.moneriz.com https://moneriz.com https://js.stripe.com https://hooks.stripe.com;",
+    value: "frame-src 'self' https://*.moneriz.com https://moneriz.com https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com;",
   },
 ];
 

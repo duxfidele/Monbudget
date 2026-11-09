@@ -1,37 +1,96 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
+import { translateAuthError } from "@/lib/utils/auth-errors";
+import { HoneypotField } from "@/components/security/honeypot-field";
+import { TurnstileWidget, isTurnstileConfigured } from "@/components/security/turnstile-widget";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
+  const [honeypot, setHoneypot] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const mountedAtRef = useRef<number>(0);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const supabase = createClient();
+
+  useEffect(() => {
+    mountedAtRef.current = Date.now();
+  }, []);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+
+    if (isTurnstileConfigured && !turnstileToken) {
+      const msg = "Veuillez patienter pendant la vérification de sécurité.";
+      setErrorMsg(msg);
+      toast.error(msg);
+      return;
+    }
+
     setLoading(true);
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
-    });
+    try {
+      const formLoadedAt = mountedAtRef.current;
+      const antiSpamRes = await fetch("/api/auth/anti-spam", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "forgot-password",
+          email: email.trim(),
+          honeypot,
+          formLoadedAt,
+          formElapsedMs: formLoadedAt > 0 ? Math.max(0, Date.now() - formLoadedAt) : 0,
+          turnstileToken,
+        }),
+      });
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Si cet email existe, un lien de réinitialisation vous a été envoyé.");
-      setSent(true);
+      if (!antiSpamRes.ok) {
+        const antiSpamData = await antiSpamRes.json().catch(() => ({}));
+        const msg = antiSpamData.error || "Requête bloquée par la protection anti-spam.";
+        setErrorMsg(msg);
+        toast.error(msg);
+        setTurnstileToken("");
+        setTurnstileResetKey((k) => k + 1);
+        setLoading(false);
+        return;
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
+      });
+
+      if (error) {
+        const msg = translateAuthError(error.message) || error.message;
+        setErrorMsg(msg);
+        toast.error(msg);
+        setTurnstileToken("");
+        setTurnstileResetKey((k) => k + 1);
+      } else {
+        toast.success("Si cet email existe, un lien de réinitialisation vous a été envoyé.");
+        setSent(true);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erreur réseau lors de l'envoi.";
+      setErrorMsg(msg);
+      toast.error(msg);
+      setTurnstileToken("");
+      setTurnstileResetKey((k) => k + 1);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -66,18 +125,30 @@ export default function ForgotPasswordPage() {
             </p>
           </div>
         ) : (
-          <form onSubmit={handleReset} className="space-y-4">
+          <form onSubmit={handleReset} className="space-y-4 relative">
+            <HoneypotField value={honeypot} onChange={setHoneypot} id="mb_forgot_hp" />
+            {errorMsg && (
+              <div className="p-3 rounded-xl bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60 text-red-700 dark:text-rose-200 text-xs sm:text-sm flex items-start gap-2.5">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-rose-400" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="vous@exemple.com" 
+              <Input
+                id="email"
+                type="email"
+                placeholder="vous@exemple.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
+            <TurnstileWidget
+              resetKey={turnstileResetKey}
+              onVerify={setTurnstileToken}
+              onExpire={() => setTurnstileToken("")}
+            />
             <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
               {loading ? "Envoi en cours..." : "Envoyer le lien"}
             </Button>

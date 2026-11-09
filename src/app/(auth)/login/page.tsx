@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -13,6 +13,8 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { GoogleAuthButton } from "@/components/auth/google-button";
 import { translateAuthError } from "@/lib/utils/auth-errors";
+import { HoneypotField } from "@/components/security/honeypot-field";
+import { TurnstileWidget, isTurnstileConfigured } from "@/components/security/turnstile-widget";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -20,11 +22,16 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [inputsUnlocked, setInputsUnlocked] = useState(false);
+  const [honeypot, setHoneypot] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const mountedAtRef = useRef<number>(0);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
+    mountedAtRef.current = Date.now();
     // Bloque le remplissage automatique agressif du navigateur au chargement initial
     const timer = setTimeout(() => setInputsUnlocked(true), 150);
     return () => clearTimeout(timer);
@@ -46,9 +53,42 @@ function LoginForm() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+
+    if (isTurnstileConfigured && !turnstileToken) {
+      const msg = "Veuillez patienter pendant la vérification de sécurité.";
+      setErrorMsg(msg);
+      toast.error(msg);
+      return;
+    }
+
     setLoading(true);
 
     try {
+      const formLoadedAt = mountedAtRef.current;
+      const antiSpamRes = await fetch("/api/auth/anti-spam", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "login",
+          email: email.trim(),
+          honeypot,
+          formLoadedAt,
+          formElapsedMs: formLoadedAt > 0 ? Math.max(0, Date.now() - formLoadedAt) : 0,
+          turnstileToken,
+        }),
+      });
+
+      if (!antiSpamRes.ok) {
+        const antiSpamData = await antiSpamRes.json().catch(() => ({}));
+        const msg = antiSpamData.error || "Connexion bloquée par la protection anti-spam.";
+        setErrorMsg(msg);
+        toast.error(msg);
+        setTurnstileToken("");
+        setTurnstileResetKey((k) => k + 1);
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
@@ -58,6 +98,8 @@ function LoginForm() {
         const msg = translateAuthError(error.message) || error.message;
         setErrorMsg(msg);
         toast.error(msg);
+        setTurnstileToken("");
+        setTurnstileResetKey((k) => k + 1);
         setLoading(false);
       } else {
         toast.success("Connexion réussie ! Ouverture de MonBudget...");
@@ -75,6 +117,8 @@ function LoginForm() {
       const message = err instanceof Error ? err.message : "Erreur réseau lors de la connexion.";
       setErrorMsg(message);
       toast.error(message);
+      setTurnstileToken("");
+      setTurnstileResetKey((k) => k + 1);
       setLoading(false);
     }
   };
@@ -107,7 +151,8 @@ function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleLogin} autoComplete="off" className="space-y-4">
+        <form onSubmit={handleLogin} autoComplete="off" className="space-y-4 relative">
+          <HoneypotField value={honeypot} onChange={setHoneypot} id="mb_login_hp" />
           {errorMsg && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60 text-red-700 dark:text-rose-200 text-xs sm:text-sm flex items-start gap-2.5">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-rose-400" />
@@ -173,6 +218,11 @@ function LoginForm() {
               </button>
             </div>
           </div>
+          <TurnstileWidget
+            resetKey={turnstileResetKey}
+            onVerify={setTurnstileToken}
+            onExpire={() => setTurnstileToken("")}
+          />
           <Button type="submit" className="w-full bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white font-semibold h-11" disabled={loading}>
             {loading ? "Connexion en cours..." : "Se connecter"}
           </Button>
