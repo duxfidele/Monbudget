@@ -25,6 +25,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "MonBudget",
   },
+  verification: {
+    google: "dqERQqkfOlyf9Hwqu0TTpIQQKFFphnTypq0vmEa7-CI",
+  },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "48x48" },

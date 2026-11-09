@@ -44,4 +44,13 @@ test.describe('Pages Légales & Conformité Google OAuth — MonBudget (monbudge
     expect(body).toContain('href="/terms"');
     expect(body).toContain('href="/privacy"');
   });
+
+  test('5. La page d\'accueil / contient la balise meta google-site-verification pour Search Console', async ({ request }) => {
+    const res = await request.get('/');
+    expect(res.status()).toBe(200);
+
+    const body = await res.text();
+    expect(body).toContain('name="google-site-verification"');
+    expect(body).toContain('content="dqERQqkfOlyf9Hwqu0TTpIQQKFFphnTypq0vmEa7-CI"');
+  });
 });
