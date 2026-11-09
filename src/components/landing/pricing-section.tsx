@@ -13,17 +13,17 @@ export function LandingPricingSection() {
   const plans = [
     {
       ...catalog.free,
-      cta: "Essayer 30 jours puis Gratuit",
+      cta: "Démarrer mes 30 jours offerts",
       ctaHref: "/register",
     },
     {
       ...catalog.personal,
-      cta: "Choisir le plan Particulier",
+      cta: "Tester 30j puis Particulier",
       ctaHref: "/register?plan=personal",
     },
     {
       ...catalog.business,
-      cta: "Choisir le plan Entreprise",
+      cta: "Tester 30j puis Entreprise",
       ctaHref: "/register?plan=business",
     },
   ];

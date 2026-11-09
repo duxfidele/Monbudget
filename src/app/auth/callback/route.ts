@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSafeRedirectUrl, getSafeRequestOrigin } from "@/lib/utils/security";
 import { translateAuthError } from "@/lib/utils/auth-errors";
 import { sendWelcomeNotificationsOnce } from "@/lib/server/notifications";
+import { getOrderAndSubscriptionStatus } from "@/lib/server/moneriz-app";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -44,6 +45,11 @@ export async function GET(request: NextRequest) {
           },
           { onConflict: "id", ignoreDuplicates: true }
         );
+
+        await getOrderAndSubscriptionStatus({
+          userId: user.id,
+          userEmail: user.email,
+        }).catch(() => null);
 
         await sendWelcomeNotificationsOnce({
           userId: user.id,

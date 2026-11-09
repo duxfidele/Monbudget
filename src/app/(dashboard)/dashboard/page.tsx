@@ -65,6 +65,7 @@ export default function DashboardPage() {
     payDay,
     notifications,
     activeMonth,
+    subscriptionHydrated,
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
@@ -92,6 +93,12 @@ export default function DashboardPage() {
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "reports");
   const canAccessAdvisor =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "advisor");
+
+  const showBudgetSection = !subscriptionHydrated || canUseBudgetTools;
+  const showSavingsSection = !subscriptionHydrated || canViewSavings;
+  const showDebtsSection = !subscriptionHydrated || canViewDebts;
+  const showReportsUnlocked = !subscriptionHydrated || canExportReports;
+  const showAdvisorSection = !subscriptionHydrated || canAccessAdvisor;
 
   const promptUnlockPersonal = (featureLabel: string) => {
     toast.info(`« ${featureLabel} » est cadenassé en mode Gratuit.`, {
@@ -165,6 +172,10 @@ export default function DashboardPage() {
   const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
   const handleDownloadPDF = () => {
+    if (!subscriptionHydrated) {
+      toast.info("Vérification de votre accès en cours...");
+      return;
+    }
     if (!canExportReports) {
       toast.info("Export PDF cadenassé en mode Gratuit.", {
         description:
@@ -193,6 +204,10 @@ export default function DashboardPage() {
   };
 
   const handleDownloadCSV = () => {
+    if (!subscriptionHydrated) {
+      toast.info("Vérification de votre accès en cours...");
+      return;
+    }
     if (!canExportReports) {
       toast.info("Export Excel / CSV cadenassé en mode Gratuit.", {
         description:
@@ -235,6 +250,8 @@ export default function DashboardPage() {
               className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-opacity hover:opacity-90 ${
                 isAdminUser
                   ? "bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800"
+                  : !subscriptionHydrated
+                  ? "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800"
                   : subscriptionCountdown.isTrialActive
                   ? subscriptionCountdown.isTrialExpiringSoon
                     ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700"
@@ -254,6 +271,8 @@ export default function DashboardPage() {
               <span>
                 {isAdminUser
                   ? "Super-Admin • Illimité"
+                  : !subscriptionHydrated
+                  ? "Vérification de l'accès..."
                   : subscriptionCountdown.isTrialActive
                   ? `Essai 30j • ${subscriptionCountdown.trialDaysRemaining}j restant${
                       (subscriptionCountdown.trialDaysRemaining || 0) > 1 ? "s" : ""
@@ -294,15 +313,15 @@ export default function DashboardPage() {
             variant="outline"
             suppressHydrationWarning
             className={`border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 gap-1 text-xs h-10 px-3 rounded-xl shrink-0 ${
-              !canExportReports ? "opacity-80" : ""
+              !showReportsUnlocked ? "opacity-80" : ""
             }`}
             title={
-              canExportReports
+              showReportsUnlocked
                 ? "Télécharger le rapport PDF"
                 : "Prendre un abonnement Particulier (1 000 FCFA/mois)"
             }
           >
-            {canExportReports ? (
+            {showReportsUnlocked ? (
               <FileText className="h-4 w-4 text-[#1E3A5F] dark:text-sky-400" />
             ) : (
               <Lock className="h-3.5 w-3.5 text-amber-500" />
@@ -314,15 +333,15 @@ export default function DashboardPage() {
             variant="outline"
             suppressHydrationWarning
             className={`border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 gap-1 text-xs h-10 px-3 rounded-xl shrink-0 ${
-              !canExportReports ? "opacity-80" : ""
+              !showReportsUnlocked ? "opacity-80" : ""
             }`}
             title={
-              canExportReports
+              showReportsUnlocked
                 ? "Télécharger le rapport Excel"
                 : "Prendre un abonnement Particulier (1 000 FCFA/mois)"
             }
           >
-            {canExportReports ? (
+            {showReportsUnlocked ? (
               <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             ) : (
               <Lock className="h-3.5 w-3.5 text-amber-500" />
@@ -333,7 +352,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Alerte J-3 avant fin de l'essai gratuit complet (30 jours) */}
-      {!isAdminUser &&
+      {subscriptionHydrated &&
+        !isAdminUser &&
         subscriptionCountdown.isTrialActive &&
         subscriptionCountdown.isTrialExpiringSoon && (
           <div
@@ -367,7 +387,7 @@ export default function DashboardPage() {
         )}
 
       {/* Bannière Jour 31 : Choix requis après expiration de l'essai 30j */}
-      {!isAdminUser && subscriptionCountdown.needsPlanChoice && (
+      {subscriptionHydrated && !isAdminUser && subscriptionCountdown.needsPlanChoice && (
         <div
           suppressHydrationWarning
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-sky-500/10 border border-sky-500/30 text-slate-900 dark:text-sky-100"
@@ -396,7 +416,8 @@ export default function DashboardPage() {
       )}
 
       {/* Alerte J-5 avant expiration ou notification d'expiration d'abonnement payant */}
-      {!isAdminUser &&
+      {subscriptionHydrated &&
+        !isAdminUser &&
         subscriptionCountdown.isPaidActive &&
         subscriptionCountdown.isExpiringSoon && (
         <div
@@ -426,7 +447,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {!isAdminUser && subscriptionCountdown.isExpired && (
+      {subscriptionHydrated && !isAdminUser && subscriptionCountdown.isExpired && (
         <div
           suppressHydrationWarning
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200"
@@ -451,7 +472,8 @@ export default function DashboardPage() {
       )}
 
       {/* Bannière de rappel du jour de paie si activée et débloquée */}
-      {canUseBudgetTools &&
+      {subscriptionHydrated &&
+        canUseBudgetTools &&
         notifications?.payDayReminder !== false &&
         dailyInfo.daysRemaining <= (notifications?.payDayReminderDays || 7) &&
         !dailyInfo.isPayDayToday && (
@@ -465,7 +487,7 @@ export default function DashboardPage() {
       )}
 
       {/* HERO CARD : Budget Journalier Conseillé déduit automatiquement (Cadenassé en mode Gratuit) */}
-      {canUseBudgetTools ? (
+      {showBudgetSection ? (
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A5F] via-[#24436E] to-[#152B47] text-white p-4 sm:p-6 md:p-8 shadow-xl">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
@@ -650,11 +672,11 @@ export default function DashboardPage() {
             <div suppressHydrationWarning className="text-base sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100 truncate">
               {formatMoney(depenses, currency)}
             </div>
-            {canUseBudgetTools && epargneMois > 0 ? (
+            {showBudgetSection && epargneMois > 0 ? (
               <p className="text-[10px] sm:text-xs text-sky-600 dark:text-sky-400 mt-0.5 sm:mt-1 font-medium truncate">
                 dont {formatMoney(epargneMois, currency)} épargnés
               </p>
-            ) : canUseBudgetTools ? (
+            ) : showBudgetSection ? (
               <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
                 Prévu : {formatMoney(depensesPrevues, currency)}
               </p>
@@ -691,7 +713,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* 4. Épargne constituée */}
-        {canViewSavings ? (
+        {showSavingsSection ? (
         <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Épargne Constituée</CardTitle>
@@ -731,7 +753,7 @@ export default function DashboardPage() {
         )}
 
         {/* 5. Dettes à rembourser */}
-        {canViewDebts ? (
+        {showDebtsSection ? (
         <Link href="/debts" className="block group">
           <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden group-hover:shadow-md transition-shadow h-full">
             <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
@@ -773,7 +795,7 @@ export default function DashboardPage() {
         )}
 
         {/* 6. Dettes à récupérer */}
-        {canViewDebts ? (
+        {showDebtsSection ? (
         <Link href="/debts" className="block group">
           <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden group-hover:shadow-md transition-shadow h-full">
             <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
@@ -827,12 +849,12 @@ export default function DashboardPage() {
                   Progression des Objectifs
                 </CardTitle>
                 <CardDescription className="text-slate-500 dark:text-slate-400">
-                  {canViewSavings
+                  {showSavingsSection
                     ? `Avancement global : ${globalGoalsProgress}% (${formatMoney(epargneConstituee, currency)})`
                     : "Module cadenassé en mode Gratuit"}
                 </CardDescription>
               </div>
-              {canViewSavings ? (
+              {showSavingsSection ? (
                 <Link href="/savings">
                   <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium text-xs">
                     Gérer &rarr;
@@ -846,7 +868,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {canViewSavings ? (
+            {showSavingsSection ? (
               <>
                 {savingsGoals.slice(0, 4).map((goal) => {
                   const pct = goal.target > 0 ? Math.min(100, Math.round((goal.current / goal.target) * 100)) : 0;
@@ -924,7 +946,7 @@ export default function DashboardPage() {
                   </CardDescription>
                 </div>
               </div>
-              {canAccessAdvisor ? (
+              {showAdvisorSection ? (
                 <div className="flex items-center gap-2">
                   <div className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-bold text-emerald-300">
                     Santé : {aiAnalysis.healthScore}/100 ({aiAnalysis.healthLabel})
@@ -948,7 +970,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {canAccessAdvisor ? (
+            {showAdvisorSection ? (
               <>
                 <p className="text-xs text-slate-200 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/10">
                   {aiAnalysis.summary}
@@ -1093,12 +1115,12 @@ export default function DashboardPage() {
               <div>
                 <CardTitle className="text-slate-900 dark:text-slate-100">Enveloppes par Catégorie</CardTitle>
                 <CardDescription className="text-slate-500 dark:text-slate-400">
-                  {canUseBudgetTools
+                  {showBudgetSection
                     ? "Consommation par rapport aux plafonds prévus"
                     : "Cadenassé en mode Gratuit limité"}
                 </CardDescription>
               </div>
-              {canUseBudgetTools ? (
+              {showBudgetSection ? (
                 <Link href="/budget">
                   <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium">
                     Ajuster
@@ -1112,7 +1134,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            {canUseBudgetTools ? (
+            {showBudgetSection ? (
               <>
                 {categoryStats.map((cat, idx) => {
                   return (

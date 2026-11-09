@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getSafeRedirectUrl, getSafeRequestOrigin } from '@/lib/utils/security'
 import { sendWelcomeNotificationsOnce } from '@/lib/server/notifications'
+import { getOrderAndSubscriptionStatus } from '@/lib/server/moneriz-app'
 
 export { getSafeRedirectUrl }
 
@@ -52,6 +53,11 @@ export async function GET(request: NextRequest) {
             { onConflict: 'id', ignoreDuplicates: true }
           )
 
+          await getOrderAndSubscriptionStatus({
+            userId: user.id,
+            userEmail: user.email,
+          }).catch(() => null)
+
           await sendWelcomeNotificationsOnce({
             userId: user.id,
             userEmail: user.email,
@@ -88,6 +94,11 @@ export async function GET(request: NextRequest) {
               },
               { onConflict: 'id', ignoreDuplicates: true }
             )
+
+            await getOrderAndSubscriptionStatus({
+              userId: user.id,
+              userEmail: user.email,
+            }).catch(() => null)
 
             await sendWelcomeNotificationsOnce({
               userId: user.id,

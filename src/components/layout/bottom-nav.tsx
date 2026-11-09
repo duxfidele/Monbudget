@@ -16,6 +16,7 @@ import { toast } from "sonner";
 export const BottomNav = () => {
   const pathname = usePathname();
   const {
+    subscriptionHydrated,
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
@@ -80,6 +81,7 @@ export const BottomNav = () => {
   const renderTab = (route: (typeof primaryLeftRoutes)[number]) => {
     const isActive = pathname === route.href;
     const isLocked =
+      subscriptionHydrated &&
       Boolean(route.feature) &&
       !isAdminUser &&
       !canAccessFeature(countdown.effectivePlanId, route.feature!);

@@ -834,5 +834,46 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     );
     expect(headerSrc).toContain("NotificationsBell");
   });
+
+  test("11. Garantie 30j complet dès l'inscription : rattrapage serveur/SQL 4b, bienvenue automatique & zéro flash Cadenassé avant hydratation", () => {
+    const monerizAppSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/server/moneriz-app.ts"),
+      "utf8"
+    );
+    expect(monerizAppSrc).toContain("needsTrialBackfill");
+    expect(monerizAppSrc).toContain("UUID_REGEX.test(params.userId)");
+    expect(monerizAppSrc).toContain("TRIAL_DURATION_DAYS * 86_400_000");
+    expect(monerizAppSrc).toContain('.is("trial_ends_at", null)');
+    expect(monerizAppSrc).toContain('.is("trial_choice_made_at", null)');
+    expect(monerizAppSrc).toContain('.is("last_order_id", null)');
+
+    const notificationsSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/server/notifications.ts"),
+      "utf8"
+    );
+    expect(notificationsSrc).toContain("if (countdown.isTrialActive && !sub.welcome_email_sent_at)");
+    expect(notificationsSrc).toContain("await sendWelcomeNotificationsOnce({");
+
+    const migrationSrc = fs.readFileSync(
+      path.join(process.cwd(), "supabase/migrations/20261112_trial_notifications_and_plans.sql"),
+      "utf8"
+    );
+    expect(migrationSrc).toContain("4b.");
+    expect(migrationSrc).toContain("u.created_at > NOW() - INTERVAL '30 days'");
+    expect(migrationSrc).toContain("s.trial_ends_at IS NULL");
+
+    for (const relPath of [
+      "src/components/payments/plan-gate.tsx",
+      "src/components/layout/sidebar.tsx",
+      "src/components/layout/bottom-nav.tsx",
+      "src/app/(dashboard)/dashboard/page.tsx",
+      "src/app/(dashboard)/transactions/page.tsx",
+      "src/components/transactions/receipt-upload.tsx",
+      "src/app/(dashboard)/settings/page.tsx",
+    ]) {
+      const uiSrc = fs.readFileSync(path.join(process.cwd(), relPath), "utf8");
+      expect(uiSrc).toContain("subscriptionHydrated");
+    }
+  });
 });
 

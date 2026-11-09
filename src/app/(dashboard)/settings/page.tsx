@@ -100,6 +100,7 @@ export default function SettingsPage() {
     debts,
     activeMonth,
     isAdminUser,
+    subscriptionHydrated,
     subscriptionPlan,
     billingCycle,
     subscriptionExpiresAt,
@@ -611,18 +612,24 @@ export default function SettingsPage() {
                         <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#1E3A5F] text-white dark:bg-sky-500 dark:text-slate-950">
                           {isAdminUser
                             ? "Super-Admin (Accès illimité)"
+                            : !subscriptionHydrated
+                            ? "Vérification en cours..."
                             : subscriptionCountdown.isTrialActive
                             ? "Essai Complet 30 Jours"
                             : subscriptionCountdown.needsPlanChoice
                             ? "Fin d'essai — Choix requis"
                             : `Plan ${catalog[subscriptionCountdown.effectivePlanId]?.name || "Gratuit"}`}
                         </span>
-                        {!isAdminUser && subscriptionCountdown.isPaidActive && billingCycle !== "none" && (
+                        {!isAdminUser &&
+                          subscriptionHydrated &&
+                          subscriptionCountdown.isPaidActive &&
+                          billingCycle !== "none" && (
                           <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
                             • Cycle {billingCycle === "yearly" ? "Annuel (-2 mois offerts)" : "Mensuel"}
                           </span>
                         )}
                         {!isAdminUser &&
+                          subscriptionHydrated &&
                           subscriptionCountdown.isTrialActive &&
                           subscriptionCountdown.trialDaysRemaining !== null && (
                             <span
@@ -640,7 +647,10 @@ export default function SettingsPage() {
                               </span>
                             </span>
                           )}
-                        {!isAdminUser && subscriptionCountdown.isPaidActive && subscriptionCountdown.daysRemaining !== null && (
+                        {!isAdminUser &&
+                          subscriptionHydrated &&
+                          subscriptionCountdown.isPaidActive &&
+                          subscriptionCountdown.daysRemaining !== null && (
                           <span
                             className={`inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
                               subscriptionCountdown.isExpiringSoon
@@ -654,13 +664,13 @@ export default function SettingsPage() {
                             </span>
                           </span>
                         )}
-                        {!isAdminUser && subscriptionCountdown.needsPlanChoice && (
+                        {!isAdminUser && subscriptionHydrated && subscriptionCountdown.needsPlanChoice && (
                           <span className="inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                             <AlertTriangle className="h-3 w-3" />
                             <span>Essai 30j terminé</span>
                           </span>
                         )}
-                        {!isAdminUser && subscriptionCountdown.isExpired && (
+                        {!isAdminUser && subscriptionHydrated && subscriptionCountdown.isExpired && (
                           <span className="inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
                             <AlertTriangle className="h-3 w-3" />
                             <span>Abonnement expiré</span>
@@ -670,6 +680,8 @@ export default function SettingsPage() {
                       <p suppressHydrationWarning className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
                         {isAdminUser
                           ? "Votre compte Super-Administrateur bénéficie d'un accès complet permanent sans expiration."
+                          : !subscriptionHydrated
+                          ? "Synchronisation de votre statut d'abonnement et d'essai 30 jours avec le serveur..."
                           : subscriptionCountdown.isTrialActive
                           ? `Toutes les fonctionnalités sont débloquées gratuitement jusqu'au ${subscriptionCountdown.formattedTrialEndsAt || "terme de vos 30 jours"}. Ensuite, vous choisirez librement entre Gratuit limité (0 F), Particulier (1 000 F) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} F).`
                           : subscriptionCountdown.needsPlanChoice
@@ -687,6 +699,7 @@ export default function SettingsPage() {
                     </div>
 
                     {!isAdminUser &&
+                      subscriptionHydrated &&
                       (subscriptionCountdown.isTrialActive || subscriptionCountdown.needsPlanChoice) && (
                         <Button
                           type="button"

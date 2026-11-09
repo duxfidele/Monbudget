@@ -503,6 +503,15 @@ export async function evaluateAndSendUserSubscriptionAlerts(params: {
     const catalog = getPlanCatalog();
     const businessPrice = formatXof(catalog.business.monthlyPriceXof);
 
+    // 0. Notification + email de bienvenue si essai 30j actif et accueil non encore envoyé (ex: inscription directe sans confirmation email)
+    if (countdown.isTrialActive && !sub.welcome_email_sent_at) {
+      await sendWelcomeNotificationsOnce({
+        userId: params.userId,
+        userEmail: params.userEmail,
+        fullName: params.fullName,
+      });
+    }
+
     // 1. Relance J-3 avant fin de l'essai gratuit de 30 jours
     if (
       countdown.isTrialActive &&

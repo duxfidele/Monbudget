@@ -38,6 +38,7 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const {
+    subscriptionHydrated,
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
@@ -56,6 +57,7 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
   });
   const canAttachReceipts =
     isAdminUser || canAccessFeature(countdown.effectivePlanId, "receipts");
+  const showReceiptButtons = !subscriptionHydrated || canAttachReceipts;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,6 +65,11 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
 
     // Réinitialiser la valeur de l'input pour permettre de sélectionner à nouveau le même fichier si besoin
     e.target.value = "";
+
+    if (!subscriptionHydrated) {
+      toast.info("Vérification de votre accès en cours...");
+      return;
+    }
 
     if (!canAttachReceipts) {
       toast.info(
@@ -149,7 +156,7 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
       />
 
       {!receipt ? (
-        canAttachReceipts ? (
+        showReceiptButtons ? (
         <div className="grid grid-cols-2 gap-2">
           {/* Bouton Prendre une photo */}
           <Button

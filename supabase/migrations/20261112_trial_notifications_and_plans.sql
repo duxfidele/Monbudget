@@ -97,6 +97,55 @@ ON CONFLICT (user_id) DO UPDATE SET
   trial_choice_made_at = NULL,
   updated_at = NOW();
 
+-- 4b. Rattraper les nouveaux comptes (< 30 jours) inscrits avant cette migration sans choix ni commande,
+--     afin qu'ils bénéficient immédiatement de leurs 30 jours d'essai complet (on ne touche pas aux comptes > 30j).
+INSERT INTO public.user_subscriptions (
+  user_id,
+  plan_id,
+  billing_cycle,
+  status,
+  current_period_start,
+  current_period_end,
+  trial_started_at,
+  trial_ends_at,
+  trial_choice_made_at,
+  updated_at
+)
+SELECT
+  u.id,
+  'free',
+  'none',
+  'active',
+  u.created_at,
+  NULL,
+  u.created_at,
+  u.created_at + INTERVAL '30 days',
+  NULL,
+  NOW()
+FROM auth.users u
+LEFT JOIN public.user_subscriptions s ON s.user_id = u.id
+WHERE LOWER(COALESCE(u.email, '')) NOT IN ('degladux@gmail.com', 'fideleatchade@gmail.com')
+  AND u.created_at > NOW() - INTERVAL '30 days'
+  AND (
+    s.user_id IS NULL
+    OR (
+      s.plan_id = 'free'
+      AND s.status = 'active'
+      AND s.trial_ends_at IS NULL
+      AND s.trial_choice_made_at IS NULL
+      AND s.last_order_id IS NULL
+    )
+  )
+ON CONFLICT (user_id) DO UPDATE SET
+  trial_started_at = COALESCE(public.user_subscriptions.trial_started_at, EXCLUDED.trial_started_at),
+  trial_ends_at = EXCLUDED.trial_ends_at,
+  updated_at = NOW()
+WHERE public.user_subscriptions.plan_id = 'free'
+  AND public.user_subscriptions.status = 'active'
+  AND public.user_subscriptions.trial_ends_at IS NULL
+  AND public.user_subscriptions.trial_choice_made_at IS NULL
+  AND public.user_subscriptions.last_order_id IS NULL;
+
 -- 5. Trigger d'inscription (Email ou Google OAuth) :
 --    - Nouveaux membres : plan 'free' + essai complet de 30 jours (trial_ends_at = NOW() + 30 jours)
 --    - Super-Admins : plan 'business' gratuit à vie sans expiration

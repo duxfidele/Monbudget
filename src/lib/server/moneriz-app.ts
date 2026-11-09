@@ -6,6 +6,7 @@ import {
   PaidSubscriptionPlanId,
   SubscriptionPlanId,
   SubscriptionStatus,
+  TRIAL_DURATION_DAYS,
   getServerPlanAmountXof,
 } from "@/lib/moneriz-plans";
 import { isAdmin } from "@/lib/utils/admin";
@@ -903,6 +904,9 @@ function syncFallbackMemoryWithEvent(
   return { duplicate: false, orderStatus: order.status };
 }
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
  * Récupère l'état d'une commande et l'abonnement actif d'un utilisateur côté serveur.
  */
@@ -923,13 +927,14 @@ export async function getOrderAndSubscriptionStatus(params: {
   subscription: UserSubscriptionRecord;
   isAdmin: boolean;
 }> {
-  const isSuperAdmin = isAdmin(params.userEmail);
+  let isSuperAdmin = isAdmin(params.userEmail);
   const adminSupabase = getAdminSupabase();
   const readClient = adminSupabase || (await getOptionalSessionSupabase());
+  const canQueryUserInDb = isProductionRuntime() || UUID_REGEX.test(params.userId);
 
   let order: MonerizCheckoutOrderRecord | null = null;
   if (params.orderId) {
-    if (readClient) {
+    if (readClient && canQueryUserInDb) {
       const { data: row } = await readClient
         .from("subscription_orders")
         .select("*")
@@ -949,7 +954,7 @@ export async function getOrderAndSubscriptionStatus(params: {
   }
 
   let sub: UserSubscriptionRecord | null = null;
-  if (readClient) {
+  if (readClient && canQueryUserInDb) {
     try {
       const { data: subRow } = await readClient
         .from("user_subscriptions")
@@ -972,6 +977,98 @@ export async function getOrderAndSubscriptionStatus(params: {
     } catch {}
   } else if (!isProductionRuntime()) {
     sub = fallbackSubscriptions.get(params.userId) || null;
+  }
+
+  // Filet de sécurité serveur : si un compte Supabase réel a été inscrit il y a moins de 30 jours
+  // sans date de fin d'essai, sans choix gratuit explicite ni commande associée, lui attribuer
+  // immédiatement ses 30 jours d'essai complet (ex: si le trigger SQL pré-migration avait tourné).
+  const needsTrialBackfill =
+    !isSuperAdmin &&
+    Boolean(adminSupabase) &&
+    UUID_REGEX.test(params.userId) &&
+    (!sub ||
+      (sub.planId === "free" &&
+        sub.status === "active" &&
+        !sub.trialEndsAt &&
+        !sub.trialChoiceMadeAt &&
+        !sub.lastOrderId));
+
+  if (needsTrialBackfill && adminSupabase) {
+    try {
+      const { data: userData } = await adminSupabase.auth.admin.getUserById(params.userId);
+      const authUser = userData?.user;
+      if (authUser) {
+        if (isAdmin(authUser.email)) {
+          isSuperAdmin = true;
+        } else {
+          const createdMs = authUser.created_at ? Date.parse(authUser.created_at) : NaN;
+          const nowMs = Date.now();
+          const trialWindowMs = TRIAL_DURATION_DAYS * 86_400_000;
+          if (Number.isFinite(createdMs) && nowMs - createdMs < trialWindowMs) {
+            const trialStartedAt = new Date(createdMs).toISOString();
+            const trialEndsAt = new Date(createdMs + trialWindowMs).toISOString();
+            const nowIso = new Date(nowMs).toISOString();
+
+            if (!sub) {
+              const { error: upsertErr } = await adminSupabase
+                .from("user_subscriptions")
+                .upsert(
+                  {
+                    user_id: params.userId,
+                    plan_id: "free",
+                    billing_cycle: "none",
+                    status: "active",
+                    current_period_start: trialStartedAt,
+                    current_period_end: null,
+                    trial_started_at: trialStartedAt,
+                    trial_ends_at: trialEndsAt,
+                    trial_choice_made_at: null,
+                    updated_at: nowIso,
+                  },
+                  { onConflict: "user_id", ignoreDuplicates: true }
+                );
+              if (upsertErr) {
+                console.warn("[MonerizApp] Trial backfill upsert warning:", upsertErr.message);
+              }
+              sub = {
+                userId: params.userId,
+                planId: "free",
+                billingCycle: "none",
+                status: "active",
+                currentPeriodEnd: null,
+                lastOrderId: null,
+                trialStartedAt,
+                trialEndsAt,
+                trialChoiceMadeAt: null,
+              };
+            } else {
+              const { error: updateErr } = await adminSupabase
+                .from("user_subscriptions")
+                .update({
+                  trial_started_at: sub.trialStartedAt ?? trialStartedAt,
+                  trial_ends_at: trialEndsAt,
+                  updated_at: nowIso,
+                })
+                .eq("user_id", params.userId)
+                .eq("plan_id", "free")
+                .is("trial_ends_at", null)
+                .is("trial_choice_made_at", null)
+                .is("last_order_id", null);
+              if (updateErr) {
+                console.warn("[MonerizApp] Trial backfill update warning:", updateErr.message);
+              }
+              sub = {
+                ...sub,
+                trialStartedAt: sub.trialStartedAt ?? trialStartedAt,
+                trialEndsAt,
+              };
+            }
+          }
+        }
+      }
+    } catch (backfillErr) {
+      console.warn("[MonerizApp] Trial safety-net warning:", backfillErr);
+    }
   }
 
   if (!sub) {

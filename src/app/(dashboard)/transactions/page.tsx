@@ -67,6 +67,7 @@ export default function TransactionsPage() {
     savingsGoals,
     payDay,
     subscriptionPlan,
+    subscriptionHydrated,
     subscriptionStatus,
     subscriptionExpiresAt,
     subscriptionTrialEndsAt,
@@ -86,6 +87,8 @@ export default function TransactionsPage() {
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "budget");
   const canExportReports =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "reports");
+  const showBudgetTools = !subscriptionHydrated || canUseBudgetTools;
+  const showReportsUnlocked = !subscriptionHydrated || canExportReports;
 
   const promptUnlockPersonal = (featureLabel: string) => {
     toast.info(`« ${featureLabel} » est cadenassé en mode Gratuit.`, {
@@ -245,6 +248,10 @@ export default function TransactionsPage() {
   };
 
   const handleExportCSV = () => {
+    if (!subscriptionHydrated) {
+      toast.info("Vérification de votre accès en cours...");
+      return;
+    }
     if (!canExportReports) {
       toast.info("Export Excel / CSV cadenassé en mode Gratuit.", {
         description:
@@ -398,7 +405,7 @@ export default function TransactionsPage() {
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                   {newType === "expense" ? (
-                    canUseBudgetTools ? (
+                    showBudgetTools ? (
                       <span>
                         💡 Budget journalier restant : <strong className="text-emerald-700 dark:text-emerald-400">{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</strong>. Cette dépense sera déduite automatiquement.
                       </span>
@@ -474,7 +481,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Bandeau d'information du Budget Journalier Conseillé (cadenassé en mode Gratuit) */}
-      {canUseBudgetTools ? (
+      {showBudgetTools ? (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-[#1E3A5F]/10 via-sky-50 to-blue-50/50 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900 border border-sky-200/80 dark:border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-[#1E3A5F] dark:bg-sky-500 text-white dark:text-slate-950 shadow-xs">
@@ -562,7 +569,7 @@ export default function TransactionsPage() {
               -{formatMoney(totalExpenses, currency)}
             </div>
             <p className="text-xs text-slate-400 mt-0.5 sm:mt-1 truncate">
-              {!canUseBudgetTools
+              {!showBudgetTools
                 ? "Sorties d'argent enregistrées ce mois"
                 : epargne > 0
                 ? `dont ${formatMoney(epargne, currency)} d'épargne mise de côté`
@@ -571,7 +578,7 @@ export default function TransactionsPage() {
           </CardContent>
         </Card>
 
-        {canUseBudgetTools ? (
+        {showBudgetTools ? (
           <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
             <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
               <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -634,12 +641,12 @@ export default function TransactionsPage() {
             suppressHydrationWarning
             className="border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
             title={
-              canExportReports
+              showReportsUnlocked
                 ? "Exporter CSV"
                 : "Export CSV cadenassé — Abonnement Particulier (1 000 FCFA/mois)"
             }
           >
-            {canExportReports ? (
+            {showReportsUnlocked ? (
               <Download className="h-4 w-4 mr-2" />
             ) : (
               <Lock className="h-3.5 w-3.5 mr-2 text-amber-500" />

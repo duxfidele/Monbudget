@@ -106,7 +106,12 @@ function LoginForm() {
         const nextParam = searchParams.get("next");
         const planParam = searchParams.get("plan");
         let redirectTarget = "/dashboard";
-        if (nextParam && nextParam.startsWith("/")) {
+        if (
+          nextParam &&
+          nextParam.startsWith("/") &&
+          !nextParam.startsWith("//") &&
+          !nextParam.includes("\\")
+        ) {
           redirectTarget = nextParam;
         } else if (planParam) {
           redirectTarget = `/settings?tab=subscription&plan=${encodeURIComponent(planParam)}`;

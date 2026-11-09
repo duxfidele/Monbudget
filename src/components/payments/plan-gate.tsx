@@ -28,6 +28,7 @@ export function PlanGate({
   children,
 }: PlanGateProps) {
   const {
+    subscriptionHydrated,
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
@@ -48,6 +49,15 @@ export function PlanGate({
   const isAllowed = isAdminUser || canAccessFeature(countdown.effectivePlanId, feature);
   if (isAllowed) {
     return <>{children}</>;
+  }
+
+  if (!subscriptionHydrated) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[45vh] gap-3 text-slate-500 dark:text-slate-400">
+        <div className="w-8 h-8 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+        <p className="text-sm font-medium">Vérification de votre accès en cours...</p>
+      </div>
+    );
   }
 
   const requiredPlanId = getRequiredPlanForFeature(feature);

@@ -22,9 +22,14 @@ export function GoogleAuthButton({ mode = "signin", nextTarget }: GoogleAuthButt
         const urlParams = new URLSearchParams(window.location.search);
         const nextParam = urlParams.get("next");
         const planParam = urlParams.get("plan");
-        if (nextParam && nextParam.startsWith("/")) {
+        if (
+          nextParam &&
+          nextParam.startsWith("/") &&
+          !nextParam.startsWith("//") &&
+          !nextParam.includes("\\")
+        ) {
           resolvedNext = nextParam;
-        } else if (planParam) {
+        } else if (mode !== "signup" && planParam) {
           resolvedNext = `/settings?tab=subscription&plan=${encodeURIComponent(planParam)}`;
         } else {
           resolvedNext = "/dashboard";

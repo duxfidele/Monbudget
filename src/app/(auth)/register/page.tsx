@@ -109,15 +109,20 @@ function RegisterForm() {
         return;
       }
 
-      const planParam = searchParams.get("plan");
       const nextParam = searchParams.get("next");
-      let redirectNext = "/dashboard";
-      if (nextParam && nextParam.startsWith("/")) {
-        redirectNext = nextParam;
-      } else if (planParam) {
-        redirectNext = `/settings?tab=subscription&plan=${encodeURIComponent(planParam)}`;
+      let afterWelcome = "/dashboard";
+      if (
+        nextParam &&
+        nextParam.startsWith("/") &&
+        !nextParam.startsWith("//") &&
+        !nextParam.includes("\\") &&
+        !nextParam.startsWith("/welcome")
+      ) {
+        afterWelcome = nextParam;
       }
 
+      // Toujours démarrer les nouveaux inscrits par /welcome -> /dashboard (30 jours d'essai complet d'abord)
+      const redirectNext = `/welcome?next=${encodeURIComponent(afterWelcome)}`;
       const emailRedirectTo = `${window.location.origin}/auth/confirm?next=${encodeURIComponent(redirectNext)}`;
 
       const { data, error } = await supabase.auth.signUp({
@@ -147,7 +152,7 @@ function RegisterForm() {
         setTurnstileResetKey((k) => k + 1);
         setLoading(false);
       } else if (data?.session) {
-        toast.success("Compte créé et connecté avec succès !");
+        toast.success("Compte créé ! Votre essai complet de 30 jours est activé.");
         window.location.href = redirectNext;
       } else {
         const msg = "Inscription réussie ! Un email de confirmation vous a été envoyé (vérifiez vos spams).";
@@ -155,10 +160,7 @@ function RegisterForm() {
         toast.success(msg);
         setLoading(false);
         setTimeout(() => {
-          const loginHref = searchParams.toString()
-            ? `/login?${searchParams.toString()}`
-            : "/login";
-          router.push(loginHref);
+          router.push(`/login?next=${encodeURIComponent(redirectNext)}`);
         }, 2200);
       }
     } catch (err: unknown) {
@@ -171,9 +173,12 @@ function RegisterForm() {
     }
   };
 
-  const loginHref = searchParams.toString()
-    ? `/login?${searchParams.toString()}`
-    : "/login";
+  const selectedLandingPlan = searchParams.get("plan");
+  const nextQuery = searchParams.get("next");
+  const loginHref =
+    nextQuery && nextQuery.startsWith("/") && !nextQuery.startsWith("//") && !nextQuery.includes("\\")
+      ? `/login?next=${encodeURIComponent(nextQuery)}`
+      : "/login";
 
   return (
     <Card className="w-full max-w-md border-none shadow-xl">
@@ -201,6 +206,15 @@ function RegisterForm() {
       <CardContent>
         <form onSubmit={handleRegister} autoComplete="off" className="space-y-4 relative">
           <HoneypotField value={honeypot} onChange={setHoneypot} id="mb_register_hp" />
+          {(selectedLandingPlan === "personal" || selectedLandingPlan === "business") && (
+            <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-sky-900 dark:text-sky-200 text-xs flex items-start gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+              <span>
+                Vous démarrez d&apos;abord par <strong>30 jours d&apos;essai gratuit complet</strong> (toutes fonctionnalités débloquées) avant de confirmer votre formule{" "}
+                <strong>{selectedLandingPlan === "business" ? "Entreprise" : "Particulier (1 000 F)"}</strong> ou Gratuit.
+              </span>
+            </div>
+          )}
           {errorMsg && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60 text-red-700 dark:text-rose-200 text-xs sm:text-sm flex items-start gap-2.5">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-rose-400" />

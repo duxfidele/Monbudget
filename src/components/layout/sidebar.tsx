@@ -105,6 +105,7 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
   const router = useRouter();
   const {
     resetStore,
+    subscriptionHydrated,
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
@@ -162,6 +163,8 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
 
   const planBadgeLabel = isAdminUser
     ? "Super-Admin"
+    : !subscriptionHydrated
+    ? "Vérification..."
     : countdown.isTrialActive
     ? "Essai 30j Complet"
     : `Plan ${catalog[countdown.effectivePlanId]?.name || "Gratuit"}`;
@@ -201,6 +204,7 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
         {routes.map((route) => {
           const isActive = pathname === route.href;
           const isLocked =
+            subscriptionHydrated &&
             Boolean(route.feature) &&
             !isAdminUser &&
             !canAccessFeature(countdown.effectivePlanId, route.feature!);
