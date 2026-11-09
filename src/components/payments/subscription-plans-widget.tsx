@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Lock, Sparkles, ShieldCheck, Crown } from "lucide-react";
+import { Check, Lock, Sparkles, ShieldCheck, Crown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,12 +13,13 @@ import {
 } from "@/components/ui/dialog";
 import {
   BillingCycle,
+  getPlanCatalog,
   getSubscriptionCountdownInfo,
-  MONBUDGET_PLANS,
   PaidSubscriptionPlanId,
 } from "@/lib/moneriz-plans";
 import { useUIStore } from "@/lib/store/ui-store";
 import { MonerizLiveframe } from "@/components/payments/moneriz-liveframe";
+import { toast } from "sonner";
 
 interface SubscriptionPlansWidgetProps {
   highlightPlan?: PaidSubscriptionPlanId;
@@ -34,18 +35,24 @@ export function SubscriptionPlansWidget({
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
+    subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdminUser,
     billingCycle: activeCycle,
+    chooseFreePlan,
   } = useUIStore();
   const countdown = getSubscriptionCountdownInfo({
     planId: subscriptionPlan,
     status: subscriptionStatus,
     expiresAt: subscriptionExpiresAt,
+    trialEndsAt: subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdmin: isAdminUser,
   });
   const effectivePlanId = countdown.effectivePlanId;
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("monthly");
   const [checkoutTarget, setCheckoutTarget] = useState<PaidSubscriptionPlanId | null>(null);
+  const [isChoosingFree, setIsChoosingFree] = useState(false);
   const redirectTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -56,11 +63,22 @@ export function SubscriptionPlansWidget({
     };
   }, []);
 
-  const plansList = [
-    MONBUDGET_PLANS.free,
-    MONBUDGET_PLANS.personal,
-    MONBUDGET_PLANS.business,
-  ];
+  const catalog = getPlanCatalog();
+  const plansList = [catalog.free, catalog.personal, catalog.business];
+
+  const handleChooseFree = async () => {
+    setIsChoosingFree(true);
+    try {
+      const ok = await chooseFreePlan();
+      if (ok) {
+        toast.info(
+          "Mode Gratuit limité activé : Entrées & Dépenses illimitées. Les outils avancés sont cadenassés et déblocables à tout moment dès 1 000 FCFA/mois."
+        );
+      }
+    } finally {
+      setIsChoosingFree(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -223,13 +241,31 @@ export function SubscriptionPlansWidget({
               {/* Bouton d'action */}
               <div>
                 {plan.id === "free" ? (
-                  <Button
-                    disabled
-                    variant="outline"
-                    className="w-full rounded-xl text-xs font-bold h-11"
-                  >
-                    {effectivePlanId === "free" ? "Formule Actuelle (Gratuit)" : "Inclus de base"}
-                  </Button>
+                  !isAdminUser && (countdown.needsPlanChoice || countdown.isTrialActive) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isChoosingFree}
+                      onClick={handleChooseFree}
+                      className="w-full rounded-xl text-xs font-bold h-11"
+                    >
+                      {isChoosingFree ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Choisir Gratuit (Entrées & Dépenses)"
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      disabled
+                      variant="outline"
+                      className="w-full rounded-xl text-xs font-bold h-11"
+                    >
+                      {effectivePlanId === "free"
+                        ? "Formule Actuelle (Gratuit limité)"
+                        : "Inclus de base"}
+                    </Button>
+                  )
                 ) : isCurrentPlan ? (
                   <Button
                     disabled

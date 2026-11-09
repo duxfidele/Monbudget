@@ -2,17 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LandingNavbar } from "@/components/landing/navbar";
 import { LandingFooter } from "@/components/landing/footer";
+import { getPlanCatalog } from "@/lib/moneriz-plans";
 import {
   FileText,
-  ShieldCheck,
-  CreditCard,
   AlertTriangle,
-  Scale,
-  Users,
-  Lock,
-  HelpCircle,
   ArrowLeft,
-  CheckCircle2,
 } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -22,7 +16,10 @@ export const metadata: Metadata = {
 };
 
 export default function TermsPage() {
-  const lastUpdated = "8 novembre 2026";
+  const lastUpdated = "12 novembre 2026";
+  const catalog = getPlanCatalog();
+  const businessMonthly = catalog.business.monthlyPriceXof.toLocaleString("fr-FR");
+  const businessYearly = catalog.business.yearlyPriceXof.toLocaleString("fr-FR");
 
   return (
     <div className="flex flex-col min-h-screen bg-[#071324] text-white selection:bg-sky-500 selection:text-slate-950">
@@ -110,7 +107,7 @@ export default function TermsPage() {
               </p>
               <ul className="list-disc pl-6 space-y-1.5 text-slate-300">
                 <li>
-                  Par saisie directe d&apos;une adresse email valide et d&apos;un mot de passe sécurisé d&apos;au moins 6 caractères.
+                  Par saisie directe d&apos;une adresse email valide et d&apos;un mot de passe sécurisé d&apos;au moins 8 caractères.
                 </li>
                 <li>
                   Par authentification unique via <strong>Google (« Se connecter avec Google » / Google OAuth)</strong>.
@@ -130,28 +127,28 @@ export default function TermsPage() {
                 <h2>Formules SaaS, Fonctionnalités et Tarification</h2>
               </div>
               <p>
-                MonBudget est proposé selon trois (3) formules d&apos;accès claires et transparentes :
+                Toute nouvelle inscription bénéficie d&apos;une période d&apos;<strong>essai gratuit complet de 30 jours</strong> donnant accès à toutes les fonctionnalités actuelles. À l&apos;issue de cet essai, l&apos;Utilisateur choisit librement l&apos;une des trois (3) formules suivantes :
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
                 <div className="p-4 rounded-xl bg-[#0B1A2F] border border-slate-800 space-y-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Plan Gratuit</span>
                   <p className="text-xl font-extrabold text-white">0 FCFA</p>
                   <p className="text-xs text-slate-400">
-                    Suivi essentiel des revenus et dépenses. Aucune carte bancaire requise.
+                    Suivi illimité des Entrées et Dépenses, historique et recherche. Les fonctionnalités avancées restent cadenassées.
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-[#0B1A2F] border border-sky-500/40 space-y-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-sky-400">Plan Particulier</span>
                   <p className="text-xl font-extrabold text-white">1 000 FCFA <span className="text-xs font-normal text-slate-400">/mois</span></p>
                   <p className="text-xs text-slate-400">
-                    Ou 10 000 FCFA/an (2 mois offerts). Débloque les Budgets mensuels par enveloppes, l&apos;Épargne et les Dettes.
+                    Ou 10 000 FCFA/an (2 mois offerts). Débloque 100 % des fonctionnalités actuelles : Enveloppes budgétaires, Épargne, Dettes &amp; Créances, Rapports PDF/CSV, Reçus et Conseiller IA.
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-[#0B1A2F] border border-emerald-500/40 space-y-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Plan Entreprise</span>
-                  <p className="text-xl font-extrabold text-white">2 500 FCFA <span className="text-xs font-normal text-slate-400">/mois</span></p>
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Plan Entreprise &amp; Pro</span>
+                  <p className="text-xl font-extrabold text-white">{businessMonthly} FCFA <span className="text-xs font-normal text-slate-400">/mois</span></p>
                   <p className="text-xs text-slate-400">
-                    Ou 25 000 FCFA/an (2 mois offerts). Débloque l&apos;ensemble des fonctionnalités : Rapports avancés, Exports comptables et Conseiller IA.
+                    Ou {businessYearly} FCFA/an (2 mois offerts). Inclut tout du plan Particulier + support prioritaire 7j/7 et accès anticipé aux futurs modules dédiés Entreprise.
                   </p>
                 </div>
               </div>

@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { NetworkStatus } from "@/components/pwa/network-status";
 import { InstallButton } from "@/components/pwa/install-button";
 import { UserMenu } from "@/components/layout/user-menu";
+import { NotificationsBell } from "@/components/notifications/notifications-bell";
 import { useUIStore } from "@/lib/store/ui-store";
 
 export const Header = () => {
@@ -51,10 +52,11 @@ export const Header = () => {
         <MonthSelector />
       </div>
       
-      {/* User Actions, PWA Install, Network Status & Theme Toggle */}
+      {/* User Actions, PWA Install, Network Status, Notifications & Theme Toggle */}
       <div className="flex items-center gap-1.5 sm:gap-2">
         <NetworkStatus />
         <InstallButton variant="header" />
+        <NotificationsBell />
         <ThemeToggle />
         <UserMenu />
       </div>

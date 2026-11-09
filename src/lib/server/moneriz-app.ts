@@ -39,6 +39,9 @@ export interface UserSubscriptionRecord {
   status: SubscriptionStatus;
   currentPeriodEnd: string | null;
   lastOrderId: string | null;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  trialChoiceMadeAt?: string | null;
 }
 
 /**
@@ -63,6 +66,9 @@ export function resolveEffectiveSubscription(params: {
         planId: "business",
         billingCycle: subscription.billingCycle === "none" ? "yearly" : subscription.billingCycle,
         status: "active",
+        trialStartedAt: null,
+        trialEndsAt: null,
+        trialChoiceMadeAt: null,
       },
       shouldPersistDowngrade: false,
     };
@@ -95,6 +101,9 @@ export function resolveEffectiveSubscription(params: {
         status: normalizedStatus,
         currentPeriodEnd: hasValidExpiry ? subscription.currentPeriodEnd : null,
         lastOrderId: subscription.lastOrderId,
+        trialStartedAt: subscription.trialStartedAt ?? null,
+        trialEndsAt: subscription.trialEndsAt ?? null,
+        trialChoiceMadeAt: subscription.trialChoiceMadeAt ?? null,
       },
       shouldPersistDowngrade: subscription.status === "active",
     };
@@ -747,6 +756,9 @@ export async function commitMonerizInbox(event: MonerizWebhookEvent): Promise<{
               status: sub.status,
               current_period_end: sub.currentPeriodEnd,
               last_order_id: sub.lastOrderId,
+              trial_choice_made_at: sub.trialChoiceMadeAt ?? new Date().toISOString(),
+              renewal_reminder_3d_sent_at: null,
+              subscription_expired_sent_at: null,
               updated_at: new Date().toISOString(),
             });
 
@@ -829,6 +841,7 @@ function syncFallbackMemoryWithEvent(
       order.status = "paid";
       fallbackOrders.set(order.id, order);
 
+      const existingSub = fallbackSubscriptions.get(order.userId);
       const now = new Date();
       const periodEnd = new Date(now);
       if (order.billingCycle === "yearly") {
@@ -844,6 +857,9 @@ function syncFallbackMemoryWithEvent(
         status: "active",
         currentPeriodEnd: periodEnd.toISOString(),
         lastOrderId: order.id,
+        trialStartedAt: existingSub?.trialStartedAt ?? null,
+        trialEndsAt: existingSub?.trialEndsAt ?? null,
+        trialChoiceMadeAt: existingSub?.trialChoiceMadeAt ?? now.toISOString(),
       });
     }
     return { duplicate: false, orderStatus: "paid", planId: order.planId };
@@ -948,6 +964,9 @@ export async function getOrderAndSubscriptionStatus(params: {
           status: (subRow.status as "active" | "canceled" | "expired") || "active",
           currentPeriodEnd: subRow.current_period_end || null,
           lastOrderId: subRow.last_order_id || null,
+          trialStartedAt: subRow.trial_started_at || null,
+          trialEndsAt: subRow.trial_ends_at || null,
+          trialChoiceMadeAt: subRow.trial_choice_made_at || null,
         };
       }
     } catch {}
@@ -963,6 +982,9 @@ export async function getOrderAndSubscriptionStatus(params: {
       status: "active",
       currentPeriodEnd: null,
       lastOrderId: null,
+      trialStartedAt: null,
+      trialEndsAt: null,
+      trialChoiceMadeAt: null,
     };
   }
 
@@ -1069,6 +1091,9 @@ export async function adminSetUserSubscription(params: {
       billing_cycle: effectiveCycle,
       status: "active",
       current_period_end: periodEnd,
+      trial_choice_made_at: now.toISOString(),
+      renewal_reminder_3d_sent_at: null,
+      subscription_expired_sent_at: null,
       updated_at: now.toISOString(),
     });
     if (!upsertError) {
@@ -1132,6 +1157,93 @@ export function getFallbackAdminMonerizStats() {
     recentOrders,
     subscriptionsByUser,
   };
+}
+
+/**
+ * Permet à un utilisateur (non Super-Admin) de confirmer le choix du plan Gratuit limité
+ * à l'issue ou au cours de sa période d'essai 30 jours.
+ */
+export async function chooseFreePlanForUser(params: {
+  userId: string;
+  userEmail?: string | null;
+}): Promise<UserSubscriptionRecord> {
+  if (isAdmin(params.userEmail)) {
+    return {
+      userId: params.userId,
+      planId: "business",
+      billingCycle: "yearly",
+      status: "active",
+      currentPeriodEnd: null,
+      lastOrderId: null,
+      trialStartedAt: null,
+      trialEndsAt: null,
+      trialChoiceMadeAt: null,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const adminSupabase = requireAdminSupabaseOrNonProdFallback();
+
+  if (adminSupabase) {
+    const { data: existing } = await adminSupabase
+      .from("user_subscriptions")
+      .select("trial_started_at, trial_ends_at, last_order_id")
+      .eq("user_id", params.userId)
+      .maybeSingle();
+
+    const { error } = await adminSupabase.from("user_subscriptions").upsert({
+      user_id: params.userId,
+      plan_id: "free",
+      billing_cycle: "none",
+      status: "active",
+      current_period_end: null,
+      last_order_id: existing?.last_order_id ?? null,
+      trial_started_at: existing?.trial_started_at ?? null,
+      trial_ends_at: existing?.trial_ends_at ?? nowIso,
+      trial_choice_made_at: nowIso,
+      updated_at: nowIso,
+    });
+
+    if (error) {
+      throw new Error(`CHOOSE_FREE_FAILED:${error.message}`);
+    }
+
+    return {
+      userId: params.userId,
+      planId: "free",
+      billingCycle: "none",
+      status: "active",
+      currentPeriodEnd: null,
+      lastOrderId: existing?.last_order_id ?? null,
+      trialStartedAt: existing?.trial_started_at ?? null,
+      trialEndsAt: existing?.trial_ends_at ?? nowIso,
+      trialChoiceMadeAt: nowIso,
+    };
+  }
+
+  const prev = fallbackSubscriptions.get(params.userId);
+  const record: UserSubscriptionRecord = {
+    userId: params.userId,
+    planId: "free",
+    billingCycle: "none",
+    status: "active",
+    currentPeriodEnd: null,
+    lastOrderId: prev?.lastOrderId ?? null,
+    trialStartedAt: prev?.trialStartedAt ?? null,
+    trialEndsAt: prev?.trialEndsAt ?? nowIso,
+    trialChoiceMadeAt: nowIso,
+  };
+  fallbackSubscriptions.set(params.userId, record);
+  return record;
+}
+
+export function getFallbackOrderForTests(orderId: string): MonerizCheckoutOrderRecord | null {
+  if (isProductionRuntime()) return null;
+  return fallbackOrders.get(orderId) || null;
+}
+
+export function createServerAdminSupabaseClient() {
+  return getAdminSupabase();
 }
 
 function mapRowToOrder(row: any): MonerizCheckoutOrderRecord {

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/lib/store/ui-store";
-import { BillingCycle, MONBUDGET_PLANS, PaidSubscriptionPlanId } from "@/lib/moneriz-plans";
+import { BillingCycle, getPlanCatalog, PaidSubscriptionPlanId } from "@/lib/moneriz-plans";
 import { toast } from "sonner";
 
 export interface CheckoutSessionClientPayload {
@@ -100,7 +100,7 @@ export function MonerizLiveframe({
   onCancel,
 }: MonerizLiveframeProps) {
   const router = useRouter();
-  const { refreshSubscription } = useUIStore();
+  const { refreshSubscription, refreshNotifications } = useUIStore();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   const latestPaymentIdRef = useRef<string | null>(null);
@@ -119,7 +119,7 @@ export function MonerizLiveframe({
     "idle" | "pending" | "verifying_server" | "confirmed" | "failed" | "expired"
   >("idle");
 
-  const plan = MONBUDGET_PLANS[planId];
+  const plan = getPlanCatalog()[planId];
   const expectedAmount =
     billingCycle === "yearly" ? plan.yearlyPriceXof : plan.monthlyPriceXof;
 
@@ -136,9 +136,10 @@ export function MonerizLiveframe({
     confirmedHandledRef.current = true;
     setPaymentState("confirmed");
     setResumeUrl(null);
+    void refreshNotifications();
     toast.success(`Abonnement ${plan.name} activé ! Redirection vers votre tableau de bord...`);
     onSuccess?.();
-  }, [onSuccess, plan.name]);
+  }, [onSuccess, plan.name, refreshNotifications]);
 
   const checkServerOrderOnce = useCallback(
     async (orderId: string, paymentId?: string | null): Promise<boolean> => {

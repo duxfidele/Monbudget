@@ -4,6 +4,7 @@ import { BottomNav } from "@/components/layout/bottom-nav";
 import { MobileSidebar } from "@/components/layout/mobile-sidebar";
 import { StoreInitializer } from "@/components/store-initializer";
 import { WhatsAppFloatButton } from "@/components/common/whatsapp-button";
+import { TrialChoiceModal } from "@/components/payments/trial-choice-modal";
 
 export default function DashboardLayout({
   children,
@@ -28,6 +29,7 @@ export default function DashboardLayout({
       </main>
       <BottomNav />
       <WhatsAppFloatButton phoneNumber="22898376101" />
+      <TrialChoiceModal />
       <StoreInitializer />
     </div>
   );

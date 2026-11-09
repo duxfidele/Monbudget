@@ -12,6 +12,7 @@ export function StoreInitializer() {
   const router = useRouter();
   const initStore = useUIStore((state) => state.initStore);
   const refreshSubscription = useUIStore((state) => state.refreshSubscription);
+  const refreshNotifications = useUIStore((state) => state.refreshNotifications);
   const initialized = useRef(false);
   const checkoutHandled = useRef(false);
   const lastFocusRefreshRef = useRef(0);
@@ -29,11 +30,11 @@ export function StoreInitializer() {
       const now = Date.now();
       if (now - lastFocusRefreshRef.current < 60_000) return;
       lastFocusRefreshRef.current = now;
-      void refreshSubscription();
+      void refreshSubscription().then(() => refreshNotifications());
     };
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
-  }, [refreshSubscription]);
+  }, [refreshSubscription, refreshNotifications]);
 
   useEffect(() => {
     if (checkoutHandled.current || typeof window === "undefined") return;
@@ -71,6 +72,7 @@ export function StoreInitializer() {
         if (res.orderStatus === "paid") {
           settled = true;
           if (cancelled) return;
+          void refreshNotifications();
           toast.success("Paiement confirmé par le serveur ! Votre abonnement est actif.");
           router.replace("/dashboard");
           router.refresh();
@@ -100,7 +102,7 @@ export function StoreInitializer() {
         checkoutHandled.current = false;
       }
     };
-  }, [refreshSubscription, router]);
+  }, [refreshSubscription, refreshNotifications, router]);
 
   return null;
 }

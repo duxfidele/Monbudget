@@ -4,24 +4,25 @@ import { useState } from "react";
 import { Check, Lock, Sparkles, Shield, Crown } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { BillingCycle, MONBUDGET_PLANS } from "@/lib/moneriz-plans";
+import { BillingCycle, getPlanCatalog } from "@/lib/moneriz-plans";
 
 export function LandingPricingSection() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
+  const catalog = getPlanCatalog();
 
   const plans = [
     {
-      ...MONBUDGET_PLANS.free,
-      cta: "Commencer gratuitement",
+      ...catalog.free,
+      cta: "Essayer 30 jours puis Gratuit",
       ctaHref: "/register",
     },
     {
-      ...MONBUDGET_PLANS.personal,
+      ...catalog.personal,
       cta: "Choisir le plan Particulier",
       ctaHref: "/register?plan=personal",
     },
     {
-      ...MONBUDGET_PLANS.business,
+      ...catalog.business,
       cta: "Choisir le plan Entreprise",
       ctaHref: "/register?plan=business",
     },
@@ -38,7 +39,7 @@ export function LandingPricingSection() {
             Des formules accessibles, payables par Mobile Money & Carte
           </h2>
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed">
-            Démarrez gratuitement avec le suivi de vos entrées et dépenses, ou débloquez le pilotage intégral de vos finances.
+            30 jours d&apos;essai gratuit complet à l&apos;inscription — puis choisissez Gratuit (0 FCFA), Particulier (1 000 FCFA/mois) ou Entreprise ({catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).
           </p>
         </div>
 
@@ -130,7 +131,7 @@ export function LandingPricingSection() {
                     </div>
                     <p className="text-xs text-slate-400 mt-1">
                       {plan.id === "free"
-                        ? "Gratuit à vie • Entrées & Dépenses uniquement"
+                        ? "Après 30j d'essai complet • Entrées & Dépenses"
                         : billingCycle === "yearly"
                         ? `Soit ${plan.yearlySavingsXof.toLocaleString("fr-FR")} FCFA d'économie (2 mois offerts)`
                         : `Ou ${plan.yearlyPriceXof.toLocaleString("fr-FR")} FCFA / an (2 mois offerts)`}

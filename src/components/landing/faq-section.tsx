@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, HelpCircle } from "lucide-react";
+import { ChevronDown } from "lucide-react";
+import { getPlanCatalog } from "@/lib/moneriz-plans";
 
 export function LandingFAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const catalog = getPlanCatalog();
+  const businessMonthly = catalog.business.monthlyPriceXof.toLocaleString("fr-FR");
 
   const faqs = [
     {
@@ -18,9 +21,9 @@ export function LandingFAQSection() {
         "Mon Budget s'adresse aux salariés, indépendants, chefs de famille, étudiants et entrepreneurs qui souhaitent en finir avec l'angoisse des fins de mois. Elle est particulièrement optimisée pour prendre en compte les réalités du quotidien (dépenses familiales, tontines, dettes et créances entre proches, salaires avec jour de paie paramétrable).",
     },
     {
-      question: "Comment créer un compte ?",
+      question: "Comment créer un compte et comment fonctionne l'essai gratuit de 30 jours ?",
       answer:
-        "L'inscription prend moins de 30 secondes. Cliquez sur le bouton « Commencer gratuitement », entrez votre email et votre mot de passe. Aucun numéro de carte bancaire n'est requis pour démarrer. Vous pouvez immédiatement définir vos revenus et commencer à organiser votre mois.",
+        "L'inscription prend moins de 30 secondes. Cliquez sur « Commencer gratuitement », créez votre compte par email ou via Google, sans carte bancaire. Vous bénéficiez immédiatement de 30 jours d'essai gratuit avec 100 % des fonctionnalités débloquées. 3 jours avant la fin puis à l'échéance des 30 jours, vous choisissez librement entre le plan Gratuit limité, Particulier (1 000 FCFA/mois) ou Entreprise.",
     },
     {
       question: "Puis-je utiliser Mon Budget sur mon téléphone portable ?",
@@ -33,14 +36,14 @@ export function LandingFAQSection() {
         "La sécurité et la confidentialité de vos données constituent notre priorité absolue. L'application a fait l'objet d'un audit de sécurité rigoureux : toutes les requêtes sont chiffrées en HTTPS (HSTS forcé), la base de données PostgreSQL applique des politiques Row Level Security (RLS) strictes garantissant qu'aucun autre utilisateur ne peut accéder à vos données, et le cache local est hermétiquement partitionné et purgé à la déconnexion.",
     },
     {
-      question: "Puis-je annuler mon abonnement à tout moment ?",
+      question: "Puis-je annuler ou modifier mon abonnement à tout moment ?",
       answer:
-        "Oui. Toutes nos formules sont sans engagement de durée. Vous pouvez modifier, suspendre ou résilier votre formule payante à tout moment depuis vos paramètres en un simple clic. Vos données existantes restent conservées et accessibles sur la formule Découverte gratuite.",
+        "Oui. Toutes nos formules sont sans engagement de durée. Vous pouvez modifier ou arrêter votre abonnement payant à tout moment depuis vos paramètres. Vos données restent intégralement conservées et accessibles sur le plan Gratuit.",
     },
     {
-      question: "Quelle est la différence entre l'offre gratuite et l'offre payante ?",
+      question: "Quelle est la différence entre Gratuit, Particulier (1 000 F) et Entreprise ?",
       answer:
-        "L'offre Découverte est gratuite à vie et vous permet de gérer l'essentiel de vos dépenses quotidiennes avec jusqu'à 6 enveloppes budgétaires et 1 objectif d'épargne. Les offres Sérénité Pro et Famille débloquent l'illimité sur les catégories, le suivi complet des dettes et créances avec échéances, les recommandations avancées du Conseiller IA, les exports officiels PDF/CSV et la gestion multi-budgets.",
+        `Après vos 30 jours d'essai complet : le plan Gratuit (0 FCFA) conserve le suivi illimité de vos Entrées et Dépenses avec historique et recherche, tandis que les outils avancés (Budget par enveloppes, Épargne, Dettes & Créances, Rapports PDF/CSV, Reçus et Conseiller IA) sont cadenassés. Le plan Particulier (1 000 FCFA/mois) débloque 100 % de ces fonctionnalités actuelles. Le plan Entreprise & Pro (${businessMonthly} FCFA/mois) y ajoute un support prioritaire 7j/7 et l'accès anticipé aux futurs modules dédiés aux entreprises.`,
     },
   ];
 

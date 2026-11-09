@@ -44,6 +44,7 @@ export async function GET() {
     let paidSubscribers = 0;
     let personalSubscribers = 0;
     let businessSubscribers = 0;
+    let trialUsers = 0;
     let recentUsers: Array<{
       id: string;
       email?: string;
@@ -51,6 +52,9 @@ export async function GET() {
       currency: string;
       plan_id: SubscriptionPlanId;
       billing_cycle: string;
+      current_period_end?: string | null;
+      trial_ends_at?: string | null;
+      trial_choice_made_at?: string | null;
       auth_provider?: string;
       created_at: string;
     }> = [];
@@ -75,6 +79,7 @@ export async function GET() {
         paidSubscribers = Number(rpcData.paidSubscribers) || 0;
         personalSubscribers = Number(rpcData.personalSubscribers) || 0;
         businessSubscribers = Number(rpcData.businessSubscribers) || 0;
+        trialUsers = Number(rpcData.trialUsers) || 0;
 
         if (Array.isArray(rpcData.recentUsers)) {
           recentUsers = rpcData.recentUsers.map((u: any) => {
@@ -90,6 +95,9 @@ export async function GET() {
               currency: u.currency || "FCFA",
               plan_id: effectivePlan,
               billing_cycle: memSub?.billingCycle || u.billing_cycle || "none",
+              current_period_end: u.current_period_end || null,
+              trial_ends_at: u.trial_ends_at || null,
+              trial_choice_made_at: u.trial_choice_made_at || null,
               auth_provider: u.auth_provider || "email",
               created_at: u.created_at || new Date().toISOString(),
             };
@@ -179,10 +187,23 @@ export async function GET() {
             currency: prof?.currency || "FCFA",
             plan_id: planId,
             billing_cycle: cycle,
+            current_period_end: memSub?.currentPeriodEnd || dbSub?.current_period_end || null,
+            trial_ends_at: memSub?.trialEndsAt || dbSub?.trial_ends_at || null,
+            trial_choice_made_at: memSub?.trialChoiceMadeAt || dbSub?.trial_choice_made_at || null,
             auth_provider: au.app_metadata?.provider || "email",
             created_at: au.created_at || prof?.created_at || new Date().toISOString(),
           };
         });
+
+        const nowMs = Date.now();
+        trialUsers = Array.from(subsMap.values()).filter(
+          (s: any) =>
+            s.plan_id === "free" &&
+            s.status === "active" &&
+            !s.trial_choice_made_at &&
+            s.trial_ends_at &&
+            Date.parse(s.trial_ends_at) > nowMs
+        ).length;
 
         if (ordersRes.data && ordersRes.data.length > 0) {
           recentOrders = ordersRes.data;
@@ -271,6 +292,7 @@ export async function GET() {
         paidSubscribers,
         personalSubscribers,
         businessSubscribers,
+        trialUsers,
       },
       systemHealth: {
         database: "online",

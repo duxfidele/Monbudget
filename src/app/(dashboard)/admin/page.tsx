@@ -26,7 +26,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import Link from "next/link";
-import { SubscriptionPlanId } from "@/lib/moneriz-plans";
+import {
+  getPlanCatalog,
+  getSubscriptionCountdownInfo,
+  SubscriptionPlanId,
+} from "@/lib/moneriz-plans";
 import { useUIStore } from "@/lib/store/ui-store";
 
 interface AdminUserRow {
@@ -36,6 +40,9 @@ interface AdminUserRow {
   currency?: string;
   plan_id?: SubscriptionPlanId;
   billing_cycle?: string;
+  current_period_end?: string | null;
+  trial_ends_at?: string | null;
+  trial_choice_made_at?: string | null;
   auth_provider?: string;
   created_at: string;
 }
@@ -65,6 +72,7 @@ interface AdminMetrics {
     paidSubscribers?: number;
     personalSubscribers?: number;
     businessSubscribers?: number;
+    trialUsers?: number;
   };
   systemHealth: {
     database: string;
@@ -91,6 +99,7 @@ export default function AdminPage() {
 
   const { refreshSubscription } = useUIStore();
   const supabase = createClient();
+  const catalog = getPlanCatalog();
 
   const loadMetrics = async () => {
     try {
@@ -325,7 +334,8 @@ export default function AdminPage() {
             <p className="text-[11px] sm:text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3 shrink-0" />
               <span className="truncate">
-                {metrics?.kpis.paidSubscribers || 0} abonné(s) Pro/Particulier
+                {metrics?.kpis.paidSubscribers || 0} abonné(s) •{" "}
+                {metrics?.kpis.trialUsers || 0} en essai 30j
               </span>
             </p>
           </CardContent>
@@ -438,6 +448,13 @@ export default function AdminPage() {
               <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
                 {filteredUsers.map((member) => {
                   const currentPlan: SubscriptionPlanId = member.plan_id || "free";
+                  const memberCountdown = getSubscriptionCountdownInfo({
+                    planId: currentPlan,
+                    status: "active",
+                    expiresAt: member.current_period_end,
+                    trialEndsAt: member.trial_ends_at,
+                    trialChoiceMadeAt: member.trial_choice_made_at,
+                  });
                   return (
                     <div
                       key={member.id}
@@ -454,6 +471,21 @@ export default function AdminPage() {
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-[#1E3A5F] dark:text-sky-300">
                             {member.currency || "FCFA"}
                           </span>
+                          {memberCountdown.isTrialActive && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300">
+                              Essai 30j (J-{memberCountdown.trialDaysRemaining ?? 0})
+                            </span>
+                          )}
+                          {memberCountdown.needsPlanChoice && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300">
+                              Fin d&apos;essai
+                            </span>
+                          )}
+                          {memberCountdown.isPaidActive && memberCountdown.formattedExpiresAt && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300">
+                              Exp. {memberCountdown.formattedExpiresAt}
+                            </span>
+                          )}
                         </div>
                         {member.email && (
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
@@ -495,7 +527,9 @@ export default function AdminPage() {
                         >
                           <option value="free">Plan Gratuit (0 FCFA)</option>
                           <option value="personal">Particulier (1 000 FCFA)</option>
-                          <option value="business">Entreprise (2 500 FCFA)</option>
+                          <option value="business">
+                            Entreprise ({catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA)
+                          </option>
                         </select>
                       </div>
                     </div>

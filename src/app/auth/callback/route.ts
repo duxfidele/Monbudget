@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSafeRedirectUrl, getSafeRequestOrigin } from "@/lib/utils/security";
 import { translateAuthError } from "@/lib/utils/auth-errors";
+import { sendWelcomeNotificationsOnce } from "@/lib/server/notifications";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -43,6 +44,12 @@ export async function GET(request: NextRequest) {
           },
           { onConflict: "id", ignoreDuplicates: true }
         );
+
+        await sendWelcomeNotificationsOnce({
+          userId: user.id,
+          userEmail: user.email,
+          fullName,
+        }).catch(() => null);
       } catch (profileErr) {
         console.warn("Notice: could not pre-create profile in callback", profileErr);
       }

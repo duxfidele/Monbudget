@@ -1,12 +1,22 @@
 import { test, expect } from "@playwright/test";
 import {
   getWelcomeEmailHtml,
+  getTrialReminderEmailHtml,
+  getTrialExpiredEmailHtml,
+  getPaymentSuccessEmailHtml,
+  getRenewalReminderEmailHtml,
+  getSubscriptionExpiredEmailHtml,
   getBudgetAlertEmailHtml,
   getMonthlyReportEmailHtml,
 } from "../src/lib/email/templates";
 import {
   sendEmail,
   sendWelcomeEmail,
+  sendTrialReminderEmail,
+  sendTrialExpiredEmail,
+  sendPaymentSuccessEmail,
+  sendRenewalReminderEmail,
+  sendSubscriptionExpiredEmail,
   sendBudgetAlertEmail,
   sendMonthlyReportEmail,
 } from "../src/lib/email/service";
@@ -17,14 +27,66 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
     delete process.env.RESEND_API_KEY;
   });
 
-  test("generates welcome email with personalized name and quick start guide", () => {
-    const html = getWelcomeEmailHtml({ name: "Frère Fidèle" });
+  test("generates welcome email with personalized name, 30-day full trial and quick start guide", () => {
+    const html = getWelcomeEmailHtml({
+      name: "Frère Fidèle",
+      trialDays: 30,
+      trialEndsAtFormatted: "12/12/2026",
+    });
 
     expect(html).toContain("Bienvenue sur MonBudget, Frère Fidèle !");
+    expect(html).toContain("essai gratuit complet de 30 jours");
+    expect(html).toContain("12/12/2026");
+    expect(html).toContain("Particulier (1 000 FCFA / mois)");
     expect(html).toContain("Définissez votre jour de paie");
     expect(html).toContain("Créez vos enveloppes de dépenses");
     expect(html).toContain("Installez l'application sur votre smartphone");
     expect(html).toContain("+228 98 37 61 01");
+  });
+
+  test("generates trial J-3 reminder, trial expired J0, post-payment success, renewal reminder and expired emails", () => {
+    const trialJ3 = getTrialReminderEmailHtml({
+      name: "Koffi",
+      daysRemaining: 3,
+      trialEndsAtFormatted: "10/12/2026",
+    });
+    expect(trialJ3).toContain("Plus que 3 jours d'essai gratuit complet");
+    expect(trialJ3).toContain("10/12/2026");
+    expect(trialJ3).toContain("1 000 FCFA / mois");
+
+    const trialExp = getTrialExpiredEmailHtml({ name: "Koffi" });
+    expect(trialExp).toContain("Vos 30 jours d'essai complet sont terminés");
+    expect(trialExp).toContain("mode Gratuit limité");
+
+    const paymentSuccess = getPaymentSuccessEmailHtml({
+      name: "Koffi",
+      planName: "Particulier",
+      billingCycle: "monthly",
+      amountXof: 1000,
+      reference: "MB-LIVE-PER-001",
+      expiresAtFormatted: "12/01/2027",
+    }).replace(/\u202F/g, " ");
+    expect(paymentSuccess).toContain("Abonnement Particulier activé avec succès");
+    expect(paymentSuccess).toContain("1 000 FCFA");
+    expect(paymentSuccess).toContain("MB-LIVE-PER-001");
+    expect(paymentSuccess).toContain("12/01/2027");
+
+    const renewalJ3 = getRenewalReminderEmailHtml({
+      name: "Koffi",
+      planName: "Entreprise & Pro",
+      daysRemaining: 3,
+      expiresAtFormatted: "12/01/2027",
+    });
+    expect(renewalJ3).toContain("Renouvellement MonBudget dans 3 jours");
+    expect(renewalJ3).toContain("Entreprise &amp; Pro");
+    expect(renewalJ3).toContain("12/01/2027");
+
+    const expiredPaid = getSubscriptionExpiredEmailHtml({
+      name: "Koffi",
+      previousPlanName: "Particulier",
+    });
+    expect(expiredPaid).toContain("Abonnement Particulier expiré");
+    expect(expiredPaid).toContain("1 000 FCFA / mois");
   });
 
   test("generates budget alert email with accurate warning colors and percentages", () => {
@@ -116,6 +178,31 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
       currency: "FCFA",
     });
     expect(reportRes.success).toBe(true);
+
+    const lifecycleResults = await Promise.all([
+      sendTrialReminderEmail("koffi@monbudget.app", { name: "Koffi", daysRemaining: 3 }),
+      sendTrialExpiredEmail("koffi@monbudget.app", { name: "Koffi" }),
+      sendPaymentSuccessEmail("koffi@monbudget.app", {
+        name: "Koffi",
+        planName: "Particulier",
+        billingCycle: "monthly",
+        amountXof: 1000,
+        reference: "MB-TEST-1",
+      }),
+      sendRenewalReminderEmail("koffi@monbudget.app", {
+        name: "Koffi",
+        planName: "Particulier",
+        daysRemaining: 3,
+      }),
+      sendSubscriptionExpiredEmail("koffi@monbudget.app", {
+        name: "Koffi",
+        previousPlanName: "Particulier",
+      }),
+    ]);
+    for (const r of lifecycleResults) {
+      expect(r.success).toBe(true);
+      expect(r.mocked).toBe(true);
+    }
   });
 
   test("neutralizes XSS and javascript: URLs in email templates", () => {
@@ -155,5 +242,43 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
     expect(monthly).not.toContain("<script>steal");
     expect(monthly).not.toContain("<script>x()</script>");
     expect(monthly).toContain('href="https://monbudget.app/dashboard"');
+
+    const lifecycleXss = [
+      getTrialReminderEmailHtml({
+        name: xssPayload,
+        daysRemaining: 3,
+        trialEndsAtFormatted: xssPayload,
+        subscriptionUrl: "javascript:evil()",
+      }),
+      getTrialExpiredEmailHtml({
+        name: xssPayload,
+        subscriptionUrl: "data:text/html,xss",
+      }),
+      getPaymentSuccessEmailHtml({
+        name: xssPayload,
+        planName: xssPayload,
+        billingCycle: "monthly",
+        amountXof: 1000,
+        reference: xssPayload,
+        expiresAtFormatted: xssPayload,
+        dashboardUrl: "javascript:alert(1)",
+      }),
+      getRenewalReminderEmailHtml({
+        name: xssPayload,
+        planName: xssPayload,
+        daysRemaining: 3,
+        subscriptionUrl: "javascript:alert(1)",
+      }),
+      getSubscriptionExpiredEmailHtml({
+        name: xssPayload,
+        previousPlanName: xssPayload,
+        subscriptionUrl: "javascript:alert(1)",
+      }),
+    ];
+    for (const html of lifecycleXss) {
+      expect(html).not.toContain('<script>alert("xss")</script>');
+      expect(html).not.toContain('href="javascript:');
+      expect(html).not.toContain('href="data:');
+    }
   });
 });

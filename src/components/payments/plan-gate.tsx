@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/lib/store/ui-store";
 import {
   canAccessFeature,
+  getPlanCatalog,
   getRequiredPlanForFeature,
   getSubscriptionCountdownInfo,
-  MONBUDGET_PLANS,
   ProtectedFeatureKey,
 } from "@/lib/moneriz-plans";
 import { SubscriptionPlansWidget } from "@/components/payments/subscription-plans-widget";
@@ -31,6 +31,8 @@ export function PlanGate({
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
+    subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdminUser,
   } = useUIStore();
 
@@ -38,6 +40,8 @@ export function PlanGate({
     planId: subscriptionPlan,
     status: subscriptionStatus,
     expiresAt: subscriptionExpiresAt,
+    trialEndsAt: subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdmin: isAdminUser,
   });
 
@@ -47,7 +51,8 @@ export function PlanGate({
   }
 
   const requiredPlanId = getRequiredPlanForFeature(feature);
-  const requiredPlan = MONBUDGET_PLANS[requiredPlanId];
+  const catalog = getPlanCatalog();
+  const requiredPlan = catalog[requiredPlanId];
 
   return (
     <div
@@ -60,9 +65,11 @@ export function PlanGate({
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-extrabold uppercase tracking-wider">
             <Lock className="w-3.5 h-3.5" />
             <span>
-              {countdown.isExpired
-                ? `Abonnement Expiré — Plan ${requiredPlan.name} Requis`
-                : `Fonctionnalité Réservée au Plan ${requiredPlan.name}`}
+              {countdown.isTrialExpired
+                ? `Essai 30 jours terminé — Abonnement ${requiredPlan.name} (1 000 FCFA) Requis`
+                : countdown.isExpired
+                ? `Abonnement Expiré — Plan ${requiredPlan.name} (1 000 FCFA) Requis`
+                : `Fonctionnalité Cadenassée — Plan ${requiredPlan.name} (1 000 FCFA/mois)`}
             </span>
           </div>
 
@@ -73,7 +80,7 @@ export function PlanGate({
               className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs rounded-xl gap-1.5"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Retour aux Entrées & Dépenses (Gratuit)</span>
+              <span>Retour aux Entrées &amp; Dépenses (Gratuit)</span>
             </Button>
           </Link>
         </div>
@@ -87,7 +94,14 @@ export function PlanGate({
             {featureDescription}
           </p>
           <p suppressHydrationWarning className="text-xs text-sky-300 font-medium pt-1">
-            {countdown.isExpired ? (
+            {countdown.isTrialExpired ? (
+              <>
+                Vos 30 jours d&apos;essai gratuit complet sont arrivés à terme
+                {countdown.formattedTrialEndsAt ? ` le ${countdown.formattedTrialEndsAt}` : ""}. Prenez l&apos;abonnement{" "}
+                <strong>{requiredPlan.name} à {requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA / mois</strong> (ou{" "}
+                <strong>{requiredPlan.yearlyPriceXof.toLocaleString("fr-FR")} FCFA / an</strong>) pour débloquer immédiatement cet outil et toutes les fonctionnalités actuelles.
+              </>
+            ) : countdown.isExpired ? (
               <>
                 Votre abonnement précédent est arrivé à échéance
                 {countdown.formattedExpiresAt ? ` le ${countdown.formattedExpiresAt}` : ""} et votre compte est repassé sur le{" "}
@@ -97,8 +111,7 @@ export function PlanGate({
               </>
             ) : (
               <>
-                Votre compte est actuellement sur le <strong>Plan Gratuit (Entrées & Dépenses uniquement)</strong>. Passez au plan <strong>{requiredPlan.name}</strong> dès{" "}
-                <strong>{requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA / mois</strong> (ou{" "}
+                Votre compte est actuellement sur le <strong>Plan Gratuit (Entrées &amp; Dépenses uniquement)</strong>. Prenez un abonnement <strong>{requiredPlan.name} à {requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA / mois</strong> (ou{" "}
                 <strong>{requiredPlan.yearlyPriceXof.toLocaleString("fr-FR")} FCFA / an</strong> avec 2 mois offerts) pour activer cet outil.
               </>
             )}

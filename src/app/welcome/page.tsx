@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/lib/store/ui-store";
-import { MONBUDGET_PLANS } from "@/lib/moneriz-plans";
+import { getPlanCatalog, getSubscriptionCountdownInfo } from "@/lib/moneriz-plans";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,10 @@ function WelcomeContent() {
 
   const {
     subscriptionPlan,
+    subscriptionStatus,
+    subscriptionExpiresAt,
+    subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdminUser,
     refreshSubscription,
     updatePreferences,
@@ -153,9 +157,20 @@ function WelcomeContent() {
   };
 
   const effectiveIsAdmin = isSuperAdmin || isAdminUser;
+  const catalog = getPlanCatalog();
+  const countdown = getSubscriptionCountdownInfo({
+    planId: subscriptionPlan,
+    status: subscriptionStatus,
+    expiresAt: subscriptionExpiresAt,
+    trialEndsAt: subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
+    isAdmin: effectiveIsAdmin,
+  });
   const planLabel = effectiveIsAdmin
     ? "Super-Admin"
-    : `Plan ${MONBUDGET_PLANS[subscriptionPlan]?.name || "Gratuit"}`;
+    : countdown.isTrialActive
+    ? "Essai 30j Complet (Toutes fonctionnalités)"
+    : `Plan ${catalog[countdown.effectivePlanId]?.name || "Gratuit"}`;
 
   return (
     <div className="min-h-screen relative bg-slate-50 dark:bg-[#071324] flex flex-col items-center justify-center p-3 sm:p-4 py-16 transition-colors">
@@ -296,7 +311,9 @@ function WelcomeContent() {
               <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 text-xs text-emerald-800 dark:text-emerald-200 flex items-start gap-2">
                 <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <span>
-                  Ces réglages permettent d&apos;adapter automatiquement vos graphiques, enveloppes et calculs journaliers. Modifiable à tout moment dans Paramètres.
+                  {countdown.isTrialActive && !effectiveIsAdmin
+                    ? `Votre essai complet de 30 jours est actif (${countdown.trialDaysRemaining ?? 30} jours restants avec toutes les fonctionnalités débloquées). À l'issue des 30 jours, vous choisirez librement entre Gratuit limité (Entrées/Dépenses), Particulier (1 000 F) ou Entreprise.`
+                    : "Ces réglages permettent d'adapter automatiquement vos graphiques, enveloppes et calculs journaliers. Modifiable à tout moment dans Paramètres."}
                 </span>
               </div>
 

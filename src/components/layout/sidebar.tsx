@@ -7,7 +7,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/lib/store/ui-store";
-import { getSubscriptionCountdownInfo, MONBUDGET_PLANS } from "@/lib/moneriz-plans";
+import {
+  canAccessFeature,
+  getPlanCatalog,
+  getSubscriptionCountdownInfo,
+  ProtectedFeatureKey,
+} from "@/lib/moneriz-plans";
 import { toast } from "sonner";
 import {
   LayoutDashboard,
@@ -24,9 +29,16 @@ import {
   User,
   Crown,
   Clock,
+  Lock,
 } from "lucide-react";
 
-const routes = [
+const routes: Array<{
+  label: string;
+  icon: typeof LayoutDashboard;
+  href: string;
+  color: string;
+  feature?: ProtectedFeatureKey;
+}> = [
   {
     label: "Tableau de bord",
     icon: LayoutDashboard,
@@ -38,6 +50,7 @@ const routes = [
     icon: Wallet,
     href: "/budget",
     color: "text-emerald-400",
+    feature: "budget",
   },
   {
     label: "Transactions",
@@ -50,24 +63,28 @@ const routes = [
     icon: PiggyBank,
     href: "/savings",
     color: "text-pink-400",
+    feature: "savings",
   },
   {
     label: "Dettes & Créances",
     icon: HandCoins,
     href: "/debts",
     color: "text-amber-400",
+    feature: "debts",
   },
   {
     label: "Conseiller IA",
     icon: Brain,
     href: "/advisor",
     color: "text-cyan-400",
+    feature: "advisor",
   },
   {
     label: "Rapports",
     icon: LineChart,
     href: "/reports",
     color: "text-orange-400",
+    feature: "reports",
   },
   {
     label: "Paramètres",
@@ -91,6 +108,8 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
+    subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdminUser,
   } = useUIStore();
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -135,12 +154,17 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
     planId: subscriptionPlan,
     status: subscriptionStatus,
     expiresAt: subscriptionExpiresAt,
+    trialEndsAt: subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdmin: isAdminUser,
   });
+  const catalog = getPlanCatalog();
 
   const planBadgeLabel = isAdminUser
     ? "Super-Admin"
-    : `Plan ${MONBUDGET_PLANS[countdown.effectivePlanId]?.name || "Gratuit"}`;
+    : countdown.isTrialActive
+    ? "Essai 30j Complet"
+    : `Plan ${catalog[countdown.effectivePlanId]?.name || "Gratuit"}`;
 
   return (
     <div className="flex flex-col h-full bg-[#1E3A5F] text-white select-none">
@@ -176,26 +200,47 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
       <div className="px-3 py-3 flex-1 overflow-y-auto scrollbar-none space-y-1">
         {routes.map((route) => {
           const isActive = pathname === route.href;
+          const isLocked =
+            Boolean(route.feature) &&
+            !isAdminUser &&
+            !canAccessFeature(countdown.effectivePlanId, route.feature!);
           return (
             <Link
               key={route.href}
               href={route.href}
-              onClick={onNavigate}
+              onClick={() => {
+                if (isLocked) {
+                  toast.info(
+                    `« ${route.label} » est cadenassé — Prenez l'abonnement Particulier à 1 000 FCFA/mois pour le débloquer.`
+                  );
+                }
+                onNavigate?.();
+              }}
               className={cn(
                 "text-sm group flex p-2.5 px-3 w-full justify-start font-medium cursor-pointer rounded-xl transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-sky-400/50",
                 isActive
                   ? "text-white bg-white/15 font-semibold shadow-xs"
+                  : isLocked
+                  ? "text-slate-300/80 hover:text-white hover:bg-white/10"
                   : "text-slate-300 hover:text-white hover:bg-white/10"
               )}
             >
-              <div className="flex items-center flex-1">
-                <route.icon
-                  className={cn(
-                    "h-5 w-5 mr-3 shrink-0 transition-transform group-hover:scale-110",
-                    route.color
-                  )}
-                />
-                <span className="truncate">{route.label}</span>
+              <div className="flex items-center justify-between flex-1 gap-2 min-w-0">
+                <div className="flex items-center min-w-0">
+                  <route.icon
+                    className={cn(
+                      "h-5 w-5 mr-3 shrink-0 transition-transform group-hover:scale-110",
+                      route.color
+                    )}
+                  />
+                  <span className="truncate">{route.label}</span>
+                </div>
+                {isLocked && (
+                  <Lock
+                    aria-label="Cadenassé"
+                    className="h-3.5 w-3.5 text-amber-300/90 shrink-0"
+                  />
+                )}
               </div>
             </Link>
           );
@@ -259,6 +304,18 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
               >
                 <Crown className="w-2.5 h-2.5 shrink-0" />
                 <span>{planBadgeLabel}</span>
+                {!isAdminUser && countdown.isTrialActive && countdown.trialDaysRemaining !== null && (
+                  <span
+                    className={`ml-0.5 inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
+                      countdown.isTrialExpiringSoon
+                        ? "bg-amber-500/35 text-amber-200 border border-amber-400/50"
+                        : "bg-sky-500/25 text-sky-200 border border-sky-400/40"
+                    }`}
+                  >
+                    <Clock className="w-2 h-2 shrink-0" />
+                    {countdown.trialDaysRemaining}j
+                  </span>
+                )}
                 {!isAdminUser && countdown.isPaidActive && countdown.daysRemaining !== null && (
                   <span
                     className={`ml-0.5 inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
@@ -271,9 +328,9 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
                     {countdown.daysRemaining}j
                   </span>
                 )}
-                {!isAdminUser && countdown.isExpired && (
+                {!isAdminUser && !countdown.isTrialActive && (countdown.isExpired || countdown.isTrialExpired) && (
                   <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-rose-500/30 text-rose-200 border border-rose-400/40">
-                    Expiré
+                    {countdown.isTrialExpired ? "Choix requis" : "Expiré"}
                   </span>
                 )}
               </Link>

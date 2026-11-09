@@ -153,9 +153,9 @@ export function LandingFeaturesSection() {
 
         {/* CTA Bar */}
         <div className="mt-14 text-center">
-          <Link href="/login">
+          <Link href="/register">
             <button className="inline-flex items-center gap-2 text-sky-400 hover:text-sky-300 font-semibold text-sm transition-colors group">
-              <span>Prêt à explorer toutes ces fonctionnalités gratuitement ?</span>
+              <span>Essayer toutes ces fonctionnalités gratuitement pendant 30 jours</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
           </Link>

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { canAccessFeature } from "@/lib/moneriz-plans";
+import { canAccessFeature, getSubscriptionCountdownInfo } from "@/lib/moneriz-plans";
 import { getOrderAndSubscriptionStatus } from "@/lib/server/moneriz-app";
 import {
   validateReceiptFile,
@@ -27,20 +27,29 @@ export async function POST(req: Request) {
       );
     }
 
-    // Vérification stricte de l'abonnement actif (Entreprise & Pro ou Super-Admin requis)
+    // Vérification stricte de l'abonnement actif (Essai 30j, Particulier 1 000 FCFA+ ou Super-Admin requis)
     const { subscription, isAdmin: isSuperAdmin } =
       await getOrderAndSubscriptionStatus({
         userId: user.id,
         userEmail: user.email,
       });
 
-    if (!isSuperAdmin && !canAccessFeature(subscription.planId, "receipts")) {
+    const countdown = getSubscriptionCountdownInfo({
+      planId: subscription.planId,
+      status: subscription.status,
+      expiresAt: subscription.currentPeriodEnd,
+      trialEndsAt: subscription.trialEndsAt,
+      trialChoiceMadeAt: subscription.trialChoiceMadeAt,
+      isAdmin: isSuperAdmin,
+    });
+
+    if (!isSuperAdmin && !canAccessFeature(countdown.effectivePlanId, "receipts")) {
       return NextResponse.json(
         {
           error:
-            "Le stockage de reçus et justificatifs est réservé au plan Entreprise & Pro.",
+            "Le stockage de reçus et justificatifs nécessite un abonnement Particulier (1 000 FCFA / mois).",
           code: "PLAN_REQUIRED",
-          requiredPlan: "business",
+          requiredPlan: "personal",
         },
         { status: 403 }
       );

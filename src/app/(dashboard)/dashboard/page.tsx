@@ -32,8 +32,8 @@ import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
 import {
   canAccessFeature,
+  getPlanCatalog,
   getSubscriptionCountdownInfo,
-  MONBUDGET_PLANS,
 } from "@/lib/moneriz-plans";
 import { exportMonthlyReportCSV, exportMonthlyReportPDF } from "@/lib/utils/report-export";
 import {
@@ -68,19 +68,42 @@ export default function DashboardPage() {
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
+    subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdminUser,
   } = useUIStore();
 
+  const planCatalog = getPlanCatalog();
   const subscriptionCountdown = getSubscriptionCountdownInfo({
     planId: subscriptionPlan,
     status: subscriptionStatus,
     expiresAt: subscriptionExpiresAt,
+    trialEndsAt: subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdmin: isAdminUser,
   });
+  const canUseBudgetTools =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "budget");
+  const canViewSavings =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "savings");
+  const canViewDebts =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "debts");
   const canExportReports =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "reports");
   const canAccessAdvisor =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "advisor");
+
+  const promptUnlockPersonal = (featureLabel: string) => {
+    toast.info(`« ${featureLabel} » est cadenassé en mode Gratuit.`, {
+      description:
+        "Prenez un abonnement Particulier à 1 000 FCFA/mois pour débloquer toutes les fonctionnalités.",
+      action: {
+        label: "Abonnement 1 000 F",
+        onClick: () => router.push("/settings?tab=subscription&plan=personal"),
+      },
+    });
+    router.push("/settings?tab=subscription&plan=personal");
+  };
 
   // 1. Calculs financiers purs et précis via budget-calc
   const epargneMois = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
@@ -143,14 +166,15 @@ export default function DashboardPage() {
 
   const handleDownloadPDF = () => {
     if (!canExportReports) {
-      toast.info("Export PDF réservé au Plan Entreprise & Pro.", {
+      toast.info("Export PDF cadenassé en mode Gratuit.", {
         description:
-          "Passez au plan Entreprise (2 500 FCFA/mois) pour générer vos bilans PDF officiels.",
+          "Prenez un abonnement Particulier (1 000 FCFA/mois) pour générer vos bilans PDF officiels.",
         action: {
-          label: "Débloquer",
-          onClick: () => router.push("/settings?tab=subscription"),
+          label: "Prendre 1 000 F",
+          onClick: () => router.push("/settings?tab=subscription&plan=personal"),
         },
       });
+      router.push("/settings?tab=subscription&plan=personal");
       return;
     }
     exportMonthlyReportPDF({
@@ -170,14 +194,15 @@ export default function DashboardPage() {
 
   const handleDownloadCSV = () => {
     if (!canExportReports) {
-      toast.info("Export Excel / CSV réservé au Plan Entreprise & Pro.", {
+      toast.info("Export Excel / CSV cadenassé en mode Gratuit.", {
         description:
-          "Passez au plan Entreprise (2 500 FCFA/mois) pour télécharger vos rapports CSV.",
+          "Prenez un abonnement Particulier (1 000 FCFA/mois) pour télécharger vos rapports CSV.",
         action: {
-          label: "Débloquer",
-          onClick: () => router.push("/settings?tab=subscription"),
+          label: "Prendre 1 000 F",
+          onClick: () => router.push("/settings?tab=subscription&plan=personal"),
         },
       });
+      router.push("/settings?tab=subscription&plan=personal");
       return;
     }
     exportMonthlyReportCSV({
@@ -210,6 +235,12 @@ export default function DashboardPage() {
               className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-opacity hover:opacity-90 ${
                 isAdminUser
                   ? "bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800"
+                  : subscriptionCountdown.isTrialActive
+                  ? subscriptionCountdown.isTrialExpiringSoon
+                    ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700"
+                    : "bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800"
+                  : subscriptionCountdown.needsPlanChoice
+                  ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700"
                   : subscriptionCountdown.isPaidActive
                   ? subscriptionCountdown.isExpiringSoon
                     ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700"
@@ -223,8 +254,14 @@ export default function DashboardPage() {
               <span>
                 {isAdminUser
                   ? "Super-Admin • Illimité"
+                  : subscriptionCountdown.isTrialActive
+                  ? `Essai 30j • ${subscriptionCountdown.trialDaysRemaining}j restant${
+                      (subscriptionCountdown.trialDaysRemaining || 0) > 1 ? "s" : ""
+                    }`
+                  : subscriptionCountdown.needsPlanChoice
+                  ? "Fin d'essai • Choix requis"
                   : subscriptionCountdown.isPaidActive
-                  ? `Plan ${MONBUDGET_PLANS[subscriptionCountdown.effectivePlanId].name}${
+                  ? `Plan ${planCatalog[subscriptionCountdown.effectivePlanId].name}${
                       subscriptionCountdown.daysRemaining !== null
                         ? ` • ${subscriptionCountdown.daysRemaining}j restant${
                             subscriptionCountdown.daysRemaining > 1 ? "s" : ""
@@ -232,8 +269,8 @@ export default function DashboardPage() {
                         : ""
                     }`
                   : subscriptionCountdown.isExpired
-                  ? "Abonnement expiré • Plan Gratuit"
-                  : "Plan Gratuit • Débloquer"}
+                  ? "Abonnement expiré • Mode Gratuit"
+                  : "Plan Gratuit • Débloquer (1 000 F)"}
               </span>
             </Link>
           </div>
@@ -262,7 +299,7 @@ export default function DashboardPage() {
             title={
               canExportReports
                 ? "Télécharger le rapport PDF"
-                : "Export PDF réservé au Plan Entreprise & Pro"
+                : "Prendre un abonnement Particulier (1 000 FCFA/mois)"
             }
           >
             {canExportReports ? (
@@ -282,7 +319,7 @@ export default function DashboardPage() {
             title={
               canExportReports
                 ? "Télécharger le rapport Excel"
-                : "Export CSV réservé au Plan Entreprise & Pro"
+                : "Prendre un abonnement Particulier (1 000 FCFA/mois)"
             }
           >
             {canExportReports ? (
@@ -295,8 +332,73 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Alerte J-5 avant expiration ou notification d'expiration d'abonnement */}
-      {!isAdminUser && subscriptionCountdown.isExpiringSoon && (
+      {/* Alerte J-3 avant fin de l'essai gratuit complet (30 jours) */}
+      {!isAdminUser &&
+        subscriptionCountdown.isTrialActive &&
+        subscriptionCountdown.isTrialExpiringSoon && (
+          <div
+            suppressHydrationWarning
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200"
+          >
+            <div className="flex items-center gap-3">
+              <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div className="text-xs md:text-sm">
+                <span className="font-bold">
+                  Fin d&apos;essai gratuit dans J-{subscriptionCountdown.trialDaysRemaining} :{" "}
+                </span>
+                Vos 30 jours d&apos;accès complet se terminent
+                {subscriptionCountdown.formattedTrialEndsAt
+                  ? ` le ${subscriptionCountdown.formattedTrialEndsAt}`
+                  : " bientôt"}
+                . Choisissez votre formule : <strong>Gratuit limité (0 FCFA)</strong>,{" "}
+                <strong>Particulier (1 000 FCFA/mois)</strong> ou{" "}
+                <strong>
+                  Entreprise ({planCatalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois)
+                </strong>
+                .
+              </div>
+            </div>
+            <Link href="/settings?tab=subscription" className="shrink-0">
+              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold">
+                Choisir ma formule
+              </Button>
+            </Link>
+          </div>
+        )}
+
+      {/* Bannière Jour 31 : Choix requis après expiration de l'essai 30j */}
+      {!isAdminUser && subscriptionCountdown.needsPlanChoice && (
+        <div
+          suppressHydrationWarning
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-sky-500/10 border border-sky-500/30 text-slate-900 dark:text-sky-100"
+        >
+          <div className="flex items-center gap-3">
+            <Lock className="h-5 w-5 text-amber-500 shrink-0" />
+            <div className="text-xs md:text-sm">
+              <span className="font-bold">
+                Essai 30 jours terminé — Choix d&apos;abonnement requis :{" "}
+              </span>
+              Vos données sont intactes. Les modules avancés sont cadenassés jusqu&apos;à votre choix :{" "}
+              <strong>Gratuit (Entrées &amp; Dépenses)</strong>,{" "}
+              <strong>Particulier (1 000 FCFA/mois)</strong> ou{" "}
+              <strong>
+                Entreprise ({planCatalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois)
+              </strong>
+              .
+            </div>
+          </div>
+          <Link href="/settings?tab=subscription&plan=personal" className="shrink-0">
+            <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold">
+              Choisir mon abonnement
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {/* Alerte J-5 avant expiration ou notification d'expiration d'abonnement payant */}
+      {!isAdminUser &&
+        subscriptionCountdown.isPaidActive &&
+        subscriptionCountdown.isExpiringSoon && (
         <div
           suppressHydrationWarning
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200"
@@ -308,7 +410,7 @@ export default function DashboardPage() {
                 Renouvellement imminent (J-{subscriptionCountdown.daysRemaining}) :{" "}
               </span>
               Votre abonnement{" "}
-              <strong>{MONBUDGET_PLANS[subscriptionCountdown.effectivePlanId].name}</strong> arrive à
+              <strong>{planCatalog[subscriptionCountdown.effectivePlanId].name}</strong> arrive à
               échéance{" "}
               {subscriptionCountdown.formattedExpiresAt
                 ? `le ${subscriptionCountdown.formattedExpiresAt}`
@@ -337,19 +439,22 @@ export default function DashboardPage() {
               {subscriptionCountdown.formattedExpiresAt
                 ? ` le ${subscriptionCountdown.formattedExpiresAt}`
                 : ""}
-              . Votre compte utilise actuellement le <strong>Plan Gratuit</strong> (vos données restent sauvegardées).
+              . Votre compte utilise le <strong>Mode Gratuit limité</strong> (vos données restent sauvegardées). Prenez un abonnement <strong>Particulier (1 000 FCFA/mois)</strong> pour tout débloquer.
             </div>
           </div>
-          <Link href="/settings?tab=subscription" className="shrink-0">
+          <Link href="/settings?tab=subscription&plan=personal" className="shrink-0">
             <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold">
-              Réactiver mon plan
+              Réactiver (1 000 FCFA)
             </Button>
           </Link>
         </div>
       )}
 
-      {/* Bannière de rappel du jour de paie si activée */}
-      {notifications?.payDayReminder !== false && dailyInfo.daysRemaining <= (notifications?.payDayReminderDays || 7) && !dailyInfo.isPayDayToday && (
+      {/* Bannière de rappel du jour de paie si activée et débloquée */}
+      {canUseBudgetTools &&
+        notifications?.payDayReminder !== false &&
+        dailyInfo.daysRemaining <= (notifications?.payDayReminderDays || 7) &&
+        !dailyInfo.isPayDayToday && (
         <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 animate-in fade-in">
           <Calendar className="h-5 w-5 text-amber-600 shrink-0" />
           <div className="flex-1 text-xs md:text-sm">
@@ -359,7 +464,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* HERO CARD : Budget Journalier Conseillé déduit automatiquement */}
+      {/* HERO CARD : Budget Journalier Conseillé déduit automatiquement (Cadenassé en mode Gratuit) */}
+      {canUseBudgetTools ? (
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A5F] via-[#24436E] to-[#152B47] text-white p-4 sm:p-6 md:p-8 shadow-xl">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
@@ -468,6 +574,47 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => promptUnlockPersonal("Pilotage Quotidien & Budget Journalier")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              promptUnlockPersonal("Pilotage Quotidien & Budget Journalier");
+            }
+          }}
+          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A5F] via-[#24436E] to-[#152B47] text-white p-5 sm:p-6 md:p-8 shadow-xl border border-amber-400/30 cursor-pointer hover:border-amber-300/60 transition-all group"
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-2.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-400/20 border border-amber-400/40 text-amber-300">
+                <Lock className="h-3.5 w-3.5" />
+                <span>PILOTAGE QUOTIDIEN CADENASSÉ</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+                Budget journalier conseillé &amp; reste à vivre automatique
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-200 max-w-2xl leading-relaxed">
+                En mode Gratuit limité, vous profitez des Entrées et Dépenses illimitées. Prenez un abonnement{" "}
+                <strong className="text-amber-300">Particulier (1 000 FCFA / mois)</strong> pour débloquer votre budget journalier conseillé et le diagnostic du jour.
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                promptUnlockPersonal("Pilotage Quotidien & Budget Journalier");
+              }}
+              className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl gap-1.5 shrink-0 h-10 px-4"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              <span>Prendre 1 000 FCFA/mois</span>
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards : Les 6 Indicateurs Financiers Clés (Format 2x2 optimisé Mobile-First) */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
@@ -503,13 +650,17 @@ export default function DashboardPage() {
             <div suppressHydrationWarning className="text-base sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100 truncate">
               {formatMoney(depenses, currency)}
             </div>
-            {epargneMois > 0 ? (
+            {canUseBudgetTools && epargneMois > 0 ? (
               <p className="text-[10px] sm:text-xs text-sky-600 dark:text-sky-400 mt-0.5 sm:mt-1 font-medium truncate">
                 dont {formatMoney(epargneMois, currency)} épargnés
               </p>
-            ) : (
+            ) : canUseBudgetTools ? (
               <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
                 Prévu : {formatMoney(depensesPrevues, currency)}
+              </p>
+            ) : (
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
+                Sorties enregistrées ce mois
               </p>
             )}
             <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 sm:h-1.5 mt-2 rounded-full overflow-hidden">
@@ -540,6 +691,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* 4. Épargne constituée */}
+        {canViewSavings ? (
         <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Épargne Constituée</CardTitle>
@@ -556,8 +708,30 @@ export default function DashboardPage() {
             </p>
           </CardContent>
         </Card>
+        ) : (
+        <Card
+          onClick={() => promptUnlockPersonal("Épargne Constituée")}
+          className="border-none shadow-xs bg-slate-50/90 dark:bg-slate-900/70 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl overflow-hidden cursor-pointer hover:border-amber-400 transition-colors"
+        >
+          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Épargne Constituée</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-amber-100 dark:bg-amber-950/60 rounded-lg shrink-0">
+              <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+            <div className="text-sm sm:text-base font-extrabold text-slate-700 dark:text-slate-200 truncate">
+              Cadenassé
+            </div>
+            <p className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-400 font-semibold mt-0.5 sm:mt-1 truncate">
+              Abonnement 1 000 FCFA/mois &rarr;
+            </p>
+          </CardContent>
+        </Card>
+        )}
 
         {/* 5. Dettes à rembourser */}
+        {canViewDebts ? (
         <Link href="/debts" className="block group">
           <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden group-hover:shadow-md transition-shadow h-full">
             <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
@@ -576,8 +750,30 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
+        ) : (
+        <Card
+          onClick={() => promptUnlockPersonal("Dettes à Payer")}
+          className="border-none shadow-xs bg-slate-50/90 dark:bg-slate-900/70 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl overflow-hidden cursor-pointer hover:border-amber-400 transition-colors h-full"
+        >
+          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Dettes à Payer</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-amber-100 dark:bg-amber-950/60 rounded-lg shrink-0">
+              <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+            <div className="text-sm sm:text-base font-extrabold text-slate-700 dark:text-slate-200 truncate">
+              Cadenassé
+            </div>
+            <p className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-400 font-semibold mt-0.5 sm:mt-1 truncate">
+              Abonnement 1 000 FCFA/mois &rarr;
+            </p>
+          </CardContent>
+        </Card>
+        )}
 
         {/* 6. Dettes à récupérer */}
+        {canViewDebts ? (
         <Link href="/debts" className="block group">
           <Card className="border-none shadow-xs bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden group-hover:shadow-md transition-shadow h-full">
             <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
@@ -596,6 +792,27 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
+        ) : (
+        <Card
+          onClick={() => promptUnlockPersonal("Créances")}
+          className="border-none shadow-xs bg-slate-50/90 dark:bg-slate-900/70 border border-amber-200/80 dark:border-amber-900/50 rounded-2xl overflow-hidden cursor-pointer hover:border-amber-400 transition-colors h-full"
+        >
+          <CardHeader className="flex flex-row items-center justify-between p-3 pb-1 sm:p-5 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-400 truncate">Créances</CardTitle>
+            <div className="p-1.5 sm:p-2 bg-amber-100 dark:bg-amber-950/60 rounded-lg shrink-0">
+              <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+          </CardHeader>
+          <CardContent className="p-3 pt-0 sm:p-5 sm:pt-0">
+            <div className="text-sm sm:text-base font-extrabold text-slate-700 dark:text-slate-200 truncate">
+              Cadenassé
+            </div>
+            <p className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-400 font-semibold mt-0.5 sm:mt-1 truncate">
+              Abonnement 1 000 FCFA/mois &rarr;
+            </p>
+          </CardContent>
+        </Card>
+        )}
       </div>
 
       {/* 7. Progression des Objectifs Financiers & Intelligence Artificielle Financière (Piliers A, D, F) */}
@@ -610,45 +827,81 @@ export default function DashboardPage() {
                   Progression des Objectifs
                 </CardTitle>
                 <CardDescription className="text-slate-500 dark:text-slate-400">
-                  Avancement global : {globalGoalsProgress}% ({formatMoney(epargneConstituee, currency)})
+                  {canViewSavings
+                    ? `Avancement global : ${globalGoalsProgress}% (${formatMoney(epargneConstituee, currency)})`
+                    : "Module cadenassé en mode Gratuit"}
                 </CardDescription>
               </div>
-              <Link href="/savings">
-                <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium text-xs">
-                  Gérer &rarr;
-                </Button>
-              </Link>
+              {canViewSavings ? (
+                <Link href="/savings">
+                  <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium text-xs">
+                    Gérer &rarr;
+                  </Button>
+                </Link>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                  <Lock className="h-3 w-3" /> 1 000 F
+                </span>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {savingsGoals.slice(0, 4).map((goal) => {
-              const pct = goal.target > 0 ? Math.min(100, Math.round((goal.current / goal.target) * 100)) : 0;
-              return (
-                <div key={goal.id} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs sm:text-sm">
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{goal.name}</span>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
-                      {formatMoney(goal.current, currency)}{" "}
-                      <span className="text-slate-400 font-normal">/ {formatMoney(goal.target, currency)} ({pct}%)</span>
-                    </span>
+            {canViewSavings ? (
+              <>
+                {savingsGoals.slice(0, 4).map((goal) => {
+                  const pct = goal.target > 0 ? Math.min(100, Math.round((goal.current / goal.target) * 100)) : 0;
+                  return (
+                    <div key={goal.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs sm:text-sm">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{goal.name}</span>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                          {formatMoney(goal.current, currency)}{" "}
+                          <span className="text-slate-400 font-normal">/ {formatMoney(goal.target, currency)} ({pct}%)</span>
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${goal.color || "bg-emerald-600"}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                {savingsGoals.length === 0 && (
+                  <div className="text-center py-6 text-slate-500 dark:text-slate-400 text-xs space-y-2">
+                    <p>Aucun objectif financier configuré (Moto, Maison, Scolarité, Urgence...).</p>
+                    <Link href="/savings">
+                      <Button size="sm" variant="outline" className="mt-1 text-xs dark:border-slate-700 dark:text-slate-300">
+                        + Définir un objectif
+                      </Button>
+                    </Link>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${goal.color || "bg-emerald-600"}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-            {savingsGoals.length === 0 && (
-              <div className="text-center py-6 text-slate-500 dark:text-slate-400 text-xs space-y-2">
-                <p>Aucun objectif financier configuré (Moto, Maison, Scolarité, Urgence...).</p>
-                <Link href="/savings">
-                  <Button size="sm" variant="outline" className="mt-1 text-xs dark:border-slate-700 dark:text-slate-300">
-                    + Définir un objectif
-                  </Button>
-                </Link>
+                )}
+              </>
+            ) : (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => promptUnlockPersonal("Progression des Objectifs d'Épargne")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    promptUnlockPersonal("Progression des Objectifs d'Épargne");
+                  }
+                }}
+                className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-center space-y-2.5 cursor-pointer hover:border-amber-400 transition-colors"
+              >
+                <Lock className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto" />
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  Cagnottes &amp; Objectifs d&apos;Épargne cadenassés
+                </p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                  Prenez un abonnement Particulier à <strong>1 000 FCFA / mois</strong> pour débloquer vos objectifs d&apos;épargne.
+                </p>
+                <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold rounded-xl">
+                  Prendre l&apos;abonnement 1 000 F
+                </Button>
               </div>
             )}
           </CardContent>
@@ -689,7 +942,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-bold">
                   <Lock className="h-3.5 w-3.5" />
-                  <span>Plan Entreprise</span>
+                  <span>Plan Particulier (1 000 F)</span>
                 </div>
               )}
             </div>
@@ -744,25 +997,39 @@ export default function DashboardPage() {
                 )}
               </>
             ) : (
-              <div className="p-5 rounded-2xl bg-white/5 border border-white/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => promptUnlockPersonal("Conseiller Financier IA")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    promptUnlockPersonal("Conseiller Financier IA");
+                  }
+                }}
+                className="p-5 rounded-2xl bg-white/5 border border-white/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:border-amber-300/50 transition-colors"
+              >
                 <div className="space-y-1.5">
                   <p className="text-sm font-bold text-white flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-amber-300 shrink-0" />
                     <span>Débloquez votre Conseiller Financier IA personnalisé</span>
                   </p>
                   <p className="text-xs text-slate-300 leading-relaxed max-w-lg">
-                    Obtenez votre score de santé financière /100, un simulateur de fin de mois et des plans d&apos;action en 1 clic avec le <strong>Plan Entreprise &amp; Pro</strong> (2 500 FCFA/mois).
+                    Obtenez votre score de santé financière /100, un simulateur de fin de mois et des plans d&apos;action en 1 clic dès le <strong>Plan Particulier</strong> (1 000 FCFA/mois).
                   </p>
                 </div>
-                <Link href="/settings?tab=subscription" className="shrink-0">
-                  <Button
-                    size="sm"
-                    className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl gap-1.5"
-                  >
-                    <Crown className="h-3.5 w-3.5" />
-                    <span>Passer à Entreprise</span>
-                  </Button>
-                </Link>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    promptUnlockPersonal("Conseiller Financier IA");
+                  }}
+                  className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl gap-1.5 shrink-0"
+                >
+                  <Crown className="h-3.5 w-3.5" />
+                  <span>Prendre Particulier (1 000 F)</span>
+                </Button>
               </div>
             )}
           </CardContent>
@@ -825,42 +1092,80 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-slate-900 dark:text-slate-100">Enveloppes par Catégorie</CardTitle>
-                <CardDescription className="text-slate-500 dark:text-slate-400">Consommation par rapport aux plafonds prévus</CardDescription>
+                <CardDescription className="text-slate-500 dark:text-slate-400">
+                  {canUseBudgetTools
+                    ? "Consommation par rapport aux plafonds prévus"
+                    : "Cadenassé en mode Gratuit limité"}
+                </CardDescription>
               </div>
-              <Link href="/budget">
-                <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium">
-                  Ajuster
-                </Button>
-              </Link>
+              {canUseBudgetTools ? (
+                <Link href="/budget">
+                  <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium">
+                    Ajuster
+                  </Button>
+                </Link>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                  <Lock className="h-3 w-3" /> 1 000 F
+                </span>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            {categoryStats.map((cat, idx) => {
-              return (
-                <div key={idx} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{cat.name}</span>
-                    <span suppressHydrationWarning className="font-medium text-slate-900 dark:text-slate-100 text-xs">
-                      {formatMoney(cat.spent, currency)} <span className="text-slate-400 dark:text-slate-500 font-normal">/ {formatMoney(cat.amount, currency)}</span>
-                    </span>
+            {canUseBudgetTools ? (
+              <>
+                {categoryStats.map((cat, idx) => {
+                  return (
+                    <div key={idx} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{cat.name}</span>
+                        <span suppressHydrationWarning className="font-medium text-slate-900 dark:text-slate-100 text-xs">
+                          {formatMoney(cat.spent, currency)} <span className="text-slate-400 dark:text-slate-500 font-normal">/ {formatMoney(cat.amount, currency)}</span>
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${cat.color || 'bg-blue-500'} rounded-full transition-all duration-500 ${cat.isOverBudget ? '!bg-red-500' : ''}`}
+                          style={{ width: `${Math.min(cat.percent, 100)}%` }}
+                        />
+                      </div>
+                      {cat.isOverBudget && (
+                        <p className="text-[11px] text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" /> Plafond dépassé
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                {categoryStats.length === 0 && (
+                  <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
+                    Aucune enveloppe définie. Cliquez sur « Ajuster » pour configurer votre budget.
                   </div>
-                  <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${cat.color || 'bg-blue-500'} rounded-full transition-all duration-500 ${cat.isOverBudget ? '!bg-red-500' : ''}`}
-                      style={{ width: `${Math.min(cat.percent, 100)}%` }}
-                    />
-                  </div>
-                  {cat.isOverBudget && (
-                    <p className="text-[11px] text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" /> Plafond dépassé
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-            {categoryStats.length === 0 && (
-              <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
-                Aucune enveloppe définie. Cliquez sur « Ajuster » pour configurer votre budget.
+                )}
+              </>
+            ) : (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => promptUnlockPersonal("Enveloppes par Catégorie")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    promptUnlockPersonal("Enveloppes par Catégorie");
+                  }
+                }}
+                className="p-5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-center space-y-2.5 cursor-pointer hover:border-amber-400 transition-colors"
+              >
+                <Lock className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto" />
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                  Enveloppes budgétaires cadenassées
+                </p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                  Prenez un abonnement Particulier à <strong>1 000 FCFA / mois</strong> pour fixer vos plafonds par catégorie et recevoir les alertes de seuil.
+                </p>
+                <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold rounded-xl">
+                  Prendre l&apos;abonnement 1 000 F
+                </Button>
               </div>
             )}
           </CardContent>

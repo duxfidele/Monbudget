@@ -5,6 +5,11 @@
 
 import {
   getWelcomeEmailHtml,
+  getTrialReminderEmailHtml,
+  getTrialExpiredEmailHtml,
+  getPaymentSuccessEmailHtml,
+  getRenewalReminderEmailHtml,
+  getSubscriptionExpiredEmailHtml,
   getBudgetAlertEmailHtml,
   getMonthlyReportEmailHtml,
 } from "./templates";
@@ -24,6 +29,20 @@ export interface SendEmailResult {
   mocked?: boolean;
 }
 
+function getDefaultFrom(): string {
+  return process.env.RESEND_FROM_EMAIL?.trim() || "MonBudget <notifications@monbudgetpro.com>";
+}
+
+function getDefaultReplyTo(): string {
+  return process.env.RESEND_REPLY_TO?.trim() || "support@monbudgetpro.com";
+}
+
+function getAppBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!raw) return "https://monbudgetpro.com";
+  return raw.replace(/\/+$/, "");
+}
+
 /**
  * Envoie un email via l'API Resend de manière sécurisée et résiliente
  */
@@ -31,14 +50,14 @@ export async function sendEmail({
   to,
   subject,
   html,
-  replyTo = "support@monbudget.app",
-  from = "MonBudget <notifications@monbudget.app>",
+  replyTo = getDefaultReplyTo(),
+  from = getDefaultFrom(),
 }: SendEmailOptions): Promise<SendEmailResult> {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY?.trim();
   const recipientList = Array.isArray(to) ? to : [to];
 
-  // Mode Fallback Gracieux : Si aucune clé Resend n'est configurée (ex: environnement local de dev),
-  // on journalise sans faire planter l'application
+  // Mode Fallback Gracieux : Si aucune clé Resend n'est configurée,
+  // on journalise sans faire planter l'application (les notifications in-app restent actives).
   if (!apiKey) {
     if (process.env.NODE_ENV !== "test") {
       console.log(`📨 [Email Service — Simulation Resend]`);
@@ -92,13 +111,133 @@ export async function sendEmail({
 }
 
 /**
- * Raccourci : Envoi d'un email de bienvenue
+ * 1. Email de bienvenue + essai gratuit 30 jours complet
  */
-export async function sendWelcomeEmail(to: string, name?: string): Promise<SendEmailResult> {
-  const html = getWelcomeEmailHtml({ name });
+export async function sendWelcomeEmail(
+  to: string,
+  name?: string,
+  options?: { trialDays?: number; trialEndsAtFormatted?: string | null }
+): Promise<SendEmailResult> {
+  const html = getWelcomeEmailHtml({
+    name,
+    dashboardUrl: `${getAppBaseUrl()}/dashboard`,
+    trialDays: options?.trialDays ?? 30,
+    trialEndsAtFormatted: options?.trialEndsAtFormatted,
+  });
   return await sendEmail({
     to,
-    subject: `Bienvenue sur MonBudget${name ? `, ${name}` : ""} ! 🎉 Reprenez le contrôle de votre argent`,
+    subject: `Bienvenue sur MonBudget${name ? `, ${name}` : ""} ! 🎉 Votre essai complet de 30 jours est actif`,
+    html,
+  });
+}
+
+/**
+ * 2. Email de relance J-3 avant la fin des 30 jours d'essai gratuit
+ */
+export async function sendTrialReminderEmail(
+  to: string,
+  params: {
+    name?: string;
+    daysRemaining: number;
+    trialEndsAtFormatted?: string | null;
+  }
+): Promise<SendEmailResult> {
+  const html = getTrialReminderEmailHtml({
+    ...params,
+    subscriptionUrl: `${getAppBaseUrl()}/settings?tab=subscription`,
+  });
+  const d = Math.max(1, Math.round(params.daysRemaining));
+  return await sendEmail({
+    to,
+    subject: `⏳ Plus que ${d} jour${d > 1 ? "s" : ""} d'essai gratuit complet — Choisissez votre formule MonBudget`,
+    html,
+  });
+}
+
+/**
+ * 3. Email J0 : Fin des 30 jours d'essai — Choix du plan requis
+ */
+export async function sendTrialExpiredEmail(
+  to: string,
+  params?: { name?: string }
+): Promise<SendEmailResult> {
+  const html = getTrialExpiredEmailHtml({
+    name: params?.name,
+    subscriptionUrl: `${getAppBaseUrl()}/settings?tab=subscription`,
+  });
+  return await sendEmail({
+    to,
+    subject: `🔒 Votre essai gratuit de 30 jours est terminé — Choisissez votre formule MonBudget`,
+    html,
+  });
+}
+
+/**
+ * 4. Email post-paiement avec succès : Confirmation + lancement du décompte
+ */
+export async function sendPaymentSuccessEmail(
+  to: string,
+  params: {
+    name?: string;
+    planName: string;
+    billingCycle: "monthly" | "yearly";
+    amountXof: number;
+    reference: string;
+    expiresAtFormatted?: string | null;
+  }
+): Promise<SendEmailResult> {
+  const html = getPaymentSuccessEmailHtml({
+    ...params,
+    dashboardUrl: `${getAppBaseUrl()}/dashboard`,
+  });
+  return await sendEmail({
+    to,
+    subject: `✅ Abonnement ${params.planName} activé avec succès — MonBudget`,
+    html,
+  });
+}
+
+/**
+ * 5. Email de relance J-3 avant échéance d'abonnement payant
+ */
+export async function sendRenewalReminderEmail(
+  to: string,
+  params: {
+    name?: string;
+    planName: string;
+    daysRemaining: number;
+    expiresAtFormatted?: string | null;
+  }
+): Promise<SendEmailResult> {
+  const html = getRenewalReminderEmailHtml({
+    ...params,
+    subscriptionUrl: `${getAppBaseUrl()}/settings?tab=subscription`,
+  });
+  const d = Math.max(1, Math.round(params.daysRemaining));
+  return await sendEmail({
+    to,
+    subject: `🔔 Votre abonnement ${params.planName} expire dans ${d} jour${d > 1 ? "s" : ""} — MonBudget`,
+    html,
+  });
+}
+
+/**
+ * 6. Email d'expiration d'abonnement payant
+ */
+export async function sendSubscriptionExpiredEmail(
+  to: string,
+  params: {
+    name?: string;
+    previousPlanName: string;
+  }
+): Promise<SendEmailResult> {
+  const html = getSubscriptionExpiredEmailHtml({
+    ...params,
+    subscriptionUrl: `${getAppBaseUrl()}/settings?tab=subscription`,
+  });
+  return await sendEmail({
+    to,
+    subject: `🔒 Votre abonnement ${params.previousPlanName} a expiré — MonBudget`,
     html,
   });
 }
@@ -122,7 +261,10 @@ export async function sendBudgetAlertEmail(
     ? `🚨 Alerte : Budget dépassé sur "${params.categoryName}" (${params.percent}%)`
     : `⚠️ Vigilance : 80% du budget atteint sur "${params.categoryName}"`;
 
-  const html = getBudgetAlertEmailHtml(params);
+  const html = getBudgetAlertEmailHtml({
+    ...params,
+    dashboardUrl: `${getAppBaseUrl()}/dashboard`,
+  });
   return await sendEmail({
     to,
     subject,
@@ -145,11 +287,13 @@ export async function sendMonthlyReportEmail(
     currency?: string;
   }
 ): Promise<SendEmailResult> {
-  const html = getMonthlyReportEmailHtml(params);
+  const html = getMonthlyReportEmailHtml({
+    ...params,
+    dashboardUrl: `${getAppBaseUrl()}/dashboard`,
+  });
   return await sendEmail({
     to,
     subject: `📊 Votre Bilan Financier de ${params.monthName} est disponible — MonBudget`,
     html,
   });
 }
-

@@ -195,7 +195,7 @@ function RegisterForm() {
         </Link>
         <CardTitle className="text-2xl font-bold text-center">Créer un compte</CardTitle>
         <CardDescription className="text-center">
-          Commencez à gérer votre salaire et vos dépenses intelligemment.
+          Profitez de 30 jours d&apos;essai gratuit avec toutes les fonctionnalités, sans carte bancaire.
         </CardDescription>
       </CardHeader>
       <CardContent>

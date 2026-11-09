@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   canAccessFeature,
+  getPlanCatalog,
   getRequiredPlanForFeature,
   getServerPlanAmountXof,
   getSubscriptionCountdownInfo,
@@ -13,6 +14,7 @@ import {
   verifyMonerizSignature,
 } from "../src/lib/server/moneriz-signature";
 import {
+  chooseFreePlanForUser,
   commitMonerizInbox,
   getOrderAndSubscriptionStatus,
   parseMonerizEvent,
@@ -20,6 +22,10 @@ import {
   resolveEffectiveSubscription,
   setFallbackSubscriptionForTests,
 } from "../src/lib/server/moneriz-app";
+import {
+  listUserNotifications,
+  sendPostPaymentConfirmationOnce,
+} from "../src/lib/server/notifications";
 import {
   createMonerizCheckoutSession,
   MonerizApiError,
@@ -41,7 +47,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(personalYearly.currency).toBe("XOF");
     expect(MONBUDGET_PLANS.personal.yearlySavingsXof).toBe(2000);
 
-    // Plan Entreprise : 2 500 XOF/mois et 25 000 XOF/an (2 mois offerts)
+    // Plan Entreprise : 2 500 XOF/mois et 25 000 XOF/an (2 mois offerts) par défaut
     const businessMonthly = getServerPlanAmountXof("business", "monthly");
     expect(businessMonthly.amount).toBe(2500);
     expect(businessMonthly.currency).toBe("XOF");
@@ -50,32 +56,57 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(businessYearly.amount).toBe(25000);
     expect(businessYearly.currency).toBe("XOF");
     expect(MONBUDGET_PLANS.business.yearlySavingsXof).toBe(5000);
+
+    // Tarif Entreprise rehaussable dynamiquement via variable d'environnement sans casser le code
+    const prevPublicBiz = process.env.NEXT_PUBLIC_BUSINESS_MONTHLY_PRICE_XOF;
+    const prevServerBiz = process.env.BUSINESS_MONTHLY_PRICE_XOF;
+    try {
+      delete process.env.NEXT_PUBLIC_BUSINESS_MONTHLY_PRICE_XOF;
+      process.env.BUSINESS_MONTHLY_PRICE_XOF = "3500";
+      const dynamicCatalog = getPlanCatalog();
+      expect(dynamicCatalog.business.monthlyPriceXof).toBe(3500);
+      expect(dynamicCatalog.business.yearlyPriceXof).toBe(35000);
+      expect(dynamicCatalog.business.yearlySavingsXof).toBe(7000);
+      expect(getServerPlanAmountXof("business", "yearly").amount).toBe(35000);
+    } finally {
+      if (prevPublicBiz === undefined) delete process.env.NEXT_PUBLIC_BUSINESS_MONTHLY_PRICE_XOF;
+      else process.env.NEXT_PUBLIC_BUSINESS_MONTHLY_PRICE_XOF = prevPublicBiz;
+      if (prevServerBiz === undefined) delete process.env.BUSINESS_MONTHLY_PRICE_XOF;
+      else process.env.BUSINESS_MONTHLY_PRICE_XOF = prevServerBiz;
+    }
   });
 
-  test("2. Restrictions par plan : Gratuit limité aux Entrées/Dépenses (sans Budget ni Épargne ni le reste)", () => {
-    // Plan Gratuit : aucun accès à budget, savings, debts, reports, advisor
+  test("2. Restrictions par plan : Gratuit cadenassé (Entrées/Dépenses), Particulier 1 000 F débloque tout l'existant, Entreprise Option B", () => {
+    // Plan Gratuit : aucun accès à budget, savings, debts, reports, advisor, receipts
     expect(canAccessFeature("free", "budget")).toBe(false);
     expect(canAccessFeature("free", "savings")).toBe(false);
     expect(canAccessFeature("free", "debts")).toBe(false);
     expect(canAccessFeature("free", "reports")).toBe(false);
     expect(canAccessFeature("free", "advisor")).toBe(false);
+    expect(canAccessFeature("free", "receipts")).toBe(false);
 
-    // Plan Particulier : débloque budget, savings, debts ; verrouille reports et advisor
+    // Plan Particulier (1 000 FCFA/mois) : débloque 100 % des fonctionnalités actuelles
     expect(canAccessFeature("personal", "budget")).toBe(true);
     expect(canAccessFeature("personal", "savings")).toBe(true);
     expect(canAccessFeature("personal", "debts")).toBe(true);
-    expect(canAccessFeature("personal", "reports")).toBe(false);
-    expect(canAccessFeature("personal", "advisor")).toBe(false);
+    expect(canAccessFeature("personal", "reports")).toBe(true);
+    expect(canAccessFeature("personal", "advisor")).toBe(true);
+    expect(canAccessFeature("personal", "receipts")).toBe(true);
 
-    // Plan Entreprise : débloque 100% des fonctionnalités
+    // Plan Entreprise : débloque aussi toutes les fonctionnalités actuelles + avantages Option B
     expect(canAccessFeature("business", "budget")).toBe(true);
     expect(canAccessFeature("business", "savings")).toBe(true);
     expect(canAccessFeature("business", "debts")).toBe(true);
     expect(canAccessFeature("business", "reports")).toBe(true);
     expect(canAccessFeature("business", "advisor")).toBe(true);
+    expect(canAccessFeature("business", "receipts")).toBe(true);
 
     expect(getRequiredPlanForFeature("budget")).toBe("personal");
-    expect(getRequiredPlanForFeature("advisor")).toBe("business");
+    expect(getRequiredPlanForFeature("savings")).toBe("personal");
+    expect(getRequiredPlanForFeature("debts")).toBe("personal");
+    expect(getRequiredPlanForFeature("reports")).toBe("personal");
+    expect(getRequiredPlanForFeature("advisor")).toBe("personal");
+    expect(getRequiredPlanForFeature("receipts")).toBe("personal");
   });
 
   test("3. Vérification cryptographique HMAC-SHA256 de X-Moneriz-Signature et fenêtre anti-rejeu de 5 minutes", () => {
@@ -177,6 +208,14 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(afterWebhook.order?.status).toBe("paid");
     expect(afterWebhook.subscription.planId).toBe("personal");
     expect(afterWebhook.subscription.billingCycle).toBe("yearly");
+
+    // Notification post-paiement envoyée une seule fois (idempotente)
+    const firstNotif = await sendPostPaymentConfirmationOnce({ orderId: order.id });
+    expect(firstNotif.sent).toBe(true);
+    const secondNotif = await sendPostPaymentConfirmationOnce({ orderId: order.id });
+    expect(secondNotif.sent).toBe(false);
+    const userANotifs = await listUserNotifications(userA);
+    expect(userANotifs.notifications.some((n) => n.type === "payment_success")).toBe(true);
 
     // Livraison en doublon du même event.id -> ignoré proprement (idempotent)
     const duplicateCommit = await commitMonerizInbox(parsedEvent);
@@ -556,16 +595,16 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(boundary.shouldPersistDowngrade).toBe(true);
   });
 
-  test("9. Helper de décompte (daysRemaining, J-5, expiré) & verrouillage receipts sur Plan Entreprise", () => {
+  test("9. Essai 30 jours complet, relance J-3, bascule Gratuit cadenassé à J0, décompte payant & exemption Super-Admin", async () => {
     const fixedNow = Date.parse("2026-12-01T12:00:00.000Z");
 
-    // Verrouillage des reçus uniquement sur 'business'
+    // Les reçus/justificatifs sont débloqués dès le plan Particulier (1 000 FCFA)
     expect(canAccessFeature("free", "receipts")).toBe(false);
-    expect(canAccessFeature("personal", "receipts")).toBe(false);
+    expect(canAccessFeature("personal", "receipts")).toBe(true);
     expect(canAccessFeature("business", "receipts")).toBe(true);
-    expect(getRequiredPlanForFeature("receipts")).toBe("business");
+    expect(getRequiredPlanForFeature("receipts")).toBe("personal");
 
-    // Compte gratuit neuf
+    // 9a. Compte gratuit classique (sans essai actif)
     const freeNew = getSubscriptionCountdownInfo({
       planId: "free",
       status: "active",
@@ -573,11 +612,83 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
       now: fixedNow,
     });
     expect(freeNew.effectivePlanId).toBe("free");
+    expect(freeNew.isTrialActive).toBe(false);
+    expect(freeNew.needsPlanChoice).toBe(false);
     expect(freeNew.isPaidActive).toBe(false);
     expect(freeNew.isExpired).toBe(false);
     expect(freeNew.daysRemaining).toBeNull();
 
-    // Abonnement Particulier actif avec 10 jours restants
+    // 9b. Nouvel inscrit en essai complet 30 jours (J-29) -> effectivePlanId = "personal"
+    const trialDay1 = getSubscriptionCountdownInfo({
+      planId: "free",
+      status: "active",
+      trialEndsAt: new Date(fixedNow + 29 * 86_400_000).toISOString(),
+      trialChoiceMadeAt: null,
+      now: fixedNow,
+    });
+    expect(trialDay1.isTrialActive).toBe(true);
+    expect(trialDay1.isTrialExpiringSoon).toBe(false);
+    expect(trialDay1.needsPlanChoice).toBe(false);
+    expect(trialDay1.trialDaysRemaining).toBe(29);
+    expect(trialDay1.effectivePlanId).toBe("personal");
+
+    // 9c. Essai à J-3 -> isTrialExpiringSoon = true + accès complet maintenu jusqu'à J0
+    const trialJ3 = getSubscriptionCountdownInfo({
+      planId: "free",
+      status: "active",
+      trialEndsAt: new Date(fixedNow + 3 * 86_400_000).toISOString(),
+      trialChoiceMadeAt: null,
+      now: fixedNow,
+    });
+    expect(trialJ3.isTrialActive).toBe(true);
+    expect(trialJ3.isTrialExpiringSoon).toBe(true);
+    expect(trialJ3.trialDaysRemaining).toBe(3);
+    expect(trialJ3.effectivePlanId).toBe("personal");
+
+    // 9d. Essai expiré sans choix enregistré -> needsPlanChoice = true + cadenassage ('free')
+    const trialExpired = getSubscriptionCountdownInfo({
+      planId: "free",
+      status: "active",
+      trialEndsAt: new Date(fixedNow - 3_600_000).toISOString(),
+      trialChoiceMadeAt: null,
+      now: fixedNow,
+    });
+    expect(trialExpired.isTrialActive).toBe(false);
+    expect(trialExpired.isTrialExpired).toBe(true);
+    expect(trialExpired.needsPlanChoice).toBe(true);
+    expect(trialExpired.trialDaysRemaining).toBe(0);
+    expect(trialExpired.effectivePlanId).toBe("free");
+
+    // 9e. Choix explicite du mode Gratuit limité via chooseFreePlanForUser -> ferme needsPlanChoice
+    const trialUserId = `user-trial-choice-${Date.now()}`;
+    setFallbackSubscriptionForTests({
+      userId: trialUserId,
+      planId: "free",
+      billingCycle: "none",
+      status: "active",
+      currentPeriodEnd: null,
+      lastOrderId: null,
+      trialStartedAt: new Date(fixedNow - 31 * 86_400_000).toISOString(),
+      trialEndsAt: new Date(fixedNow - 3_600_000).toISOString(),
+      trialChoiceMadeAt: null,
+    });
+    const chosenFree = await chooseFreePlanForUser({
+      userId: trialUserId,
+      userEmail: "essai.fini@example.com",
+    });
+    const afterChoice = getSubscriptionCountdownInfo({
+      planId: chosenFree.planId,
+      status: chosenFree.status,
+      expiresAt: chosenFree.currentPeriodEnd,
+      trialEndsAt: chosenFree.trialEndsAt,
+      trialChoiceMadeAt: chosenFree.trialChoiceMadeAt,
+      now: fixedNow,
+    });
+    expect(afterChoice.isTrialActive).toBe(false);
+    expect(afterChoice.needsPlanChoice).toBe(false);
+    expect(afterChoice.effectivePlanId).toBe("free");
+
+    // 9f. Abonnement Particulier actif avec 10 jours restants
     const active10Days = getSubscriptionCountdownInfo({
       planId: "personal",
       status: "active",
@@ -590,7 +701,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(active10Days.daysRemaining).toBe(10);
     expect(active10Days.formattedExpiresAt).toBe("11/12/2026");
 
-    // Abonnement Entreprise à J-4 (alerte renouvellement <= 5 jours)
+    // 9g. Abonnement Entreprise à J-4 (alerte renouvellement <= 5 jours)
     const active4Days = getSubscriptionCountdownInfo({
       planId: "business",
       status: "active",
@@ -602,7 +713,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(active4Days.isExpiringSoon).toBe(true);
     expect(active4Days.daysRemaining).toBe(4);
 
-    // Abonnement client expiré depuis 1 seconde -> rétrogradé vers free
+    // 9h. Abonnement client expiré depuis 1 seconde -> rétrogradé vers free
     const expiredClient = getSubscriptionCountdownInfo({
       planId: "business",
       status: "active",
@@ -614,34 +725,45 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(expiredClient.isExpired).toBe(true);
     expect(expiredClient.daysRemaining).toBe(0);
 
-    // Super-Admin exempt
+    // 9i. Super-Admin exempt même avec essai expiré / statut expiré
     const superAdmin = getSubscriptionCountdownInfo({
       planId: "free",
       status: "expired",
       expiresAt: "2020-01-01T00:00:00.000Z",
+      trialEndsAt: "2020-01-01T00:00:00.000Z",
       isAdmin: true,
       now: fixedNow,
     });
     expect(superAdmin.effectivePlanId).toBe("business");
     expect(superAdmin.isPaidActive).toBe(true);
+    expect(superAdmin.isTrialActive).toBe(false);
+    expect(superAdmin.needsPlanChoice).toBe(false);
     expect(superAdmin.isExpired).toBe(false);
     expect(superAdmin.daysRemaining).toBeNull();
   });
 
-  test("10. Contrats API fail-closed (/api/receipts/upload, /api/cron/daily-check) & verrouillage complet UI Dashboard/Sidebar/PlanGate", async ({
+  test("10. Contrats API fail-closed (/api/receipts/upload, /api/notifications, /api/subscription/choose-free, /api/cron/daily-check) & UI", async ({
     request,
   }) => {
-    // 10a. POST /api/receipts/upload anonyme refusé (401)
-    const anonUpload = await request.post("/api/receipts/upload");
+    // 10a. Endpoints authentifiés anonymes refusés (401)
+    const [anonUpload, anonNotifGet, anonNotifPatch, anonChooseFree] = await Promise.all([
+      request.post("/api/receipts/upload"),
+      request.get("/api/notifications"),
+      request.patch("/api/notifications", { data: { markAll: true } }),
+      request.post("/api/subscription/choose-free"),
+    ]);
     expect(anonUpload.status()).toBe(401);
+    expect(anonNotifGet.status()).toBe(401);
+    expect(anonNotifPatch.status()).toBe(401);
+    expect(anonChooseFree.status()).toBe(401);
 
-    // 10b. Contrats statiques serveur (receipts plan gating & cron expiration sweep)
+    // 10b. Contrats statiques serveur (receipts plan gating, notifications & cron lifecycle)
     const uploadRouteSrc = fs.readFileSync(
       path.join(process.cwd(), "src/app/api/receipts/upload/route.ts"),
       "utf8"
     );
     expect(uploadRouteSrc).toContain("getOrderAndSubscriptionStatus");
-    expect(uploadRouteSrc).toContain('canAccessFeature(subscription.planId, "receipts")');
+    expect(uploadRouteSrc).toContain('canAccessFeature(countdown.effectivePlanId, "receipts")');
     expect(uploadRouteSrc).toContain('code: "PLAN_REQUIRED"');
     expect(uploadRouteSrc).toContain("403");
 
@@ -649,11 +771,20 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
       path.join(process.cwd(), "src/app/api/cron/daily-check/route.ts"),
       "utf8"
     );
-    expect(cronRouteSrc).toContain('.from("user_subscriptions")');
-    expect(cronRouteSrc).toContain('status: "expired"');
-    expect(cronRouteSrc).toContain("expiredSubscriptionsDowngraded");
+    expect(cronRouteSrc).toContain("runDailySubscriptionLifecycleCron");
 
-    // 10c. Contrats UI : Dashboard PDF/CSV/IA, Transactions CSV/Reçus, Sidebar, PlanGate, Settings
+    const notificationsServerSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/server/notifications.ts"),
+      "utf8"
+    );
+    expect(notificationsServerSrc).toContain('status: "expired"');
+    expect(notificationsServerSrc).toContain("expiredSubscriptionsDowngraded");
+    expect(notificationsServerSrc).toContain("trialReminders3dSent");
+    expect(notificationsServerSrc).toContain("trialExpiredAlertsSent");
+    expect(notificationsServerSrc).toContain("renewalReminders3dSent");
+    expect(notificationsServerSrc).toContain("subscriptionExpiredAlertsSent");
+
+    // 10c. Contrats UI : Dashboard, Transactions, ReceiptUpload, PlanGate, Sidebar, Modal Choix & Bell
     const dashboardSrc = fs.readFileSync(
       path.join(process.cwd(), "src/app/(dashboard)/dashboard/page.tsx"),
       "utf8"
@@ -690,6 +821,18 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     );
     expect(sidebarSrc).toContain("getSubscriptionCountdownInfo");
     expect(sidebarSrc).toContain("countdown.daysRemaining");
+
+    const layoutSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/app/(dashboard)/layout.tsx"),
+      "utf8"
+    );
+    expect(layoutSrc).toContain("TrialChoiceModal");
+
+    const headerSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/layout/header.tsx"),
+      "utf8"
+    );
+    expect(headerSrc).toContain("NotificationsBell");
   });
 });
 

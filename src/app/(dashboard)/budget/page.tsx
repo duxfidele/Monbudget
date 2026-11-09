@@ -29,6 +29,7 @@ import {
 import { toast } from "sonner";
 import { useUIStore, Category } from "@/lib/store/ui-store";
 import { PlanGate } from "@/components/payments/plan-gate";
+import { canAccessFeature, getSubscriptionCountdownInfo } from "@/lib/moneriz-plans";
 import { 
   formatMoney, 
   getSpentByCategory, 
@@ -528,8 +529,25 @@ export default function BudgetPage() {
     duplicatePreviousMonth,
     savingsGoals,
     debts,
-    payDay
+    payDay,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionExpiresAt,
+    subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
+    isAdminUser,
   } = useUIStore();
+
+  const subscriptionCountdown = getSubscriptionCountdownInfo({
+    planId: subscriptionPlan,
+    status: subscriptionStatus,
+    expiresAt: subscriptionExpiresAt,
+    trialEndsAt: subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
+    isAdmin: isAdminUser,
+  });
+  const canUseBudget =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "budget");
 
   const [newCatName, setNewCatName] = useState("");
   const [newCatAmount, setNewCatAmount] = useState<number>(0);
@@ -598,7 +616,7 @@ export default function BudgetPage() {
 
   // Comptabilisation automatique de l'épargne dans Mon Budget même si elle n'a pas été budgétisée manuellement
   useEffect(() => {
-    if (epargne <= 0) return;
+    if (!canUseBudget || epargne <= 0) return;
     if (!savingsEnvelope) {
       const uuid =
         typeof crypto !== "undefined" && crypto.randomUUID
@@ -613,7 +631,7 @@ export default function BudgetPage() {
     } else if ((Number(savingsEnvelope.amount) || 0) < epargne) {
       updateCategoryAmount(savingsEnvelope.id, epargne);
     }
-  }, [epargne, savingsEnvelope, addCategory, updateCategoryAmount]);
+  }, [canUseBudget, epargne, savingsEnvelope, addCategory, updateCategoryAmount]);
 
   const handleBudgetizeSavingsEnvelope = async () => {
     const suggestedAmount =

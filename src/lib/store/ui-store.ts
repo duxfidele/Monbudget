@@ -13,9 +13,36 @@ import {
 } from "@/lib/utils/budget-calc";
 import {
   BillingCycle,
+  getSubscriptionCountdownInfo,
   SubscriptionPlanId,
   SubscriptionStatus,
 } from "@/lib/moneriz-plans";
+
+export type InAppNotificationType =
+  | "welcome_trial"
+  | "trial_reminder_3d"
+  | "trial_expired"
+  | "payment_success"
+  | "renewal_reminder_3d"
+  | "subscription_expired"
+  | "system";
+
+export interface InAppNotificationItem {
+  id: string;
+  userId: string;
+  type: InAppNotificationType;
+  title: string;
+  message: string;
+  ctaHref: string | null;
+  metadata: Record<string, unknown>;
+  isRead: boolean;
+  createdAt: string;
+}
+
+const LOCKED_FEATURE_TOAST =
+  "Fonctionnalité cadenassée — Passez au plan Particulier à 1 000 FCFA/mois pour la débloquer.";
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type IncomeSourceEntry = {
   id: string;
@@ -125,6 +152,8 @@ export interface LocalCache {
   subscriptionPlan?: SubscriptionPlanId;
   billingCycle?: BillingCycle | "none";
   subscriptionExpiresAt?: string | null;
+  subscriptionTrialEndsAt?: string | null;
+  trialChoiceMadeAt?: string | null;
   subscriptionStatus?: SubscriptionStatus;
 }
 
@@ -196,17 +225,26 @@ interface UIState {
   addDebtPayment: (debtId: string, amount: number, notes?: string, date?: string) => Promise<void>;
   removeDebtPayment: (paymentId: string, debtId: string) => Promise<void>;
 
-  // Abonnement SaaS (Moneriz) & Rôle Admin (évalué côté serveur uniquement)
+  // Abonnement SaaS (Moneriz), Essai 30j & Notifications (évalué côté serveur uniquement)
   isAdminUser: boolean;
+  subscriptionHydrated: boolean;
   subscriptionPlan: SubscriptionPlanId;
   billingCycle: BillingCycle | "none";
   subscriptionExpiresAt: string | null;
+  subscriptionTrialEndsAt: string | null;
+  trialChoiceMadeAt: string | null;
   subscriptionStatus: SubscriptionStatus;
   refreshSubscription: (orderId?: string | null, paymentId?: string | null) => Promise<{
     planId: SubscriptionPlanId;
     orderStatus: string | null;
     isAdmin: boolean;
   }>;
+  chooseFreePlan: () => Promise<boolean>;
+
+  inAppNotifications: InAppNotificationItem[];
+  unreadNotificationsCount: number;
+  refreshNotifications: () => Promise<void>;
+  markNotificationsRead: (opts: { notificationId?: string; markAll?: boolean }) => Promise<void>;
 
   // Preferences & Init
   alertThreshold: number;
@@ -327,6 +365,29 @@ const initialMonthData = initialCache?.months?.[initialMonthKey];
 const allocationDebounceTimers: Record<string, NodeJS.Timeout> = {};
 let incomeDebounceTimer: NodeJS.Timeout | null = null;
 
+function canModifyPaidFeature(
+  state: Pick<
+    UIState,
+    | "isAdminUser"
+    | "subscriptionPlan"
+    | "subscriptionStatus"
+    | "subscriptionExpiresAt"
+    | "subscriptionTrialEndsAt"
+    | "trialChoiceMadeAt"
+  >
+): boolean {
+  if (state.isAdminUser) return true;
+  const countdown = getSubscriptionCountdownInfo({
+    planId: state.subscriptionPlan,
+    status: state.subscriptionStatus,
+    expiresAt: state.subscriptionExpiresAt,
+    trialEndsAt: state.subscriptionTrialEndsAt,
+    trialChoiceMadeAt: state.trialChoiceMadeAt,
+    isAdmin: state.isAdminUser,
+  });
+  return countdown.effectivePlanId !== "free";
+}
+
 export const useUIStore = create<UIState>((set, get) => ({
   userId: activeUserId,
   resetStore: () => {
@@ -355,10 +416,15 @@ export const useUIStore = create<UIState>((set, get) => ({
       payDay: 28,
       notifications: defaultNotifications,
       isAdminUser: false,
+      subscriptionHydrated: false,
       subscriptionPlan: "free",
       billingCycle: "none",
       subscriptionExpiresAt: null,
+      subscriptionTrialEndsAt: null,
+      trialChoiceMadeAt: null,
       subscriptionStatus: "active",
+      inAppNotifications: [],
+      unreadNotificationsCount: 0,
     });
   },
 
@@ -429,10 +495,103 @@ export const useUIStore = create<UIState>((set, get) => ({
   payDay: initialCache?.payDay ?? 28,
   notifications: initialCache?.notifications ? { ...defaultNotifications, ...initialCache.notifications } : defaultNotifications,
   isAdminUser: false,
+  subscriptionHydrated: false,
   subscriptionPlan: initialCache?.subscriptionPlan ?? "free",
   billingCycle: initialCache?.billingCycle ?? "none",
   subscriptionExpiresAt: initialCache?.subscriptionExpiresAt ?? null,
+  subscriptionTrialEndsAt: initialCache?.subscriptionTrialEndsAt ?? null,
+  trialChoiceMadeAt: initialCache?.trialChoiceMadeAt ?? null,
   subscriptionStatus: initialCache?.subscriptionStatus ?? "active",
+  inAppNotifications: [],
+  unreadNotificationsCount: 0,
+  refreshNotifications: async () => {
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data?.notifications)) {
+        set({
+          inAppNotifications: data.notifications,
+          unreadNotificationsCount: Number(data.unreadCount) || 0,
+        });
+      }
+    } catch {}
+  },
+  markNotificationsRead: async ({ notificationId, markAll }) => {
+    // Mise à jour optimiste immédiate
+    set((state) => {
+      const nextList = state.inAppNotifications.map((item) => {
+        if (markAll || (notificationId && item.id === notificationId)) {
+          return { ...item, isRead: true };
+        }
+        return item;
+      });
+      return {
+        inAppNotifications: nextList,
+        unreadNotificationsCount: nextList.filter((item) => !item.isRead).length,
+      };
+    });
+
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(markAll ? { markAll: true } : { notificationId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.notifications)) {
+          set({
+            inAppNotifications: data.notifications,
+            unreadNotificationsCount: Number(data.unreadCount) || 0,
+          });
+        }
+      }
+    } catch {}
+  },
+  chooseFreePlan: async () => {
+    try {
+      const res = await fetch("/api/subscription/choose-free", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        toast.error("Impossible d'activer le mode Gratuit pour le moment.");
+        return false;
+      }
+      const data = await res.json();
+      const sub = data?.subscription;
+      if (sub) {
+        set({
+          subscriptionPlan: sub.planId || "free",
+          billingCycle: sub.billingCycle || "none",
+          subscriptionExpiresAt: sub.currentPeriodEnd || null,
+          subscriptionTrialEndsAt: sub.trialEndsAt || null,
+          trialChoiceMadeAt: sub.trialChoiceMadeAt || new Date().toISOString(),
+          subscriptionStatus: sub.status || "active",
+          subscriptionHydrated: true,
+        });
+        const cache = loadLocalCache();
+        if (cache) {
+          cache.subscriptionPlan = sub.planId || "free";
+          cache.billingCycle = sub.billingCycle || "none";
+          cache.subscriptionExpiresAt = sub.currentPeriodEnd || null;
+          cache.subscriptionTrialEndsAt = sub.trialEndsAt || null;
+          cache.trialChoiceMadeAt = sub.trialChoiceMadeAt || new Date().toISOString();
+          cache.subscriptionStatus = sub.status || "active";
+          saveLocalCache(cache);
+        }
+      }
+      void get().refreshNotifications();
+      return true;
+    } catch {
+      toast.error("Erreur réseau lors de l'activation du mode Gratuit.");
+      return false;
+    }
+  },
   refreshSubscription: async (orderId, paymentId) => {
     try {
       const qs = new URLSearchParams();
@@ -456,13 +615,18 @@ export const useUIStore = create<UIState>((set, get) => ({
             subscriptionPlan: sub.planId,
             billingCycle: sub.billingCycle || "none",
             subscriptionExpiresAt: sub.currentPeriodEnd || null,
+            subscriptionTrialEndsAt: sub.trialEndsAt || null,
+            trialChoiceMadeAt: sub.trialChoiceMadeAt || null,
             subscriptionStatus: nextStatus,
+            subscriptionHydrated: true,
           });
           const cache = loadLocalCache();
           if (cache) {
             cache.subscriptionPlan = sub.planId;
             cache.billingCycle = sub.billingCycle || "none";
             cache.subscriptionExpiresAt = sub.currentPeriodEnd || null;
+            cache.subscriptionTrialEndsAt = sub.trialEndsAt || null;
+            cache.trialChoiceMadeAt = sub.trialChoiceMadeAt || null;
             cache.subscriptionStatus = nextStatus;
             saveLocalCache(cache);
           }
@@ -472,9 +636,14 @@ export const useUIStore = create<UIState>((set, get) => ({
             isAdmin: serverIsAdmin,
           };
         }
-        set({ isAdminUser: serverIsAdmin });
+        set({ isAdminUser: serverIsAdmin, subscriptionHydrated: true });
       }
-    } catch {}
+    } catch {
+    } finally {
+      if (!get().subscriptionHydrated) {
+        set({ subscriptionHydrated: true });
+      }
+    }
     return {
       planId: get().subscriptionPlan,
       orderStatus: null,
@@ -875,13 +1044,17 @@ export const useUIStore = create<UIState>((set, get) => ({
             mergedTxsMap.set(lTx.id, lTx);
             if (budget && user) {
               const isInc = lTx.type === "income" || lTx.type === "income_adjustment";
+              const safeCatId =
+                !isInc && lTx.category_id && UUID_REGEX.test(lTx.category_id)
+                  ? lTx.category_id
+                  : null;
               supabase.from("transactions").insert({
                 monthly_budget_id: budget.id,
                 description: lTx.label,
                 amount: lTx.amount,
                 type: lTx.type,
                 transaction_date: lTx.date || new Date().toISOString().split("T")[0],
-                category_id: isInc ? null : lTx.category_id,
+                category_id: safeCatId,
               }).then();
             }
           }
@@ -951,17 +1124,22 @@ export const useUIStore = create<UIState>((set, get) => ({
           transactions: finalTxs,
         });
 
-        // Synchroniser en arrière-plan les allocations locales vers Supabase si elles manquaient
+        // 8. Abonnement SaaS Moneriz & statut admin (lecture serveur) avant les écritures payantes éventuelles
+        await subscriptionPromise;
+
+        // Synchroniser en arrière-plan les allocations locales vers Supabase si l'accès Budget est actif
         if (budget && user) {
-          for (const cat of finalCats) {
-            if (cat.amount > 0 && !cat.allocation_id) {
-              supabase
-                .from("budget_allocations")
-                .upsert(
-                  { monthly_budget_id: budget.id, category_id: cat.id, allocated_amount: cat.amount },
-                  { onConflict: "monthly_budget_id,category_id" }
-                )
-                .then();
+          if (canModifyPaidFeature(get())) {
+            for (const cat of finalCats) {
+              if (cat.amount > 0 && !cat.allocation_id && UUID_REGEX.test(cat.id)) {
+                supabase
+                  .from("budget_allocations")
+                  .upsert(
+                    { monthly_budget_id: budget.id, category_id: cat.id, allocated_amount: cat.amount },
+                    { onConflict: "monthly_budget_id,category_id" }
+                  )
+                  .then();
+              }
             }
           }
           if (finalBaseSalary > 0 && fetchedBaseSalary === 0) {
@@ -977,7 +1155,7 @@ export const useUIStore = create<UIState>((set, get) => ({
           }
         }
 
-        // Mettre à jour le cache local
+        // Mettre à jour le cache local avec l'abonnement à jour
         const cache = loadLocalCache() || {
           currency: get().currency,
           payDay: get().payDay,
@@ -988,6 +1166,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         cache.subscriptionPlan = get().subscriptionPlan;
         cache.billingCycle = get().billingCycle;
         cache.subscriptionExpiresAt = get().subscriptionExpiresAt;
+        cache.subscriptionTrialEndsAt = get().subscriptionTrialEndsAt;
+        cache.trialChoiceMadeAt = get().trialChoiceMadeAt;
         cache.subscriptionStatus = get().subscriptionStatus;
         cache.months[monthKey] = {
           baseSalary: finalBaseSalary,
@@ -997,6 +1177,8 @@ export const useUIStore = create<UIState>((set, get) => ({
           transactions: finalTxs,
         };
         saveLocalCache(cache);
+      } else {
+        await subscriptionPromise;
       }
 
       // 6. Objectifs d épargne
@@ -1039,7 +1221,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       const monthlySavingsAmount = getMonthlySavingsContributions(activeGoals, year, month);
       const txSavingsAmount = getSpentByCategory(get().transactions, "Épargne", monthlySavingsAmount);
       const effectiveMonthlySavings = Math.max(monthlySavingsAmount, txSavingsAmount);
-      if (effectiveMonthlySavings > 0) {
+      if (canModifyPaidFeature(get()) && effectiveMonthlySavings > 0) {
         const currentCats = get().categories;
         const hasSavingsCat = currentCats.some(
           (c) => c.name.trim().toLowerCase() === "épargne" || c.name.trim().toLowerCase() === "epargne"
@@ -1119,8 +1301,9 @@ export const useUIStore = create<UIState>((set, get) => ({
         // La table debts peut ne pas encore être créée sur Supabase ; on garde les dettes locales
       }
 
-      // 8. Abonnement SaaS Moneriz & statut admin (lecture serveur)
+      // 8. Notifications in-app & relances automatiques
       await subscriptionPromise;
+      void get().refreshNotifications();
     } catch (e) {
       console.warn("Notice: Offline or local mode active", e);
     }
@@ -1429,21 +1612,24 @@ export const useUIStore = create<UIState>((set, get) => ({
           });
       }
 
-      // Sauvegarde des allocations pour chaque catégorie
-      for (const cat of curState.categories) {
-        if (cat.allocation_id) {
-          await supabase
-            .from("budget_allocations")
-            .update({ allocated_amount: cat.amount })
-            .eq("id", cat.allocation_id);
-        } else {
-          const { data: newAlloc } = await supabase
-            .from("budget_allocations")
-            .insert({ monthly_budget_id: budgetId, category_id: cat.id, allocated_amount: cat.amount })
-            .select()
-            .single();
-          if (newAlloc) {
-            cat.allocation_id = newAlloc.id;
+      // Sauvegarde des allocations pour chaque catégorie (réservé aux formules débloquant le Budget)
+      if (canModifyPaidFeature(curState)) {
+        for (const cat of curState.categories) {
+          if (!UUID_REGEX.test(cat.id)) continue;
+          if (cat.allocation_id) {
+            await supabase
+              .from("budget_allocations")
+              .update({ allocated_amount: cat.amount })
+              .eq("id", cat.allocation_id);
+          } else {
+            const { data: newAlloc } = await supabase
+              .from("budget_allocations")
+              .insert({ monthly_budget_id: budgetId, category_id: cat.id, allocated_amount: cat.amount })
+              .select()
+              .single();
+            if (newAlloc) {
+              cat.allocation_id = newAlloc.id;
+            }
           }
         }
       }
@@ -1453,6 +1639,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   addCategory: async (cat) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const trimmedName = cat.name.trim();
     if (!trimmedName) return;
 
@@ -1502,6 +1692,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   removeCategory: async (id) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const updated = get().categories.filter((c) => c.id !== id);
     set({ categories: updated });
 
@@ -1521,6 +1715,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   updateCategory: async (id, updates) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const updated = get().categories.map((c) => (c.id === id ? { ...c, ...updates } : c));
     set({ categories: updated });
 
@@ -1540,6 +1738,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   updateCategoryAmount: async (id, amount) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const updated = get().categories.map((c) => (c.id === id ? { ...c, amount } : c));
     set({ categories: updated });
 
@@ -1614,7 +1816,12 @@ export const useUIStore = create<UIState>((set, get) => ({
       assignedCatName.toLowerCase() === "epargne" ||
       tx.label.trim().toLowerCase().startsWith("épargne :");
 
-    if (!isInc && assignedCatName && assignedCatName !== "Autre (Hors Budget)") {
+    if (
+      canModifyPaidFeature(get()) &&
+      !isInc &&
+      assignedCatName &&
+      assignedCatName !== "Autre (Hors Budget)"
+    ) {
       const catSpentAfter = getSpentByCategory(newTransactions, assignedCatName);
       const catExists = updatedCategories.some(
         (c) => c.name.trim().toLowerCase() === assignedCatName.toLowerCase()
@@ -1665,10 +1872,10 @@ export const useUIStore = create<UIState>((set, get) => ({
       const budgetId = get().budget_id;
       if (!budgetId) return;
 
-      let category_id = null;
+      let category_id: string | null = null;
       if (!isInc) {
         const cat = get().categories.find((c) => c.name.toLowerCase() === tx.category.toLowerCase());
-        if (cat) category_id = cat.id;
+        if (cat && UUID_REGEX.test(cat.id)) category_id = cat.id;
       }
 
       const { data: newTx } = await supabase
@@ -1689,10 +1896,10 @@ export const useUIStore = create<UIState>((set, get) => ({
       }
     } catch (err) {
       console.warn("Could not sync transaction to Supabase immediately (queued)", err);
-      let category_id = null;
+      let category_id: string | null = null;
       if (!isInc) {
         const cat = get().categories.find((c) => c.name.toLowerCase() === tx.category.toLowerCase());
-        if (cat) category_id = cat.id;
+        if (cat && UUID_REGEX.test(cat.id)) category_id = cat.id;
       }
       get().enqueueSyncAction({
         type: "add_transaction",
@@ -1893,6 +2100,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   duplicatePreviousMonth: async () => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return { prevMonthName: "", allocationsCount: 0, income: 0 };
+    }
     const { year, month } = get().activeMonth;
     const prevYear = month === 1 ? year - 1 : year;
     const prevMonth = month === 1 ? 12 : month - 1;
@@ -1974,6 +2185,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   addSavingsGoal: async (goal) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const newGoal: SavingsGoal = {
       id: Date.now().toString(),
       name: goal.name,
@@ -2019,6 +2234,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   removeSavingsGoal: async (id) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const updated = get().savingsGoals.filter((g) => g.id !== id);
     set({ savingsGoals: updated });
 
@@ -2036,6 +2255,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   updateSavingsGoalStatus: async (id, status) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const updated = get().savingsGoals.map((g) => (g.id === id ? { ...g, status } : g));
     set({ savingsGoals: updated });
 
@@ -2053,6 +2276,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   addSavingsContribution: async (goalId, amount, notes, date) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const goal = get().savingsGoals.find((g) => g.id === goalId);
     if (!goal) return;
 
@@ -2189,6 +2416,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   removeSavingsContribution: async (contributionId, goalId) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const targetGoal = get().savingsGoals.find((g) => g.id === goalId);
     const contribToRemove = targetGoal?.contributions?.find((c) => c.id === contributionId);
 
@@ -2282,6 +2513,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   addDebt: async (debt) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const cleanAmount = Math.max(0, Number(debt.totalAmount) || 0);
     if (!debt.personName.trim() || cleanAmount <= 0) return;
 
@@ -2341,6 +2576,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   removeDebt: async (id) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const updatedDebts = get().debts.filter((d) => d.id !== id);
     set({ debts: updatedDebts });
 
@@ -2358,6 +2597,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   addDebtPayment: async (debtId, amount, notes, date) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const debt = get().debts.find((d) => d.id === debtId);
     if (!debt) return;
 
@@ -2488,6 +2731,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   removeDebtPayment: async (paymentId, debtId) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
     const targetDebt = get().debts.find((d) => d.id === debtId);
     const paymentToRemove = targetDebt?.payments?.find((p) => p.id === paymentId);
 

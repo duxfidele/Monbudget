@@ -6,6 +6,10 @@ import {
 } from "@/lib/server/moneriz-app";
 import { fetchMonerizPaymentById } from "@/lib/server/moneriz-checkout";
 import { checkoutStatusQuerySchema } from "@/lib/validations";
+import {
+  evaluateAndSendUserSubscriptionAlerts,
+  sendPostPaymentConfirmationOnce,
+} from "@/lib/server/notifications";
 
 export async function GET(request: Request) {
   try {
@@ -80,6 +84,18 @@ export async function GET(request: Request) {
           orderId,
         });
       }
+    }
+
+    if (state.order?.status === "paid") {
+      await sendPostPaymentConfirmationOnce({
+        orderId: state.order.id,
+        userEmail: user?.email,
+      }).catch(() => null);
+    } else if (user) {
+      await evaluateAndSendUserSubscriptionAlerts({
+        userId: user.id,
+        userEmail: user.email,
+      }).catch(() => null);
     }
 
     return NextResponse.json(state);

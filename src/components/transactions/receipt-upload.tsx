@@ -41,6 +41,8 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
+    subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdminUser,
   } = useUIStore();
 
@@ -48,6 +50,8 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
     planId: subscriptionPlan,
     status: subscriptionStatus,
     expiresAt: subscriptionExpiresAt,
+    trialEndsAt: subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdmin: isAdminUser,
   });
   const canAttachReceipts =
@@ -61,7 +65,9 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
     e.target.value = "";
 
     if (!canAttachReceipts) {
-      toast.info("Le stockage de reçus est réservé au Plan Entreprise & Pro.");
+      toast.info(
+        "Fonctionnalité cadenassée — Prenez l'abonnement Particulier à 1 000 FCFA/mois pour joindre des reçus."
+      );
       return;
     }
 
@@ -182,10 +188,10 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
           <div className="flex items-center gap-2 min-w-0">
             <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <span className="text-[11px] font-medium text-amber-900 dark:text-amber-200 truncate">
-              Ajout de reçus réservé au Plan Entreprise &amp; Pro
+              Ajout de reçus cadenassé — Abonnement Particulier 1 000 FCFA/mois
             </span>
           </div>
-          <Link href="/settings?tab=subscription" className="shrink-0">
+          <Link href="/settings?tab=subscription&plan=personal" className="shrink-0">
             <Button
               type="button"
               size="sm"

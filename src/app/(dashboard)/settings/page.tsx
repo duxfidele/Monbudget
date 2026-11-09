@@ -38,12 +38,20 @@ import { InstallButton } from "@/components/pwa/install-button";
 import { buildFullAccountExport, downloadJsonFile } from "@/lib/utils/account-export";
 import { getUserStorageKey } from "@/lib/utils/security";
 import { SubscriptionPlansWidget } from "@/components/payments/subscription-plans-widget";
-import { getSubscriptionCountdownInfo, MONBUDGET_PLANS } from "@/lib/moneriz-plans";
+import {
+  getPlanCatalog,
+  getSubscriptionCountdownInfo,
+  PaidSubscriptionPlanId,
+} from "@/lib/moneriz-plans";
 
 type TabType = "profile" | "subscription" | "appearance" | "notifications" | "security";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>("profile");
+  const [highlightedPlan, setHighlightedPlan] = useState<PaidSubscriptionPlanId | undefined>(
+    undefined
+  );
+  const [isChoosingFree, setIsChoosingFree] = useState(false);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
   const { theme, setTheme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -58,6 +66,10 @@ export default function SettingsPage() {
         ["profile", "subscription", "appearance", "notifications", "security"].includes(tabParam)
       ) {
         setActiveTab(tabParam);
+      }
+      const planParam = params.get("plan");
+      if (planParam === "personal" || planParam === "business") {
+        setHighlightedPlan(planParam);
       }
     }
   }, []);
@@ -91,16 +103,22 @@ export default function SettingsPage() {
     subscriptionPlan,
     billingCycle,
     subscriptionExpiresAt,
+    subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     subscriptionStatus,
     refreshSubscription,
+    chooseFreePlan,
   } = useUIStore();
 
   const subscriptionCountdown = getSubscriptionCountdownInfo({
     planId: subscriptionPlan,
     status: subscriptionStatus,
     expiresAt: subscriptionExpiresAt,
+    trialEndsAt: subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdmin: isAdminUser,
   });
+  const catalog = getPlanCatalog();
 
   const [localAlert, setLocalAlert] = useState(80);
   const [localCurrency, setLocalCurrency] = useState("FCFA");
@@ -576,7 +594,7 @@ export default function SettingsPage() {
                       onClick={async () => {
                         const res = await refreshSubscription();
                         toast.success(
-                          `Statut vérifié : Plan ${MONBUDGET_PLANS[res.planId].name}`
+                          `Statut vérifié : Plan ${catalog[res.planId].name}`
                         );
                       }}
                       className="text-xs gap-1.5"
@@ -593,13 +611,35 @@ export default function SettingsPage() {
                         <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#1E3A5F] text-white dark:bg-sky-500 dark:text-slate-950">
                           {isAdminUser
                             ? "Super-Admin (Accès illimité)"
-                            : `Plan ${MONBUDGET_PLANS[subscriptionCountdown.effectivePlanId]?.name || "Gratuit"}`}
+                            : subscriptionCountdown.isTrialActive
+                            ? "Essai Complet 30 Jours"
+                            : subscriptionCountdown.needsPlanChoice
+                            ? "Fin d'essai — Choix requis"
+                            : `Plan ${catalog[subscriptionCountdown.effectivePlanId]?.name || "Gratuit"}`}
                         </span>
                         {!isAdminUser && subscriptionCountdown.isPaidActive && billingCycle !== "none" && (
                           <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
                             • Cycle {billingCycle === "yearly" ? "Annuel (-2 mois offerts)" : "Mensuel"}
                           </span>
                         )}
+                        {!isAdminUser &&
+                          subscriptionCountdown.isTrialActive &&
+                          subscriptionCountdown.trialDaysRemaining !== null && (
+                            <span
+                              className={`inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
+                                subscriptionCountdown.isTrialExpiringSoon
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+                                  : "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-300 dark:border-sky-700"
+                              }`}
+                            >
+                              <Clock className="h-3 w-3" />
+                              <span>
+                                {subscriptionCountdown.trialDaysRemaining} jour
+                                {subscriptionCountdown.trialDaysRemaining > 1 ? "s" : ""} d&apos;essai restant
+                                {subscriptionCountdown.trialDaysRemaining > 1 ? "s" : ""}
+                              </span>
+                            </span>
+                          )}
                         {!isAdminUser && subscriptionCountdown.isPaidActive && subscriptionCountdown.daysRemaining !== null && (
                           <span
                             className={`inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
@@ -614,6 +654,12 @@ export default function SettingsPage() {
                             </span>
                           </span>
                         )}
+                        {!isAdminUser && subscriptionCountdown.needsPlanChoice && (
+                          <span className="inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                            <AlertTriangle className="h-3 w-3" />
+                            <span>Essai 30j terminé</span>
+                          </span>
+                        )}
                         {!isAdminUser && subscriptionCountdown.isExpired && (
                           <span className="inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
                             <AlertTriangle className="h-3 w-3" />
@@ -624,6 +670,10 @@ export default function SettingsPage() {
                       <p suppressHydrationWarning className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
                         {isAdminUser
                           ? "Votre compte Super-Administrateur bénéficie d'un accès complet permanent sans expiration."
+                          : subscriptionCountdown.isTrialActive
+                          ? `Toutes les fonctionnalités sont débloquées gratuitement jusqu'au ${subscriptionCountdown.formattedTrialEndsAt || "terme de vos 30 jours"}. Ensuite, vous choisirez librement entre Gratuit limité (0 F), Particulier (1 000 F) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} F).`
+                          : subscriptionCountdown.needsPlanChoice
+                          ? `Votre essai complet de 30 jours est arrivé à terme${subscriptionCountdown.formattedTrialEndsAt ? ` le ${subscriptionCountdown.formattedTrialEndsAt}` : ""}. Choisissez ci-dessous le mode Gratuit limité (Entrées/Dépenses), Particulier (1 000 FCFA/mois) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`
                           : subscriptionCountdown.isPaidActive
                           ? subscriptionCountdown.formattedExpiresAt
                             ? subscriptionCountdown.isExpiringSoon
@@ -632,12 +682,38 @@ export default function SettingsPage() {
                             : "Abonnement actif."
                           : subscriptionCountdown.isExpired
                           ? `Votre dernier abonnement est arrivé à échéance${subscriptionCountdown.formattedExpiresAt ? ` le ${subscriptionCountdown.formattedExpiresAt}` : ""}. Votre compte est repassé sur le Plan Gratuit ; toutes vos données restent conservées.`
-                          : "Accès aux Entrées et Dépenses uniquement. Passez au plan Particulier (1 000 FCFA/mois) ou Entreprise (2 500 FCFA/mois) pour débloquer Budget, Épargne, Dettes, Rapports, Justificatifs et IA."}
+                          : `Accès aux Entrées et Dépenses uniquement. Passez au plan Particulier (1 000 FCFA/mois) pour tout débloquer, ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`}
                       </p>
                     </div>
+
+                    {!isAdminUser &&
+                      (subscriptionCountdown.isTrialActive || subscriptionCountdown.needsPlanChoice) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isChoosingFree}
+                          onClick={async () => {
+                            setIsChoosingFree(true);
+                            try {
+                              const ok = await chooseFreePlan();
+                              if (ok) {
+                                toast.info(
+                                  "Mode Gratuit limité activé (Entrées & Dépenses). Les outils payants sont cadenassés et déblocables à 1 000 FCFA/mois."
+                                );
+                              }
+                            } finally {
+                              setIsChoosingFree(false);
+                            }
+                          }}
+                          className="text-xs shrink-0 border-slate-300 dark:border-slate-600"
+                        >
+                          {isChoosingFree ? "Activation..." : "Continuer en mode Gratuit limité"}
+                        </Button>
+                      )}
                   </div>
 
-                  <SubscriptionPlansWidget />
+                  <SubscriptionPlansWidget highlightPlan={highlightedPlan} />
                 </CardContent>
               </Card>
             </div>

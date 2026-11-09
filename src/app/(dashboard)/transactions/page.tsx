@@ -18,7 +18,8 @@ import {
   Zap,
   Paperclip,
   Eye,
-  Lock
+  Lock,
+  Search
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -68,6 +69,8 @@ export default function TransactionsPage() {
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
+    subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdminUser,
   } = useUIStore();
 
@@ -75,12 +78,30 @@ export default function TransactionsPage() {
     planId: subscriptionPlan,
     status: subscriptionStatus,
     expiresAt: subscriptionExpiresAt,
+    trialEndsAt: subscriptionTrialEndsAt,
+    trialChoiceMadeAt,
     isAdmin: isAdminUser,
   });
+  const canUseBudgetTools =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "budget");
   const canExportReports =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "reports");
 
+  const promptUnlockPersonal = (featureLabel: string) => {
+    toast.info(`« ${featureLabel} » est cadenassé en mode Gratuit.`, {
+      description:
+        "Prenez un abonnement Particulier à 1 000 FCFA/mois pour débloquer toutes les fonctionnalités.",
+      action: {
+        label: "Abonnement 1 000 F",
+        onClick: () => router.push("/settings?tab=subscription&plan=personal"),
+      },
+    });
+    router.push("/settings?tab=subscription&plan=personal");
+  };
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [txTypeFilter, setTxTypeFilter] = useState<"all" | "income" | "expense">("all");
   const [newLabel, setNewLabel] = useState("");
   const [newAmountStr, setNewAmountStr] = useState("");
   const [newCategory, setNewCategory] = useState("");
@@ -166,11 +187,16 @@ export default function TransactionsPage() {
       ? `${newIncomeSource} — ${cleanLabel}`
       : cleanLabel;
 
-    // Alerte seuil pour les dépenses (si notifications d'alerte activées)
+    // Alerte seuil pour les dépenses (réservé aux formules avec enveloppes budgétaires)
     const isAlertEnabled = notifications?.budgetAlert !== false;
     const effectiveThreshold = notifications?.budgetAlertThreshold || alertThreshold || 80;
 
-    if (isAlertEnabled && newType === "expense" && assignedCategory !== "Autre (Hors Budget)") {
+    if (
+      canUseBudgetTools &&
+      isAlertEnabled &&
+      newType === "expense" &&
+      assignedCategory !== "Autre (Hors Budget)"
+    ) {
       const categoryObj = categories.find((c) => c.name.toLowerCase() === assignedCategory.toLowerCase());
       if (categoryObj && categoryObj.amount > 0) {
         const spentSoFar = transactions
@@ -220,14 +246,15 @@ export default function TransactionsPage() {
 
   const handleExportCSV = () => {
     if (!canExportReports) {
-      toast.info("Export Excel / CSV réservé au Plan Entreprise & Pro.", {
+      toast.info("Export Excel / CSV cadenassé en mode Gratuit.", {
         description:
-          "Passez au plan Entreprise (2 500 FCFA/mois) pour exporter vos transactions en CSV.",
+          "Prenez un abonnement Particulier (1 000 FCFA/mois) pour exporter vos transactions en CSV.",
         action: {
-          label: "Débloquer",
-          onClick: () => router.push("/settings?tab=subscription"),
+          label: "Prendre 1 000 F",
+          onClick: () => router.push("/settings?tab=subscription&plan=personal"),
         },
       });
+      router.push("/settings?tab=subscription&plan=personal");
       return;
     }
     if (transactions.length === 0) {
@@ -264,6 +291,18 @@ export default function TransactionsPage() {
     removeTransaction(id);
     toast.info("Transaction supprimée.");
   };
+
+  const filteredTransactions = transactions.filter((tx) => {
+    const isInc = isIncomeTransaction(tx);
+    if (txTypeFilter === "income" && !isInc) return false;
+    if (txTypeFilter === "expense" && isInc) return false;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (tx.label || "").toLowerCase().includes(q) ||
+      (tx.category || "").toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="flex flex-col gap-6 pb-12">
@@ -359,12 +398,23 @@ export default function TransactionsPage() {
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                   {newType === "expense" ? (
-                    <span>
-                      💡 Budget journalier restant : <strong className="text-emerald-700 dark:text-emerald-400">{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</strong>. Cette dépense sera déduite automatiquement.
-                    </span>
+                    canUseBudgetTools ? (
+                      <span>
+                        💡 Budget journalier restant : <strong className="text-emerald-700 dark:text-emerald-400">{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</strong>. Cette dépense sera déduite automatiquement.
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => promptUnlockPersonal("Budget Journalier du Jour")}
+                        className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-semibold hover:underline cursor-pointer"
+                      >
+                        <Lock className="h-3 w-3 shrink-0" />
+                        <span>Pilotage journalier cadenassé — Abonnement 1 000 FCFA/mois</span>
+                      </button>
+                    )
                   ) : (
                     <span>
-                      💡 Ce revenu s'ajoutera directement aux revenus du mois de {capitalizedMonth}.
+                      💡 Ce revenu s&apos;ajoutera directement aux revenus du mois de {capitalizedMonth}.
                     </span>
                   )}
                 </p>
@@ -423,31 +473,59 @@ export default function TransactionsPage() {
         </Dialog>
       </div>
 
-      {/* Bandeau d'information du Budget Journalier Conseillé déduit automatiquement */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-[#1E3A5F]/10 via-sky-50 to-blue-50/50 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900 border border-sky-200/80 dark:border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-[#1E3A5F] dark:bg-sky-500 text-white dark:text-slate-950 shadow-xs">
-            <Zap className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F] dark:text-sky-400">Budget Journalier du Jour</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-[#1E3A5F] dark:text-sky-300">Déduit automatiquement</span>
+      {/* Bandeau d'information du Budget Journalier Conseillé (cadenassé en mode Gratuit) */}
+      {canUseBudgetTools ? (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-[#1E3A5F]/10 via-sky-50 to-blue-50/50 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900 border border-sky-200/80 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-[#1E3A5F] dark:bg-sky-500 text-white dark:text-slate-950 shadow-xs">
+              <Zap className="h-5 w-5" />
             </div>
-            <p className="text-sm text-slate-700 dark:text-slate-300 mt-0.5">
-              Disponible aujourd'hui : <strong className={dailyInfo.isOverDailyBudget ? "text-amber-700 dark:text-amber-400 font-extrabold" : "text-emerald-700 dark:text-emerald-400 font-extrabold"}>{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</strong>
-              <span className="text-slate-500 dark:text-slate-400 text-xs ml-2">
-                (Alloué : {formatMoney(dailyInfo.dailyBudget, currency)}/j | Dépensé aujourd'hui : {formatMoney(dailyInfo.todaySpent, currency)})
-              </span>
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F] dark:text-sky-400">Budget Journalier du Jour</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-[#1E3A5F] dark:text-sky-300">Déduit automatiquement</span>
+              </div>
+              <p className="text-sm text-slate-700 dark:text-slate-300 mt-0.5">
+                Disponible aujourd&apos;hui : <strong className={dailyInfo.isOverDailyBudget ? "text-amber-700 dark:text-amber-400 font-extrabold" : "text-emerald-700 dark:text-emerald-400 font-extrabold"}>{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</strong>
+                <span className="text-slate-500 dark:text-slate-400 text-xs ml-2">
+                  (Alloué : {formatMoney(dailyInfo.dailyBudget, currency)}/j | Dépensé aujourd&apos;hui : {formatMoney(dailyInfo.todaySpent, currency)})
+                </span>
+              </p>
+            </div>
           </div>
-        </div>
 
-        <Link href="/dashboard" className="text-xs font-semibold text-[#1E3A5F] dark:text-sky-400 hover:underline flex items-center gap-1 shrink-0">
-          <span>Tableau de bord</span>
-          <span>&rarr;</span>
-        </Link>
-      </div>
+          <Link href="/dashboard" className="text-xs font-semibold text-[#1E3A5F] dark:text-sky-400 hover:underline flex items-center gap-1 shrink-0">
+            <span>Tableau de bord</span>
+            <span>&rarr;</span>
+          </Link>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => promptUnlockPersonal("Budget Journalier du Jour")}
+          className="w-full text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-dashed border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 shadow-xs">
+              <Lock className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Budget Journalier du Jour</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
+                  Cadenassé • Mode Gratuit
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                Prenez un abonnement Particulier de <strong>1 000 FCFA/mois</strong> pour calculer votre budget quotidien et votre reste à vivre.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#1E3A5F] text-white shrink-0">
+            Débloquer (1 000 F) &rarr;
+          </span>
+        </button>
+      )}
 
       {/* Cartes KPI Concordantes avec le Tableau de bord */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
@@ -484,40 +562,69 @@ export default function TransactionsPage() {
               -{formatMoney(totalExpenses, currency)}
             </div>
             <p className="text-xs text-slate-400 mt-0.5 sm:mt-1 truncate">
-              {epargne > 0
+              {!canUseBudgetTools
+                ? "Sorties d'argent enregistrées ce mois"
+                : epargne > 0
                 ? `dont ${formatMoney(epargne, currency)} d'épargne mise de côté`
                 : "Consommées sur vos enveloppes de dépenses"}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Reste à Vivre Disponible
-            </CardTitle>
-            <div className={`p-1.5 sm:p-2 rounded-lg ${reste >= 0 ? "bg-blue-50 dark:bg-blue-950/50 text-[#1E3A5F] dark:text-sky-300" : "bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400"}`}>
-              <Scale className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
-            <div className={`text-xl sm:text-2xl font-extrabold ${reste >= 0 ? "text-[#1E3A5F] dark:text-sky-300" : "text-red-600 dark:text-red-400"}`}>
-              {reste >= 0 ? "+" : ""}{formatMoney(reste, currency)}
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5 sm:mt-1 truncate">
-              Soit {formatMoney(dailyInfo.dailyBudget, currency)}/j conseillés jusqu'à la paie
-            </p>
-          </CardContent>
-        </Card>
+        {canUseBudgetTools ? (
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+            <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Reste à Vivre Disponible
+              </CardTitle>
+              <div className={`p-1.5 sm:p-2 rounded-lg ${reste >= 0 ? "bg-blue-50 dark:bg-blue-950/50 text-[#1E3A5F] dark:text-sky-300" : "bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400"}`}>
+                <Scale className="h-4 w-4" />
+              </div>
+            </CardHeader>
+            <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
+              <div className={`text-xl sm:text-2xl font-extrabold ${reste >= 0 ? "text-[#1E3A5F] dark:text-sky-300" : "text-red-600 dark:text-red-400"}`}>
+                {reste >= 0 ? "+" : ""}{formatMoney(reste, currency)}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5 sm:mt-1 truncate">
+                Soit {formatMoney(dailyInfo.dailyBudget, currency)}/j conseillés jusqu&apos;à la paie
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card
+            onClick={() => promptUnlockPersonal("Reste à Vivre Disponible")}
+            className="border-dashed border-amber-300 dark:border-amber-700 shadow-sm bg-amber-50/40 dark:bg-amber-950/15 cursor-pointer hover:bg-amber-50/80 dark:hover:bg-amber-950/30 transition-colors"
+          >
+            <CardHeader className="flex flex-row items-center justify-between p-3.5 sm:p-5 pb-1 sm:pb-2">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                Reste à Vivre Disponible
+              </CardTitle>
+              <div className="p-1.5 sm:p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
+                <Lock className="h-4 w-4" />
+              </div>
+            </CardHeader>
+            <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
+              <div className="text-base sm:text-lg font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>Cadenassé</span>
+              </div>
+              <p className="text-xs text-amber-800 dark:text-amber-300 font-semibold mt-0.5 sm:mt-1 truncate">
+                Prendre un abonnement de 1 000 FCFA/mois &rarr;
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Liste des transactions */}
+      {/* Liste des transactions (Historique, recherche et filtrage inclus dès le plan Gratuit) */}
       <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <div className="space-y-0.5">
             <CardTitle className="text-lg text-slate-900 dark:text-slate-100">Historique des Transactions</CardTitle>
             <CardDescription className="text-slate-500 dark:text-slate-400">
-              {transactions.length} opération{transactions.length > 1 ? "s" : ""} enregistrée{transactions.length > 1 ? "s" : ""} pour {capitalizedMonth}.
+              {filteredTransactions.length === transactions.length
+                ? `${transactions.length} opération${transactions.length > 1 ? "s" : ""} enregistrée${transactions.length > 1 ? "s" : ""} pour ${capitalizedMonth}.`
+                : `${filteredTransactions.length} sur ${transactions.length} opération${transactions.length > 1 ? "s" : ""} pour ${capitalizedMonth}.`}
             </CardDescription>
           </div>
           <Button
@@ -526,7 +633,11 @@ export default function TransactionsPage() {
             onClick={handleExportCSV}
             suppressHydrationWarning
             className="border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-            title={canExportReports ? "Exporter CSV" : "Export CSV réservé au Plan Entreprise"}
+            title={
+              canExportReports
+                ? "Exporter CSV"
+                : "Export CSV cadenassé — Abonnement Particulier (1 000 FCFA/mois)"
+            }
           >
             {canExportReports ? (
               <Download className="h-4 w-4 mr-2" />
@@ -537,6 +648,62 @@ export default function TransactionsPage() {
           </Button>
         </CardHeader>
         <CardContent>
+          {/* Barre de recherche & filtrage accessible à tous */}
+          {transactions.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 mb-4">
+              <div className="relative flex-1">
+                <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Rechercher par libellé ou catégorie..."
+                  aria-label="Rechercher une transaction"
+                  className="pl-9 h-9 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800/70 border-slate-200 dark:border-slate-700 rounded-xl"
+                />
+              </div>
+              <div
+                role="group"
+                aria-label="Filtrer par type de transaction"
+                className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
+              >
+                <button
+                  type="button"
+                  onClick={() => setTxTypeFilter("all")}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                    txTypeFilter === "all"
+                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  Toutes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTxTypeFilter("expense")}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                    txTypeFilter === "expense"
+                      ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  Dépenses
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTxTypeFilter("income")}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                    txTypeFilter === "income"
+                      ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  Entrées
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2 mt-1">
             {transactions.length === 0 ? (
               <div className="text-center py-12 text-slate-500 dark:text-slate-400 bg-slate-50/70 dark:bg-slate-850 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center">
@@ -548,8 +715,25 @@ export default function TransactionsPage() {
                   Cliquez sur « Nouvelle transaction » ci-dessus pour enregistrer une dépense ou un revenu supplémentaire.
                 </p>
               </div>
+            ) : filteredTransactions.length === 0 ? (
+              <div className="text-center py-10 text-slate-500 dark:text-slate-400 bg-slate-50/70 dark:bg-slate-850 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center">
+                <Search className="h-6 w-6 text-slate-400 mb-2" />
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">
+                  Aucune transaction ne correspond à votre filtre
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setTxTypeFilter("all");
+                  }}
+                  className="text-xs font-semibold text-[#1E3A5F] dark:text-sky-400 hover:underline mt-1"
+                >
+                  Réinitialiser la recherche
+                </button>
+              </div>
             ) : (
-              transactions.map((tx) => {
+              filteredTransactions.map((tx) => {
                 const isInc = isIncomeTransaction(tx);
                 return (
                   <div 

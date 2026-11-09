@@ -61,7 +61,7 @@ export function LandingHero() {
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 pt-3 text-xs sm:text-sm text-slate-400">
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              100 % gratuit pour démarrer
+              30 jours d&apos;essai complet offert
             </span>
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />

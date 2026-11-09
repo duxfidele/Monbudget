@@ -94,3 +94,12 @@ export const authAntiSpamRequestSchema = z.object({
   formElapsedMs: z.number().finite().optional().nullable(),
   turnstileToken: z.string().max(2048).optional().nullable(),
 });
+
+export const notificationsMarkReadSchema = z
+  .object({
+    markAll: z.boolean().optional(),
+    notificationId: z.string().uuid("Identifiant de notification UUID invalide.").optional(),
+  })
+  .refine((data) => Boolean(data.markAll || data.notificationId), {
+    message: "Veuillez indiquer notificationId ou markAll=true.",
+  });

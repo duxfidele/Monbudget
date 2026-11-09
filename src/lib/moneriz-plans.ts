@@ -3,12 +3,22 @@ export type PaidSubscriptionPlanId = "personal" | "business";
 export type BillingCycle = "monthly" | "yearly";
 export type SubscriptionStatus = "active" | "canceled" | "expired";
 
+export const TRIAL_DURATION_DAYS = 30;
+export const DEFAULT_BUSINESS_MONTHLY_PRICE_XOF = 2500;
+
 export interface SubscriptionCountdownInfo {
   effectivePlanId: SubscriptionPlanId;
   rawPlanId: SubscriptionPlanId;
   status: SubscriptionStatus;
   isPaidPlan: boolean;
   isPaidActive: boolean;
+  isTrialActive: boolean;
+  isTrialExpiringSoon: boolean;
+  isTrialExpired: boolean;
+  needsPlanChoice: boolean;
+  trialDaysRemaining: number | null;
+  trialEndsAtMs: number | null;
+  formattedTrialEndsAt: string | null;
   isExpired: boolean;
   isExpiringSoon: boolean;
   daysRemaining: number | null;
@@ -30,71 +40,93 @@ export interface PlanPricingTier {
   lockedFeatures?: string[];
 }
 
-export const MONBUDGET_PLANS: Record<SubscriptionPlanId, PlanPricingTier> = {
-  free: {
-    id: "free",
-    name: "Gratuit",
-    badge: "Découverte",
-    description: "Idéal pour noter vos entrées et vos dépenses au quotidien en toute simplicité.",
-    monthlyPriceXof: 0,
-    yearlyPriceXof: 0,
-    yearlySavingsXof: 0,
-    features: [
-      "Saisie illimitée des Entrées (Revenus) et Dépenses",
-      "Historique et recherche dans le journal des transactions",
-      "Ajout rapide mobile (+) en 2 secondes",
-      "Synchronisation cloud sécurisée & mode hors-ligne",
-    ],
-    lockedFeatures: [
-      "Enveloppes budgétaires & Reste à vivre",
-      "Objectifs d'épargne & Cagnottes",
-      "Suivi des Dettes & Créances",
-      "Rapports avancés & Exports PDF/CSV",
-      "Stockage de reçus & justificatifs de dépenses",
-      "Conseiller Financier IA",
-    ],
-  },
-  personal: {
-    id: "personal",
-    name: "Particulier",
-    badge: "Le plus populaire",
-    description: "Pour maîtriser votre salaire de A à Z : budget par enveloppes, épargne et suivi des dettes.",
-    monthlyPriceXof: 1000,
-    yearlyPriceXof: 10000, // 2 mois offerts (10 x 1 000 FCFA au lieu de 12 000 FCFA)
-    yearlySavingsXof: 2000,
-    popular: true,
-    features: [
-      "Tout ce qui est inclus dans le plan Gratuit",
-      "Enveloppes budgétaires illimitées & alertes de seuil",
-      "Calcul intelligent du Reste à vivre journalier jusqu'à la paie",
-      "Objectifs d'épargne & projets avec suivi des versements",
-      "Gestionnaire complet des Dettes & Créances (WhatsApp intégré)",
-    ],
-    lockedFeatures: [
-      "Rapports financiers avancés & Exports PDF/CSV",
-      "Stockage de reçus & justificatifs de dépenses",
-      "Conseiller Financier IA personnalisé",
-    ],
-  },
-  business: {
-    id: "business",
-    name: "Entreprise & Pro",
-    badge: "Tout inclus",
-    description: "Pour les entrepreneurs, commerçants et foyers exigeants qui veulent des bilans complets et l'IA.",
-    monthlyPriceXof: 2500,
-    yearlyPriceXof: 25000, // 2 mois offerts (10 x 2 500 FCFA au lieu de 30 000 FCFA)
-    yearlySavingsXof: 5000,
-    features: [
-      "Tout ce qui est inclus dans le plan Particulier",
-      "Rapports financiers détaillés & analytique multi-mois",
-      "Exports officiels illimités en PDF et Excel/CSV",
-      "Conseiller Financier IA personnalisé (diagnostic & coaching)",
-      "Stockage illimité de reçus et justificatifs de dépenses",
-      "Gestion multi-sources de revenus ( Commerce, Honoraires, Salaire)",
-      "Support prioritaire 7j/7",
-    ],
-  },
-};
+/**
+ * Lit le tarif mensuel officiel du plan Entreprise & Pro depuis les variables d'environnement
+ * (par défaut 2 500 FCFA, rehaussable sans modifier le code ni altérer l'historique payé).
+ */
+export function getBusinessMonthlyPriceXof(): number {
+  const raw =
+    process.env.NEXT_PUBLIC_BUSINESS_MONTHLY_PRICE_XOF ??
+    process.env.BUSINESS_MONTHLY_PRICE_XOF;
+  if (!raw) return DEFAULT_BUSINESS_MONTHLY_PRICE_XOF;
+  const parsed = Number(String(raw).trim());
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1000) {
+    return DEFAULT_BUSINESS_MONTHLY_PRICE_XOF;
+  }
+  return parsed;
+}
+
+export function getPlanCatalog(): Record<SubscriptionPlanId, PlanPricingTier> {
+  const businessMonthly = getBusinessMonthlyPriceXof();
+  const businessYearly = businessMonthly * 10;
+  const businessSavings = businessMonthly * 2;
+
+  return {
+    free: {
+      id: "free",
+      name: "Gratuit",
+      badge: "Essentiel",
+      description:
+        "Continuez gratuitement après vos 30 jours d'essai pour noter vos entrées et vos dépenses du quotidien.",
+      monthlyPriceXof: 0,
+      yearlyPriceXof: 0,
+      yearlySavingsXof: 0,
+      features: [
+        "Saisie illimitée des Entrées (Revenus) et Dépenses",
+        "Historique, recherche et filtrage des transactions",
+        "Ajout rapide mobile (+) en 2 secondes",
+        "Synchronisation cloud sécurisée & mode hors-ligne",
+      ],
+      lockedFeatures: [
+        "Pilotage quotidien & Reste à vivre journalier",
+        "Enveloppes budgétaires & alertes de seuil",
+        "Objectifs d'épargne & Cagnottes",
+        "Gestionnaire des Dettes & Créances",
+        "Rapports avancés & Exports PDF/CSV",
+        "Stockage de reçus & justificatifs de dépenses",
+        "Conseiller Financier IA",
+      ],
+    },
+    personal: {
+      id: "personal",
+      name: "Particulier",
+      badge: "Tout inclus (actuel)",
+      description:
+        "Débloque 100 % des fonctionnalités actuelles de MonBudget : budget, épargne, dettes, rapports, reçus et IA.",
+      monthlyPriceXof: 1000,
+      yearlyPriceXof: 10000, // 2 mois offerts (10 x 1 000 FCFA au lieu de 12 000 FCFA)
+      yearlySavingsXof: 2000,
+      popular: true,
+      features: [
+        "Tout ce qui est inclus dans le plan Gratuit",
+        "Enveloppes budgétaires illimitées & Reste à vivre journalier",
+        "Objectifs d'épargne, cagnottes & suivi des versements",
+        "Gestionnaire complet des Dettes & Créances (WhatsApp intégré)",
+        "Rapports financiers détaillés & Exports officiels PDF / CSV",
+        "Stockage illimité de reçus et justificatifs de dépenses",
+        "Conseiller Financier IA personnalisé (diagnostic & coaching)",
+      ],
+      lockedFeatures: [],
+    },
+    business: {
+      id: "business",
+      name: "Entreprise & Pro",
+      badge: "Évolutif Pro",
+      description:
+        "Pour les entrepreneurs, commerçants et équipes : tout du plan Particulier + support prioritaire et futurs modules dédiés Entreprise.",
+      monthlyPriceXof: businessMonthly,
+      yearlyPriceXof: businessYearly, // 2 mois offerts (10 mois facturés)
+      yearlySavingsXof: businessSavings,
+      features: [
+        "Tout ce qui est inclus dans le plan Particulier",
+        "Support prioritaire 7j/7 (WhatsApp & Email)",
+        "Accès anticipé aux futurs modules dédiés Entreprise (multi-caisses, bilans pro, équipe)",
+      ],
+    },
+  };
+}
+
+export const MONBUDGET_PLANS: Record<SubscriptionPlanId, PlanPricingTier> = getPlanCatalog();
 
 export type ProtectedFeatureKey =
   | "budget"
@@ -108,9 +140,9 @@ const FEATURE_REQUIRED_PLAN: Record<ProtectedFeatureKey, PaidSubscriptionPlanId>
   budget: "personal",
   savings: "personal",
   debts: "personal",
-  reports: "business",
-  advisor: "business",
-  receipts: "business",
+  reports: "personal",
+  advisor: "personal",
+  receipts: "personal",
 };
 
 const PLAN_RANK: Record<SubscriptionPlanId, number> = {
@@ -129,14 +161,18 @@ function formatUtcDateFr(ms: number): string {
 }
 
 /**
- * Calcule le décompte de validité d'un abonnement et retourne le plan effectif.
- * Un plan payant expiré (currentPeriodEnd <= now) ou inactif retombe immédiatement sur "free".
- * Les Super-Administrateurs ne subissent jamais d'expiration.
+ * Calcule le décompte d'essai gratuit 30 jours et/ou de validité d'abonnement payant.
+ * - Pendant les 30 jours d'essai (sans choix gratuit déjà enregistré), `effectivePlanId` vaut `"personal"`.
+ * - Après 30 jours ou choix du mode Gratuit, les outils payants sont cadenassés (`effectivePlanId = "free"`).
+ * - Un plan payant expiré ou inactif retombe immédiatement sur `"free"`.
+ * - Les Super-Administrateurs ne subissent jamais d'essai ni d'expiration.
  */
 export function getSubscriptionCountdownInfo(params: {
   planId?: SubscriptionPlanId | null;
   status?: SubscriptionStatus | null;
   expiresAt?: string | null;
+  trialEndsAt?: string | null;
+  trialChoiceMadeAt?: string | null;
   isAdmin?: boolean;
   now?: number | Date;
 }): SubscriptionCountdownInfo {
@@ -154,6 +190,13 @@ export function getSubscriptionCountdownInfo(params: {
       status: "active",
       isPaidPlan: true,
       isPaidActive: true,
+      isTrialActive: false,
+      isTrialExpiringSoon: false,
+      isTrialExpired: false,
+      needsPlanChoice: false,
+      trialDaysRemaining: null,
+      trialEndsAtMs: null,
+      formattedTrialEndsAt: null,
       isExpired: false,
       isExpiringSoon: false,
       daysRemaining: null,
@@ -171,15 +214,65 @@ export function getSubscriptionCountdownInfo(params: {
   const expiresAtMs = hasValidExpiry ? parsedExpiresMs : null;
   const formattedExpiresAt = expiresAtMs !== null ? formatUtcDateFr(expiresAtMs) : null;
 
+  const parsedTrialMs = params.trialEndsAt ? Date.parse(params.trialEndsAt) : NaN;
+  const hasValidTrial = Boolean(params.trialEndsAt && Number.isFinite(parsedTrialMs));
+  const trialEndsAtMs = hasValidTrial ? parsedTrialMs : null;
+  const formattedTrialEndsAt = trialEndsAtMs !== null ? formatUtcDateFr(trialEndsAtMs) : null;
+  const hasTrialChoiceMade = Boolean(params.trialChoiceMadeAt);
+
   if (rawPlanId === "free") {
+    const isTrialActive =
+      rawStatus === "active" &&
+      trialEndsAtMs !== null &&
+      !hasTrialChoiceMade &&
+      trialEndsAtMs > nowMs;
+
+    if (isTrialActive && trialEndsAtMs !== null) {
+      const diffMs = Math.max(0, trialEndsAtMs - nowMs);
+      const trialDaysRemaining = Math.max(1, Math.ceil(diffMs / 86_400_000));
+      const hoursRemaining = Math.max(1, Math.ceil(diffMs / 3_600_000));
+      const isTrialExpiringSoon = trialDaysRemaining <= 3;
+
+      return {
+        effectivePlanId: "personal",
+        rawPlanId: "free",
+        status: "active",
+        isPaidPlan: false,
+        isPaidActive: false,
+        isTrialActive: true,
+        isTrialExpiringSoon,
+        isTrialExpired: false,
+        needsPlanChoice: false,
+        trialDaysRemaining,
+        trialEndsAtMs,
+        formattedTrialEndsAt,
+        isExpired: false,
+        isExpiringSoon: isTrialExpiringSoon,
+        daysRemaining: trialDaysRemaining,
+        hoursRemaining,
+        expiresAtMs: trialEndsAtMs,
+        formattedExpiresAt: formattedTrialEndsAt,
+      };
+    }
+
+    const isTrialExpired =
+      trialEndsAtMs !== null && !hasTrialChoiceMade && trialEndsAtMs <= nowMs;
     const expiredMarker =
       rawStatus === "expired" || (expiresAtMs !== null && expiresAtMs <= nowMs);
+
     return {
       effectivePlanId: "free",
       rawPlanId: "free",
       status: rawStatus === "canceled" ? "canceled" : expiredMarker ? "expired" : "active",
       isPaidPlan: false,
       isPaidActive: false,
+      isTrialActive: false,
+      isTrialExpiringSoon: false,
+      isTrialExpired,
+      needsPlanChoice: isTrialExpired,
+      trialDaysRemaining: isTrialExpired ? 0 : null,
+      trialEndsAtMs,
+      formattedTrialEndsAt,
       isExpired: expiredMarker,
       isExpiringSoon: false,
       daysRemaining: expiresAtMs !== null && expiredMarker ? 0 : null,
@@ -197,6 +290,13 @@ export function getSubscriptionCountdownInfo(params: {
       status: rawStatus === "canceled" ? "canceled" : "expired",
       isPaidPlan: false,
       isPaidActive: false,
+      isTrialActive: false,
+      isTrialExpiringSoon: false,
+      isTrialExpired: false,
+      needsPlanChoice: false,
+      trialDaysRemaining: null,
+      trialEndsAtMs,
+      formattedTrialEndsAt,
       isExpired: true,
       isExpiringSoon: false,
       daysRemaining: expiresAtMs !== null ? 0 : null,
@@ -216,6 +316,13 @@ export function getSubscriptionCountdownInfo(params: {
       status: "active",
       isPaidPlan: true,
       isPaidActive: true,
+      isTrialActive: false,
+      isTrialExpiringSoon: false,
+      isTrialExpired: false,
+      needsPlanChoice: false,
+      trialDaysRemaining: null,
+      trialEndsAtMs,
+      formattedTrialEndsAt,
       isExpired: false,
       isExpiringSoon: daysRemaining <= 5,
       daysRemaining,
@@ -231,6 +338,13 @@ export function getSubscriptionCountdownInfo(params: {
     status: "active",
     isPaidPlan: true,
     isPaidActive: true,
+    isTrialActive: false,
+    isTrialExpiringSoon: false,
+    isTrialExpired: false,
+    needsPlanChoice: false,
+    trialDaysRemaining: null,
+    trialEndsAtMs,
+    formattedTrialEndsAt,
     isExpired: false,
     isExpiringSoon: false,
     daysRemaining: null,
@@ -266,7 +380,8 @@ export function getServerPlanAmountXof(
   planId: PaidSubscriptionPlanId,
   billingCycle: BillingCycle
 ): { amount: number; currency: "XOF"; title: string } {
-  const plan = MONBUDGET_PLANS[planId];
+  const catalog = getPlanCatalog();
+  const plan = catalog[planId];
   if (!plan) {
     throw new Error("INVALID_PLAN");
   }
@@ -283,4 +398,3 @@ export function getServerPlanAmountXof(
     title: `Abonnement MonBudget ${plan.name} — ${cycleLabel}`,
   };
 }
-

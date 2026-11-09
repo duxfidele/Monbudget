@@ -2,6 +2,7 @@ import { type EmailOtpType } from '@supabase/supabase-js'
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getSafeRedirectUrl, getSafeRequestOrigin } from '@/lib/utils/security'
+import { sendWelcomeNotificationsOnce } from '@/lib/server/notifications'
 
 export { getSafeRedirectUrl }
 
@@ -50,6 +51,12 @@ export async function GET(request: NextRequest) {
             },
             { onConflict: 'id', ignoreDuplicates: true }
           )
+
+          await sendWelcomeNotificationsOnce({
+            userId: user.id,
+            userEmail: user.email,
+            fullName,
+          }).catch(() => null)
         } catch {}
       }
 
@@ -81,6 +88,12 @@ export async function GET(request: NextRequest) {
               },
               { onConflict: 'id', ignoreDuplicates: true }
             )
+
+            await sendWelcomeNotificationsOnce({
+              userId: user.id,
+              userEmail: user.email,
+              fullName,
+            }).catch(() => null)
           } catch {}
         }
         const redirectUrl = getSafeRedirectUrl(next, requestOrigin)
