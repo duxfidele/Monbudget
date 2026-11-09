@@ -1,13 +1,16 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Camera, Upload, Trash2, Eye, CheckCircle2, FileText, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Camera, Upload, Trash2, Eye, CheckCircle2, FileText, Loader2, Lock, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   validateReceiptFile,
   compressReceiptImage,
   formatFileSize,
 } from "@/lib/utils/receipt-storage";
+import { canAccessFeature, getSubscriptionCountdownInfo } from "@/lib/moneriz-plans";
+import { useUIStore } from "@/lib/store/ui-store";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -34,6 +37,21 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const {
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionExpiresAt,
+    isAdminUser,
+  } = useUIStore();
+
+  const countdown = getSubscriptionCountdownInfo({
+    planId: subscriptionPlan,
+    status: subscriptionStatus,
+    expiresAt: subscriptionExpiresAt,
+    isAdmin: isAdminUser,
+  });
+  const canAttachReceipts =
+    isAdminUser || canAccessFeature(countdown.effectivePlanId, "receipts");
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -41,6 +59,11 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
 
     // Réinitialiser la valeur de l'input pour permettre de sélectionner à nouveau le même fichier si besoin
     e.target.value = "";
+
+    if (!canAttachReceipts) {
+      toast.info("Le stockage de reçus est réservé au Plan Entreprise & Pro.");
+      return;
+    }
 
     // 1. Validation préalable
     const validation = validateReceiptFile({
@@ -120,6 +143,7 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
       />
 
       {!receipt ? (
+        canAttachReceipts ? (
         <div className="grid grid-cols-2 gap-2">
           {/* Bouton Prendre une photo */}
           <Button
@@ -153,6 +177,27 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
             Choisir fichier
           </Button>
         </div>
+        ) : (
+        <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-dashed border-amber-300 dark:border-amber-700/60 bg-amber-50/70 dark:bg-amber-950/20">
+          <div className="flex items-center gap-2 min-w-0">
+            <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-[11px] font-medium text-amber-900 dark:text-amber-200 truncate">
+              Ajout de reçus réservé au Plan Entreprise &amp; Pro
+            </span>
+          </div>
+          <Link href="/settings?tab=subscription" className="shrink-0">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 px-2.5 text-[11px] font-bold border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-amber-800 dark:text-amber-300 hover:bg-amber-100 gap-1"
+            >
+              <Crown className="h-3 w-3" />
+              <span>Débloquer</span>
+            </Button>
+          </Link>
+        </div>
+        )
       ) : (
         /* Prévisualisation miniature du reçu attaché */
         <div className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850">

@@ -11,7 +11,11 @@ import {
   getSpentByCategory,
   AFRICAN_EXPENSE_CATEGORIES,
 } from "@/lib/utils/budget-calc";
-import { BillingCycle, SubscriptionPlanId } from "@/lib/moneriz-plans";
+import {
+  BillingCycle,
+  SubscriptionPlanId,
+  SubscriptionStatus,
+} from "@/lib/moneriz-plans";
 
 export type IncomeSourceEntry = {
   id: string;
@@ -121,6 +125,7 @@ export interface LocalCache {
   subscriptionPlan?: SubscriptionPlanId;
   billingCycle?: BillingCycle | "none";
   subscriptionExpiresAt?: string | null;
+  subscriptionStatus?: SubscriptionStatus;
 }
 
 interface UIState {
@@ -196,6 +201,7 @@ interface UIState {
   subscriptionPlan: SubscriptionPlanId;
   billingCycle: BillingCycle | "none";
   subscriptionExpiresAt: string | null;
+  subscriptionStatus: SubscriptionStatus;
   refreshSubscription: (orderId?: string | null, paymentId?: string | null) => Promise<{
     planId: SubscriptionPlanId;
     orderStatus: string | null;
@@ -352,6 +358,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       subscriptionPlan: "free",
       billingCycle: "none",
       subscriptionExpiresAt: null,
+      subscriptionStatus: "active",
     });
   },
 
@@ -425,6 +432,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   subscriptionPlan: initialCache?.subscriptionPlan ?? "free",
   billingCycle: initialCache?.billingCycle ?? "none",
   subscriptionExpiresAt: initialCache?.subscriptionExpiresAt ?? null,
+  subscriptionStatus: initialCache?.subscriptionStatus ?? "active",
   refreshSubscription: async (orderId, paymentId) => {
     try {
       const qs = new URLSearchParams();
@@ -439,17 +447,23 @@ export const useUIStore = create<UIState>((set, get) => ({
         const sub = data?.subscription;
         const serverIsAdmin = Boolean(data?.isAdmin);
         if (sub && sub.planId) {
+          const nextStatus: SubscriptionStatus =
+            sub.status === "canceled" || sub.status === "expired"
+              ? sub.status
+              : "active";
           set({
             isAdminUser: serverIsAdmin,
             subscriptionPlan: sub.planId,
             billingCycle: sub.billingCycle || "none",
             subscriptionExpiresAt: sub.currentPeriodEnd || null,
+            subscriptionStatus: nextStatus,
           });
           const cache = loadLocalCache();
           if (cache) {
             cache.subscriptionPlan = sub.planId;
             cache.billingCycle = sub.billingCycle || "none";
             cache.subscriptionExpiresAt = sub.currentPeriodEnd || null;
+            cache.subscriptionStatus = nextStatus;
             saveLocalCache(cache);
           }
           return {
@@ -971,6 +985,10 @@ export const useUIStore = create<UIState>((set, get) => ({
           months: {},
           savingsGoals: get().savingsGoals,
         };
+        cache.subscriptionPlan = get().subscriptionPlan;
+        cache.billingCycle = get().billingCycle;
+        cache.subscriptionExpiresAt = get().subscriptionExpiresAt;
+        cache.subscriptionStatus = get().subscriptionStatus;
         cache.months[monthKey] = {
           baseSalary: finalBaseSalary,
           income: finalIncome,

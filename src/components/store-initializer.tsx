@@ -14,6 +14,7 @@ export function StoreInitializer() {
   const refreshSubscription = useUIStore((state) => state.refreshSubscription);
   const initialized = useRef(false);
   const checkoutHandled = useRef(false);
+  const lastFocusRefreshRef = useRef(0);
 
   useEffect(() => {
     if (!initialized.current) {
@@ -21,6 +22,18 @@ export function StoreInitializer() {
       initStore();
     }
   }, [initStore]);
+
+  // Resynchronisation silencieuse au retour sur l'onglet (vérifie renouvellement ou expiration côté serveur)
+  useEffect(() => {
+    const handleFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusRefreshRef.current < 60_000) return;
+      lastFocusRefreshRef.current = now;
+      void refreshSubscription();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [refreshSubscription]);
 
   useEffect(() => {
     if (checkoutHandled.current || typeof window === "undefined") return;

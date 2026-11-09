@@ -67,7 +67,34 @@ export async function GET(request: NextRequest) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // 2. Détection des dettes actives à échéance proche (J-7) ou dépassées
+    // 2. Expiration automatique des abonnements payants arrivés à échéance
+    const nowIso = currentDate.toISOString();
+    let expiredSubscriptionsDowngraded = 0;
+    try {
+      const { data: downgradedRows, error: downgradeError } = await supabase
+        .from("user_subscriptions")
+        .update({
+          plan_id: "free",
+          billing_cycle: "none",
+          status: "expired",
+          updated_at: nowIso,
+        })
+        .neq("plan_id", "free")
+        .eq("status", "active")
+        .not("current_period_end", "is", null)
+        .lte("current_period_end", nowIso)
+        .select("user_id");
+
+      if (downgradeError) {
+        console.warn("Erreur lors de la révocation des abonnements expirés :", downgradeError.message);
+      } else {
+        expiredSubscriptionsDowngraded = downgradedRows?.length || 0;
+      }
+    } catch (subErr) {
+      console.warn("Exception lors de la vérification des abonnements expirés :", subErr);
+    }
+
+    // 3. Détection des dettes actives à échéance proche (J-7) ou dépassées
     const { data: upcomingDebts, error: debtError } = await supabase
       .from("debts")
       .select("id, user_id, person_name, total_amount, remaining_amount, type, due_date, status")
@@ -83,10 +110,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 3. Détection de premier jour du mois (clôture mensuelle)
+    // 4. Détection de premier jour du mois (clôture mensuelle)
     const isFirstDayOfMonth = currentDate.getDate() === 1;
 
-    // 4. Synthèse d'audit nocturne
+    // 5. Synthèse d'audit nocturne
     const payableCount = (upcomingDebts || []).filter((d) => d.type === "payable").length;
     const receivableCount = (upcomingDebts || []).filter((d) => d.type === "receivable").length;
 
@@ -97,6 +124,7 @@ export async function GET(request: NextRequest) {
       durationMs: Date.now() - startTime,
       task: "nightly-financial-audit",
       results: {
+        expiredSubscriptionsDowngraded,
         upcomingDebtsDetected: upcomingDebts?.length || 0,
         debtsToPaySoon: payableCount,
         debtsToCollectSoon: receivableCount,

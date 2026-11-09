@@ -5,6 +5,7 @@ import {
   canAccessFeature,
   getRequiredPlanForFeature,
   getServerPlanAmountXof,
+  getSubscriptionCountdownInfo,
   MONBUDGET_PLANS,
 } from "../src/lib/moneriz-plans";
 import {
@@ -16,6 +17,8 @@ import {
   getOrderAndSubscriptionStatus,
   parseMonerizEvent,
   prepareAuthorizedCheckout,
+  resolveEffectiveSubscription,
+  setFallbackSubscriptionForTests,
 } from "../src/lib/server/moneriz-app";
 import {
   createMonerizCheckoutSession,
@@ -419,6 +422,274 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(widgetSrc).toContain('router.push("/dashboard")');
     expect(initializerSrc).toContain('refreshSubscription(rawOrderId, validPaymentId)');
     expect(initializerSrc).toContain('router.replace("/dashboard")');
+  });
+
+  test("8. Révocation serveur automatique à l'échéance, exemption Super-Admin & réactivation au renouvellement", async () => {
+    const expiredUserId = `user-expired-${Date.now()}`;
+    const activeUserId = `user-active-${Date.now()}`;
+    const canceledUserId = `user-canceled-${Date.now()}`;
+    const adminUserId = `admin-user-${Date.now()}`;
+
+    const pastIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const futureIso = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
+
+    // 8a. Utilisateur standard expiré (currentPeriodEnd dépassé mais status encore 'active')
+    setFallbackSubscriptionForTests({
+      userId: expiredUserId,
+      planId: "personal",
+      billingCycle: "monthly",
+      status: "active",
+      currentPeriodEnd: pastIso,
+      lastOrderId: null,
+    });
+
+    const expiredStatus = await getOrderAndSubscriptionStatus({
+      userId: expiredUserId,
+      userEmail: "client.expire@example.com",
+    });
+    expect(expiredStatus.subscription.planId).toBe("free");
+    expect(expiredStatus.subscription.billingCycle).toBe("none");
+    expect(expiredStatus.subscription.status).toBe("expired");
+    expect(expiredStatus.subscription.currentPeriodEnd).toBe(pastIso);
+    expect(expiredStatus.isAdmin).toBe(false);
+
+    // 8b. Utilisateur standard avec abonnement actif non expiré -> reste actif
+    setFallbackSubscriptionForTests({
+      userId: activeUserId,
+      planId: "business",
+      billingCycle: "monthly",
+      status: "active",
+      currentPeriodEnd: futureIso,
+      lastOrderId: null,
+    });
+    const activeStatus = await getOrderAndSubscriptionStatus({
+      userId: activeUserId,
+      userEmail: "client.actif@example.com",
+    });
+    expect(activeStatus.subscription.planId).toBe("business");
+    expect(activeStatus.subscription.status).toBe("active");
+
+    // 8c. Utilisateur avec statut 'canceled' même avant fin de période -> rétrogradé immédiatement
+    setFallbackSubscriptionForTests({
+      userId: canceledUserId,
+      planId: "personal",
+      billingCycle: "yearly",
+      status: "canceled",
+      currentPeriodEnd: futureIso,
+      lastOrderId: null,
+    });
+    const canceledStatus = await getOrderAndSubscriptionStatus({
+      userId: canceledUserId,
+      userEmail: "client.annule@example.com",
+    });
+    expect(canceledStatus.subscription.planId).toBe("free");
+    expect(canceledStatus.subscription.status).toBe("canceled");
+
+    // 8d. Super-Admin conservé actif même sans expiration future
+    setFallbackSubscriptionForTests({
+      userId: adminUserId,
+      planId: "personal",
+      billingCycle: "monthly",
+      status: "active",
+      currentPeriodEnd: pastIso,
+      lastOrderId: null,
+    });
+    const adminStatus = await getOrderAndSubscriptionStatus({
+      userId: adminUserId,
+      userEmail: "degladux@gmail.com",
+    });
+    expect(adminStatus.isAdmin).toBe(true);
+    expect(adminStatus.subscription.planId).toBe("business");
+    expect(adminStatus.subscription.status).toBe("active");
+
+    // 8e. Réactivation après expiration via un nouveau paiement Moneriz confirmé
+    const renewalOrder = await prepareAuthorizedCheckout({
+      userId: expiredUserId,
+      planId: "business",
+      billingCycle: "monthly",
+      requestOrigin: "https://monbudgetpro.com",
+      preferredMode: "iframe",
+    });
+    const renewEvent = parseMonerizEvent(
+      JSON.stringify({
+        id: `evt_renew_${renewalOrder.order.id}`,
+        type: "payment.succeeded",
+        mode: renewalOrder.order.mode,
+        occurredAt: new Date().toISOString(),
+        payment: {
+          id: `pay_renew_${renewalOrder.order.id}`,
+          mode: renewalOrder.order.mode,
+          status: "paid",
+          amount: renewalOrder.order.amount,
+          currency: "XOF",
+          reference: renewalOrder.order.reference,
+          paidAt: new Date().toISOString(),
+        },
+      })
+    );
+    await commitMonerizInbox(renewEvent);
+
+    const renewedStatus = await getOrderAndSubscriptionStatus({
+      userId: expiredUserId,
+      userEmail: "client.expire@example.com",
+      orderId: renewalOrder.order.id,
+    });
+    expect(renewedStatus.subscription.planId).toBe("business");
+    expect(renewedStatus.subscription.status).toBe("active");
+    expect(Date.parse(renewedStatus.subscription.currentPeriodEnd!)).toBeGreaterThan(Date.now());
+
+    // 8f. Vérification directe de resolveEffectiveSubscription sur échéance exacte
+    const boundary = resolveEffectiveSubscription({
+      subscription: {
+        userId: "usr-boundary",
+        planId: "business",
+        billingCycle: "monthly",
+        status: "active",
+        currentPeriodEnd: "2026-12-09T12:00:00.000Z",
+        lastOrderId: null,
+      },
+      isSuperAdmin: false,
+      nowMs: Date.parse("2026-12-09T12:00:00.000Z"),
+    });
+    expect(boundary.effective.planId).toBe("free");
+    expect(boundary.effective.status).toBe("expired");
+    expect(boundary.shouldPersistDowngrade).toBe(true);
+  });
+
+  test("9. Helper de décompte (daysRemaining, J-5, expiré) & verrouillage receipts sur Plan Entreprise", () => {
+    const fixedNow = Date.parse("2026-12-01T12:00:00.000Z");
+
+    // Verrouillage des reçus uniquement sur 'business'
+    expect(canAccessFeature("free", "receipts")).toBe(false);
+    expect(canAccessFeature("personal", "receipts")).toBe(false);
+    expect(canAccessFeature("business", "receipts")).toBe(true);
+    expect(getRequiredPlanForFeature("receipts")).toBe("business");
+
+    // Compte gratuit neuf
+    const freeNew = getSubscriptionCountdownInfo({
+      planId: "free",
+      status: "active",
+      expiresAt: null,
+      now: fixedNow,
+    });
+    expect(freeNew.effectivePlanId).toBe("free");
+    expect(freeNew.isPaidActive).toBe(false);
+    expect(freeNew.isExpired).toBe(false);
+    expect(freeNew.daysRemaining).toBeNull();
+
+    // Abonnement Particulier actif avec 10 jours restants
+    const active10Days = getSubscriptionCountdownInfo({
+      planId: "personal",
+      status: "active",
+      expiresAt: "2026-12-11T12:00:00.000Z",
+      now: fixedNow,
+    });
+    expect(active10Days.effectivePlanId).toBe("personal");
+    expect(active10Days.isPaidActive).toBe(true);
+    expect(active10Days.isExpiringSoon).toBe(false);
+    expect(active10Days.daysRemaining).toBe(10);
+    expect(active10Days.formattedExpiresAt).toBe("11/12/2026");
+
+    // Abonnement Entreprise à J-4 (alerte renouvellement <= 5 jours)
+    const active4Days = getSubscriptionCountdownInfo({
+      planId: "business",
+      status: "active",
+      expiresAt: "2026-12-05T12:00:00.000Z",
+      now: fixedNow,
+    });
+    expect(active4Days.effectivePlanId).toBe("business");
+    expect(active4Days.isPaidActive).toBe(true);
+    expect(active4Days.isExpiringSoon).toBe(true);
+    expect(active4Days.daysRemaining).toBe(4);
+
+    // Abonnement client expiré depuis 1 seconde -> rétrogradé vers free
+    const expiredClient = getSubscriptionCountdownInfo({
+      planId: "business",
+      status: "active",
+      expiresAt: "2026-12-01T11:59:59.000Z",
+      now: fixedNow,
+    });
+    expect(expiredClient.effectivePlanId).toBe("free");
+    expect(expiredClient.isPaidActive).toBe(false);
+    expect(expiredClient.isExpired).toBe(true);
+    expect(expiredClient.daysRemaining).toBe(0);
+
+    // Super-Admin exempt
+    const superAdmin = getSubscriptionCountdownInfo({
+      planId: "free",
+      status: "expired",
+      expiresAt: "2020-01-01T00:00:00.000Z",
+      isAdmin: true,
+      now: fixedNow,
+    });
+    expect(superAdmin.effectivePlanId).toBe("business");
+    expect(superAdmin.isPaidActive).toBe(true);
+    expect(superAdmin.isExpired).toBe(false);
+    expect(superAdmin.daysRemaining).toBeNull();
+  });
+
+  test("10. Contrats API fail-closed (/api/receipts/upload, /api/cron/daily-check) & verrouillage complet UI Dashboard/Sidebar/PlanGate", async ({
+    request,
+  }) => {
+    // 10a. POST /api/receipts/upload anonyme refusé (401)
+    const anonUpload = await request.post("/api/receipts/upload");
+    expect(anonUpload.status()).toBe(401);
+
+    // 10b. Contrats statiques serveur (receipts plan gating & cron expiration sweep)
+    const uploadRouteSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/receipts/upload/route.ts"),
+      "utf8"
+    );
+    expect(uploadRouteSrc).toContain("getOrderAndSubscriptionStatus");
+    expect(uploadRouteSrc).toContain('canAccessFeature(subscription.planId, "receipts")');
+    expect(uploadRouteSrc).toContain('code: "PLAN_REQUIRED"');
+    expect(uploadRouteSrc).toContain("403");
+
+    const cronRouteSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/cron/daily-check/route.ts"),
+      "utf8"
+    );
+    expect(cronRouteSrc).toContain('.from("user_subscriptions")');
+    expect(cronRouteSrc).toContain('status: "expired"');
+    expect(cronRouteSrc).toContain("expiredSubscriptionsDowngraded");
+
+    // 10c. Contrats UI : Dashboard PDF/CSV/IA, Transactions CSV/Reçus, Sidebar, PlanGate, Settings
+    const dashboardSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/app/(dashboard)/dashboard/page.tsx"),
+      "utf8"
+    );
+    expect(dashboardSrc).toContain("getSubscriptionCountdownInfo");
+    expect(dashboardSrc).toContain('canAccessFeature(subscriptionCountdown.effectivePlanId, "reports")');
+    expect(dashboardSrc).toContain('canAccessFeature(subscriptionCountdown.effectivePlanId, "advisor")');
+    expect(dashboardSrc).toContain("if (!canExportReports)");
+    expect(dashboardSrc).toContain("subscriptionCountdown.isExpiringSoon");
+
+    const transactionsSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/app/(dashboard)/transactions/page.tsx"),
+      "utf8"
+    );
+    expect(transactionsSrc).toContain('canAccessFeature(subscriptionCountdown.effectivePlanId, "reports")');
+    expect(transactionsSrc).toContain("if (!canExportReports)");
+
+    const receiptUploadSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/transactions/receipt-upload.tsx"),
+      "utf8"
+    );
+    expect(receiptUploadSrc).toContain('canAccessFeature(countdown.effectivePlanId, "receipts")');
+
+    const planGateSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/payments/plan-gate.tsx"),
+      "utf8"
+    );
+    expect(planGateSrc).toContain("getSubscriptionCountdownInfo");
+    expect(planGateSrc).toContain("countdown.effectivePlanId");
+
+    const sidebarSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/layout/sidebar.tsx"),
+      "utf8"
+    );
+    expect(sidebarSrc).toContain("getSubscriptionCountdownInfo");
+    expect(sidebarSrc).toContain("countdown.daysRemaining");
   });
 });
 

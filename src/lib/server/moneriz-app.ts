@@ -5,6 +5,7 @@ import {
   BillingCycle,
   PaidSubscriptionPlanId,
   SubscriptionPlanId,
+  SubscriptionStatus,
   getServerPlanAmountXof,
 } from "@/lib/moneriz-plans";
 import { isAdmin } from "@/lib/utils/admin";
@@ -35,9 +36,78 @@ export interface UserSubscriptionRecord {
   userId: string;
   planId: SubscriptionPlanId;
   billingCycle: BillingCycle | "none";
-  status: "active" | "canceled" | "expired";
+  status: SubscriptionStatus;
   currentPeriodEnd: string | null;
   lastOrderId: string | null;
+}
+
+/**
+ * Évalue la validité réelle d'un abonnement en vérifiant son statut et sa date d'échéance.
+ * Les Super-Administrateurs ne subissent jamais d'expiration automatique.
+ */
+export function resolveEffectiveSubscription(params: {
+  subscription: UserSubscriptionRecord;
+  isSuperAdmin: boolean;
+  nowMs?: number;
+}): {
+  effective: UserSubscriptionRecord;
+  shouldPersistDowngrade: boolean;
+} {
+  const { subscription, isSuperAdmin } = params;
+  const nowMs = params.nowMs ?? Date.now();
+
+  if (isSuperAdmin) {
+    return {
+      effective: {
+        ...subscription,
+        planId: "business",
+        billingCycle: subscription.billingCycle === "none" ? "yearly" : subscription.billingCycle,
+        status: "active",
+      },
+      shouldPersistDowngrade: false,
+    };
+  }
+
+  if (subscription.planId === "free") {
+    return { effective: subscription, shouldPersistDowngrade: false };
+  }
+
+  const parsedExpiresMs = subscription.currentPeriodEnd
+    ? Date.parse(subscription.currentPeriodEnd)
+    : NaN;
+  const hasValidExpiry = Boolean(
+    subscription.currentPeriodEnd && Number.isFinite(parsedExpiresMs)
+  );
+  const hasInvalidExpiry = Boolean(
+    subscription.currentPeriodEnd && !Number.isFinite(parsedExpiresMs)
+  );
+  const isDateExpired = hasValidExpiry && parsedExpiresMs <= nowMs;
+  const isStatusInactive = subscription.status !== "active";
+
+  if (isDateExpired || hasInvalidExpiry || isStatusInactive) {
+    const normalizedStatus: SubscriptionStatus =
+      subscription.status === "canceled" ? "canceled" : "expired";
+    return {
+      effective: {
+        userId: subscription.userId,
+        planId: "free",
+        billingCycle: "none",
+        status: normalizedStatus,
+        currentPeriodEnd: hasValidExpiry ? subscription.currentPeriodEnd : null,
+        lastOrderId: subscription.lastOrderId,
+      },
+      shouldPersistDowngrade: subscription.status === "active",
+    };
+  }
+
+  return { effective: subscription, shouldPersistDowngrade: false };
+}
+
+export function setFallbackSubscriptionForTests(record: UserSubscriptionRecord): void {
+  if (isProductionRuntime()) {
+    throw new Error("NOT_ALLOWED_IN_PRODUCTION");
+  }
+  fallbackSubscriptions.set(record.userId, record);
 }
 
 // Registre serveur résilient (utilisé en relais si la migration SQL n'a pas encore été appliquée sur l'instance distante)
@@ -896,6 +966,33 @@ export async function getOrderAndSubscriptionStatus(params: {
     };
   }
 
+  const { effective, shouldPersistDowngrade } = resolveEffectiveSubscription({
+    subscription: sub,
+    isSuperAdmin,
+  });
+
+  if (effective.planId !== sub.planId || effective.status !== sub.status) {
+    sub = effective;
+    if (!isProductionRuntime()) {
+      fallbackSubscriptions.set(params.userId, sub);
+    }
+    if (shouldPersistDowngrade && adminSupabase) {
+      try {
+        await adminSupabase
+          .from("user_subscriptions")
+          .update({
+            plan_id: "free",
+            billing_cycle: "none",
+            status: sub.status,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", params.userId);
+      } catch {}
+    }
+  } else {
+    sub = effective;
+  }
+
   return {
     order: order
       ? {
@@ -1024,7 +1121,10 @@ export function getFallbackAdminMonerizStats() {
 
   const subscriptionsByUser: Record<string, UserSubscriptionRecord> = {};
   for (const [uid, sub] of fallbackSubscriptions.entries()) {
-    subscriptionsByUser[uid] = sub;
+    subscriptionsByUser[uid] = resolveEffectiveSubscription({
+      subscription: sub,
+      isSuperAdmin: false,
+    }).effective;
   }
 
   return {

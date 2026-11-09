@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { canAccessFeature } from "@/lib/moneriz-plans";
+import { getOrderAndSubscriptionStatus } from "@/lib/server/moneriz-app";
 import {
   validateReceiptFile,
   validateReceiptBuffer,
@@ -22,6 +24,25 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "Non autorisé. Veuillez vous connecter." },
         { status: 401 }
+      );
+    }
+
+    // Vérification stricte de l'abonnement actif (Entreprise & Pro ou Super-Admin requis)
+    const { subscription, isAdmin: isSuperAdmin } =
+      await getOrderAndSubscriptionStatus({
+        userId: user.id,
+        userEmail: user.email,
+      });
+
+    if (!isSuperAdmin && !canAccessFeature(subscription.planId, "receipts")) {
+      return NextResponse.json(
+        {
+          error:
+            "Le stockage de reçus et justificatifs est réservé au plan Entreprise & Pro.",
+          code: "PLAN_REQUIRED",
+          requiredPlan: "business",
+        },
+        { status: 403 }
       );
     }
 

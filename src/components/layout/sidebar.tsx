@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useUIStore } from "@/lib/store/ui-store";
-import { MONBUDGET_PLANS } from "@/lib/moneriz-plans";
+import { getSubscriptionCountdownInfo, MONBUDGET_PLANS } from "@/lib/moneriz-plans";
 import { toast } from "sonner";
 import {
   LayoutDashboard,
@@ -23,6 +23,7 @@ import {
   LogOut,
   User,
   Crown,
+  Clock,
 } from "lucide-react";
 
 const routes = [
@@ -85,7 +86,13 @@ const routes = [
 export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { resetStore, subscriptionPlan, isAdminUser } = useUIStore();
+  const {
+    resetStore,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionExpiresAt,
+    isAdminUser,
+  } = useUIStore();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -124,9 +131,16 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
     }
   };
 
+  const countdown = getSubscriptionCountdownInfo({
+    planId: subscriptionPlan,
+    status: subscriptionStatus,
+    expiresAt: subscriptionExpiresAt,
+    isAdmin: isAdminUser,
+  });
+
   const planBadgeLabel = isAdminUser
     ? "Super-Admin"
-    : `Plan ${MONBUDGET_PLANS[subscriptionPlan]?.name || "Gratuit"}`;
+    : `Plan ${MONBUDGET_PLANS[countdown.effectivePlanId]?.name || "Gratuit"}`;
 
   return (
     <div className="flex flex-col h-full bg-[#1E3A5F] text-white select-none">
@@ -240,10 +254,28 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
               <Link
                 href={isAdminUser ? "/admin" : "/settings?tab=subscription"}
                 onClick={onNavigate}
+                suppressHydrationWarning
                 className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 hover:underline truncate focus:outline-none"
               >
                 <Crown className="w-2.5 h-2.5 shrink-0" />
                 <span>{planBadgeLabel}</span>
+                {!isAdminUser && countdown.isPaidActive && countdown.daysRemaining !== null && (
+                  <span
+                    className={`ml-0.5 inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
+                      countdown.isExpiringSoon
+                        ? "bg-rose-500/30 text-rose-200 border border-rose-400/50"
+                        : "bg-emerald-500/25 text-emerald-200 border border-emerald-400/40"
+                    }`}
+                  >
+                    <Clock className="w-2 h-2 shrink-0" />
+                    {countdown.daysRemaining}j
+                  </span>
+                )}
+                {!isAdminUser && countdown.isExpired && (
+                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-rose-500/30 text-rose-200 border border-rose-400/40">
+                    Expiré
+                  </span>
+                )}
               </Link>
             </div>
           </div>

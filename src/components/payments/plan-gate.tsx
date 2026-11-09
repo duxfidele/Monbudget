@@ -8,6 +8,7 @@ import { useUIStore } from "@/lib/store/ui-store";
 import {
   canAccessFeature,
   getRequiredPlanForFeature,
+  getSubscriptionCountdownInfo,
   MONBUDGET_PLANS,
   ProtectedFeatureKey,
 } from "@/lib/moneriz-plans";
@@ -26,9 +27,21 @@ export function PlanGate({
   featureDescription,
   children,
 }: PlanGateProps) {
-  const { subscriptionPlan, isAdminUser } = useUIStore();
+  const {
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionExpiresAt,
+    isAdminUser,
+  } = useUIStore();
 
-  const isAllowed = isAdminUser || canAccessFeature(subscriptionPlan, feature);
+  const countdown = getSubscriptionCountdownInfo({
+    planId: subscriptionPlan,
+    status: subscriptionStatus,
+    expiresAt: subscriptionExpiresAt,
+    isAdmin: isAdminUser,
+  });
+
+  const isAllowed = isAdminUser || canAccessFeature(countdown.effectivePlanId, feature);
   if (isAllowed) {
     return <>{children}</>;
   }
@@ -46,7 +59,11 @@ export function PlanGate({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-extrabold uppercase tracking-wider">
             <Lock className="w-3.5 h-3.5" />
-            <span>Fonctionnalité Réservée au Plan {requiredPlan.name}</span>
+            <span>
+              {countdown.isExpired
+                ? `Abonnement Expiré — Plan ${requiredPlan.name} Requis`
+                : `Fonctionnalité Réservée au Plan ${requiredPlan.name}`}
+            </span>
           </div>
 
           <Link href="/transactions">
@@ -69,10 +86,22 @@ export function PlanGate({
           <p className="text-sm sm:text-base text-slate-200 leading-relaxed">
             {featureDescription}
           </p>
-          <p className="text-xs text-sky-300 font-medium pt-1">
-            Votre compte est actuellement sur le <strong>Plan Gratuit (Entrées & Dépenses uniquement)</strong>. Passez au plan <strong>{requiredPlan.name}</strong> dès{" "}
-            <strong>{requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA / mois</strong> (ou{" "}
-            <strong>{requiredPlan.yearlyPriceXof.toLocaleString("fr-FR")} FCFA / an</strong> avec 2 mois offerts) pour activer cet outil.
+          <p suppressHydrationWarning className="text-xs text-sky-300 font-medium pt-1">
+            {countdown.isExpired ? (
+              <>
+                Votre abonnement précédent est arrivé à échéance
+                {countdown.formattedExpiresAt ? ` le ${countdown.formattedExpiresAt}` : ""} et votre compte est repassé sur le{" "}
+                <strong>Plan Gratuit</strong>. Renouvelez votre plan <strong>{requiredPlan.name}</strong> dès{" "}
+                <strong>{requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA / mois</strong> (ou{" "}
+                <strong>{requiredPlan.yearlyPriceXof.toLocaleString("fr-FR")} FCFA / an</strong>) pour réactiver cet outil.
+              </>
+            ) : (
+              <>
+                Votre compte est actuellement sur le <strong>Plan Gratuit (Entrées & Dépenses uniquement)</strong>. Passez au plan <strong>{requiredPlan.name}</strong> dès{" "}
+                <strong>{requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA / mois</strong> (ou{" "}
+                <strong>{requiredPlan.yearlyPriceXof.toLocaleString("fr-FR")} FCFA / an</strong> avec 2 mois offerts) pour activer cet outil.
+              </>
+            )}
           </p>
         </div>
       </div>

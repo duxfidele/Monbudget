@@ -17,11 +17,14 @@ import {
   Calendar,
   Zap,
   Paperclip,
-  Eye
+  Eye,
+  Lock
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
+import { canAccessFeature, getSubscriptionCountdownInfo } from "@/lib/moneriz-plans";
 import { ReceiptUpload, ReceiptData } from "@/components/transactions/receipt-upload";
 import { formatFileSize } from "@/lib/utils/receipt-storage";
 import { escapeCsvCell } from "@/lib/utils/security";
@@ -49,6 +52,7 @@ import {
 } from "@/components/ui/dialog";
 
 export default function TransactionsPage() {
+  const router = useRouter();
   const { 
     transactions, 
     addTransaction, 
@@ -60,8 +64,21 @@ export default function TransactionsPage() {
     notifications,
     income,
     savingsGoals,
-    payDay
+    payDay,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionExpiresAt,
+    isAdminUser,
   } = useUIStore();
+
+  const subscriptionCountdown = getSubscriptionCountdownInfo({
+    planId: subscriptionPlan,
+    status: subscriptionStatus,
+    expiresAt: subscriptionExpiresAt,
+    isAdmin: isAdminUser,
+  });
+  const canExportReports =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "reports");
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
@@ -202,6 +219,17 @@ export default function TransactionsPage() {
   };
 
   const handleExportCSV = () => {
+    if (!canExportReports) {
+      toast.info("Export Excel / CSV réservé au Plan Entreprise & Pro.", {
+        description:
+          "Passez au plan Entreprise (2 500 FCFA/mois) pour exporter vos transactions en CSV.",
+        action: {
+          label: "Débloquer",
+          onClick: () => router.push("/settings?tab=subscription"),
+        },
+      });
+      return;
+    }
     if (transactions.length === 0) {
       toast.info("Aucune transaction à exporter.");
       return;
@@ -492,8 +520,19 @@ export default function TransactionsPage() {
               {transactions.length} opération{transactions.length > 1 ? "s" : ""} enregistrée{transactions.length > 1 ? "s" : ""} pour {capitalizedMonth}.
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={handleExportCSV} className="border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
-            <Download className="h-4 w-4 mr-2" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            suppressHydrationWarning
+            className="border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            title={canExportReports ? "Exporter CSV" : "Export CSV réservé au Plan Entreprise"}
+          >
+            {canExportReports ? (
+              <Download className="h-4 w-4 mr-2" />
+            ) : (
+              <Lock className="h-3.5 w-3.5 mr-2 text-amber-500" />
+            )}
             <span className="hidden sm:inline">Exporter CSV</span>
           </Button>
         </CardHeader>

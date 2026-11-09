@@ -25,7 +25,9 @@ import {
   FileJson,
   Database,
   CreditCard,
-  Crown
+  Crown,
+  Clock,
+  AlertTriangle
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
@@ -36,7 +38,7 @@ import { InstallButton } from "@/components/pwa/install-button";
 import { buildFullAccountExport, downloadJsonFile } from "@/lib/utils/account-export";
 import { getUserStorageKey } from "@/lib/utils/security";
 import { SubscriptionPlansWidget } from "@/components/payments/subscription-plans-widget";
-import { MONBUDGET_PLANS } from "@/lib/moneriz-plans";
+import { getSubscriptionCountdownInfo, MONBUDGET_PLANS } from "@/lib/moneriz-plans";
 
 type TabType = "profile" | "subscription" | "appearance" | "notifications" | "security";
 
@@ -85,11 +87,20 @@ export default function SettingsPage() {
     savingsGoals,
     debts,
     activeMonth,
+    isAdminUser,
     subscriptionPlan,
     billingCycle,
     subscriptionExpiresAt,
+    subscriptionStatus,
     refreshSubscription,
   } = useUIStore();
+
+  const subscriptionCountdown = getSubscriptionCountdownInfo({
+    planId: subscriptionPlan,
+    status: subscriptionStatus,
+    expiresAt: subscriptionExpiresAt,
+    isAdmin: isAdminUser,
+  });
 
   const [localAlert, setLocalAlert] = useState(80);
   const [localCurrency, setLocalCurrency] = useState("FCFA");
@@ -578,22 +589,50 @@ export default function SettingsPage() {
                 <CardContent className="space-y-6">
                   <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div suppressHydrationWarning className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#1E3A5F] text-white dark:bg-sky-500 dark:text-slate-950">
-                          Plan {MONBUDGET_PLANS[subscriptionPlan]?.name || "Gratuit"}
+                          {isAdminUser
+                            ? "Super-Admin (Accès illimité)"
+                            : `Plan ${MONBUDGET_PLANS[subscriptionCountdown.effectivePlanId]?.name || "Gratuit"}`}
                         </span>
-                        {billingCycle !== "none" && (
+                        {!isAdminUser && subscriptionCountdown.isPaidActive && billingCycle !== "none" && (
                           <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
                             • Cycle {billingCycle === "yearly" ? "Annuel (-2 mois offerts)" : "Mensuel"}
                           </span>
                         )}
+                        {!isAdminUser && subscriptionCountdown.isPaidActive && subscriptionCountdown.daysRemaining !== null && (
+                          <span
+                            className={`inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
+                              subscriptionCountdown.isExpiringSoon
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+                                : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
+                            }`}
+                          >
+                            <Clock className="h-3 w-3" />
+                            <span>
+                              {subscriptionCountdown.daysRemaining} jour{subscriptionCountdown.daysRemaining > 1 ? "s" : ""} restant{subscriptionCountdown.daysRemaining > 1 ? "s" : ""}
+                            </span>
+                          </span>
+                        )}
+                        {!isAdminUser && subscriptionCountdown.isExpired && (
+                          <span className="inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
+                            <AlertTriangle className="h-3 w-3" />
+                            <span>Abonnement expiré</span>
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-                        {subscriptionPlan === "free"
-                          ? "Accès aux Entrées et Dépenses uniquement. Passez au plan Particulier (1 000 FCFA/mois) ou Entreprise (2 500 FCFA/mois) pour débloquer Budget, Épargne, Dettes, Rapports et IA."
-                          : subscriptionExpiresAt
-                          ? `Valide jusqu'au ${new Date(subscriptionExpiresAt).toLocaleDateString("fr-FR")}`
-                          : "Abonnement actif"}
+                      <p suppressHydrationWarning className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+                        {isAdminUser
+                          ? "Votre compte Super-Administrateur bénéficie d'un accès complet permanent sans expiration."
+                          : subscriptionCountdown.isPaidActive
+                          ? subscriptionCountdown.formattedExpiresAt
+                            ? subscriptionCountdown.isExpiringSoon
+                              ? `Valide jusqu'au ${subscriptionCountdown.formattedExpiresAt}. Renouvelez bientôt pour éviter toute interruption.`
+                              : `Valide jusqu'au ${subscriptionCountdown.formattedExpiresAt} (renouvellement ou changement de formule possible à tout moment).`
+                            : "Abonnement actif."
+                          : subscriptionCountdown.isExpired
+                          ? `Votre dernier abonnement est arrivé à échéance${subscriptionCountdown.formattedExpiresAt ? ` le ${subscriptionCountdown.formattedExpiresAt}` : ""}. Votre compte est repassé sur le Plan Gratuit ; toutes vos données restent conservées.`
+                          : "Accès aux Entrées et Dépenses uniquement. Passez au plan Particulier (1 000 FCFA/mois) ou Entreprise (2 500 FCFA/mois) pour débloquer Budget, Épargne, Dettes, Rapports, Justificatifs et IA."}
                       </p>
                     </div>
                   </div>

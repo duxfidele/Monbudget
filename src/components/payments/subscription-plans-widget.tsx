@@ -13,9 +13,9 @@ import {
 } from "@/components/ui/dialog";
 import {
   BillingCycle,
+  getSubscriptionCountdownInfo,
   MONBUDGET_PLANS,
   PaidSubscriptionPlanId,
-  SubscriptionPlanId,
 } from "@/lib/moneriz-plans";
 import { useUIStore } from "@/lib/store/ui-store";
 import { MonerizLiveframe } from "@/components/payments/moneriz-liveframe";
@@ -30,7 +30,20 @@ export function SubscriptionPlansWidget({
   compact = false,
 }: SubscriptionPlansWidgetProps) {
   const router = useRouter();
-  const { subscriptionPlan, billingCycle: activeCycle } = useUIStore();
+  const {
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionExpiresAt,
+    isAdminUser,
+    billingCycle: activeCycle,
+  } = useUIStore();
+  const countdown = getSubscriptionCountdownInfo({
+    planId: subscriptionPlan,
+    status: subscriptionStatus,
+    expiresAt: subscriptionExpiresAt,
+    isAdmin: isAdminUser,
+  });
+  const effectivePlanId = countdown.effectivePlanId;
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("monthly");
   const [checkoutTarget, setCheckoutTarget] = useState<PaidSubscriptionPlanId | null>(null);
   const redirectTimerRef = useRef<number | null>(null);
@@ -95,8 +108,8 @@ export function SubscriptionPlansWidget({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
         {plansList.map((plan) => {
           const isCurrentPlan =
-            subscriptionPlan === plan.id &&
-            (plan.id === "free" || activeCycle === selectedCycle);
+            effectivePlanId === plan.id &&
+            (plan.id === "free" || (countdown.isPaidActive && activeCycle === selectedCycle));
           const isHighlighted =
             highlightPlan ? plan.id === highlightPlan : Boolean(plan.popular);
           const priceXof =
@@ -215,7 +228,7 @@ export function SubscriptionPlansWidget({
                     variant="outline"
                     className="w-full rounded-xl text-xs font-bold h-11"
                   >
-                    {subscriptionPlan === "free" ? "Formule Actuelle (Gratuit)" : "Inclus de base"}
+                    {effectivePlanId === "free" ? "Formule Actuelle (Gratuit)" : "Inclus de base"}
                   </Button>
                 ) : isCurrentPlan ? (
                   <Button

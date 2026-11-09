@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Wallet,
@@ -21,11 +22,19 @@ import {
   ArrowDownLeft,
   FileText,
   FileSpreadsheet,
+  Lock,
+  Clock,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuickAddTransactionDialog } from "@/components/transactions/quick-add-transaction-dialog";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
+import {
+  canAccessFeature,
+  getSubscriptionCountdownInfo,
+  MONBUDGET_PLANS,
+} from "@/lib/moneriz-plans";
 import { exportMonthlyReportCSV, exportMonthlyReportPDF } from "@/lib/utils/report-export";
 import {
   getTotalExpenses,
@@ -44,7 +53,34 @@ import {
 } from "@/lib/utils/budget-calc";
 
 export default function DashboardPage() {
-  const { income, incomeEntries, categories, transactions, savingsGoals, debts, currency, payDay, notifications, activeMonth } = useUIStore();
+  const router = useRouter();
+  const {
+    income,
+    incomeEntries,
+    categories,
+    transactions,
+    savingsGoals,
+    debts,
+    currency,
+    payDay,
+    notifications,
+    activeMonth,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionExpiresAt,
+    isAdminUser,
+  } = useUIStore();
+
+  const subscriptionCountdown = getSubscriptionCountdownInfo({
+    planId: subscriptionPlan,
+    status: subscriptionStatus,
+    expiresAt: subscriptionExpiresAt,
+    isAdmin: isAdminUser,
+  });
+  const canExportReports =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "reports");
+  const canAccessAdvisor =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "advisor");
 
   // 1. Calculs financiers purs et précis via budget-calc
   const epargneMois = getMonthlySavingsContributions(savingsGoals, activeMonth.year, activeMonth.month);
@@ -106,6 +142,17 @@ export default function DashboardPage() {
   const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
   const handleDownloadPDF = () => {
+    if (!canExportReports) {
+      toast.info("Export PDF réservé au Plan Entreprise & Pro.", {
+        description:
+          "Passez au plan Entreprise (2 500 FCFA/mois) pour générer vos bilans PDF officiels.",
+        action: {
+          label: "Débloquer",
+          onClick: () => router.push("/settings?tab=subscription"),
+        },
+      });
+      return;
+    }
     exportMonthlyReportPDF({
       monthLabel: capitalizedMonth,
       year: activeMonth.year,
@@ -122,6 +169,17 @@ export default function DashboardPage() {
   };
 
   const handleDownloadCSV = () => {
+    if (!canExportReports) {
+      toast.info("Export Excel / CSV réservé au Plan Entreprise & Pro.", {
+        description:
+          "Passez au plan Entreprise (2 500 FCFA/mois) pour télécharger vos rapports CSV.",
+        action: {
+          label: "Débloquer",
+          onClick: () => router.push("/settings?tab=subscription"),
+        },
+      });
+      return;
+    }
     exportMonthlyReportCSV({
       monthLabel: capitalizedMonth,
       year: activeMonth.year,
@@ -142,9 +200,43 @@ export default function DashboardPage() {
       {/* En-tête Mobile-First */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">
         <div>
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
-            Tableau de bord
-          </h2>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+              Tableau de bord
+            </h2>
+            <Link
+              href={isAdminUser ? "/admin" : "/settings?tab=subscription"}
+              suppressHydrationWarning
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-opacity hover:opacity-90 ${
+                isAdminUser
+                  ? "bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-800"
+                  : subscriptionCountdown.isPaidActive
+                  ? subscriptionCountdown.isExpiringSoon
+                    ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-700"
+                    : "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
+                  : subscriptionCountdown.isExpired
+                  ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800"
+                  : "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+              }`}
+            >
+              <Crown className="h-3 w-3 shrink-0" />
+              <span>
+                {isAdminUser
+                  ? "Super-Admin • Illimité"
+                  : subscriptionCountdown.isPaidActive
+                  ? `Plan ${MONBUDGET_PLANS[subscriptionCountdown.effectivePlanId].name}${
+                      subscriptionCountdown.daysRemaining !== null
+                        ? ` • ${subscriptionCountdown.daysRemaining}j restant${
+                            subscriptionCountdown.daysRemaining > 1 ? "s" : ""
+                          }`
+                        : ""
+                    }`
+                  : subscriptionCountdown.isExpired
+                  ? "Abonnement expiré • Plan Gratuit"
+                  : "Plan Gratuit • Débloquer"}
+              </span>
+            </Link>
+          </div>
           <p className="text-slate-500 dark:text-slate-400 mt-0.5 text-xs sm:text-sm">
             Gérez votre salaire au jour le jour pour terminer le mois sereinement.
           </p>
@@ -163,23 +255,98 @@ export default function DashboardPage() {
           <Button
             onClick={handleDownloadPDF}
             variant="outline"
-            className="border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 gap-1 text-xs h-10 px-3 rounded-xl shrink-0"
-            title="Télécharger le rapport PDF"
+            suppressHydrationWarning
+            className={`border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 gap-1 text-xs h-10 px-3 rounded-xl shrink-0 ${
+              !canExportReports ? "opacity-80" : ""
+            }`}
+            title={
+              canExportReports
+                ? "Télécharger le rapport PDF"
+                : "Export PDF réservé au Plan Entreprise & Pro"
+            }
           >
-            <FileText className="h-4 w-4 text-[#1E3A5F] dark:text-sky-400" />
+            {canExportReports ? (
+              <FileText className="h-4 w-4 text-[#1E3A5F] dark:text-sky-400" />
+            ) : (
+              <Lock className="h-3.5 w-3.5 text-amber-500" />
+            )}
             <span className="hidden sm:inline">PDF</span>
           </Button>
           <Button
             onClick={handleDownloadCSV}
             variant="outline"
-            className="border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 gap-1 text-xs h-10 px-3 rounded-xl shrink-0"
-            title="Télécharger le rapport Excel"
+            suppressHydrationWarning
+            className={`border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 gap-1 text-xs h-10 px-3 rounded-xl shrink-0 ${
+              !canExportReports ? "opacity-80" : ""
+            }`}
+            title={
+              canExportReports
+                ? "Télécharger le rapport Excel"
+                : "Export CSV réservé au Plan Entreprise & Pro"
+            }
           >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            {canExportReports ? (
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            ) : (
+              <Lock className="h-3.5 w-3.5 text-amber-500" />
+            )}
             <span className="hidden sm:inline">CSV</span>
           </Button>
         </div>
       </div>
+
+      {/* Alerte J-5 avant expiration ou notification d'expiration d'abonnement */}
+      {!isAdminUser && subscriptionCountdown.isExpiringSoon && (
+        <div
+          suppressHydrationWarning
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200"
+        >
+          <div className="flex items-center gap-3">
+            <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div className="text-xs md:text-sm">
+              <span className="font-bold">
+                Renouvellement imminent (J-{subscriptionCountdown.daysRemaining}) :{" "}
+              </span>
+              Votre abonnement{" "}
+              <strong>{MONBUDGET_PLANS[subscriptionCountdown.effectivePlanId].name}</strong> arrive à
+              échéance{" "}
+              {subscriptionCountdown.formattedExpiresAt
+                ? `le ${subscriptionCountdown.formattedExpiresAt}`
+                : "bientôt"}
+              . Renouvelez pour conserver vos enveloppes, épargne, dettes, rapports et Conseiller IA.
+            </div>
+          </div>
+          <Link href="/settings?tab=subscription" className="shrink-0">
+            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold">
+              Renouveler maintenant
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {!isAdminUser && subscriptionCountdown.isExpired && (
+        <div
+          suppressHydrationWarning
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-900 dark:text-rose-200"
+        >
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0" />
+            <div className="text-xs md:text-sm">
+              <span className="font-bold">Abonnement expiré : </span>
+              Votre précédent plan a pris fin
+              {subscriptionCountdown.formattedExpiresAt
+                ? ` le ${subscriptionCountdown.formattedExpiresAt}`
+                : ""}
+              . Votre compte utilise actuellement le <strong>Plan Gratuit</strong> (vos données restent sauvegardées).
+            </div>
+          </div>
+          <Link href="/settings?tab=subscription" className="shrink-0">
+            <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold">
+              Réactiver mon plan
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Bannière de rappel du jour de paie si activée */}
       {notifications?.payDayReminder !== false && dailyInfo.daysRemaining <= (notifications?.payDayReminderDays || 7) && !dailyInfo.isPayDayToday && (
@@ -504,65 +671,97 @@ export default function DashboardPage() {
                   </CardDescription>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-bold text-emerald-300">
-                  Santé : {aiAnalysis.healthScore}/100 ({aiAnalysis.healthLabel})
+              {canAccessAdvisor ? (
+                <div className="flex items-center gap-2">
+                  <div className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-bold text-emerald-300">
+                    Santé : {aiAnalysis.healthScore}/100 ({aiAnalysis.healthLabel})
+                  </div>
+                  <Link href="/advisor">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 text-xs bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold"
+                    >
+                      Conseiller IA &rarr;
+                    </Button>
+                  </Link>
                 </div>
-                <Link href="/advisor">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-7 text-xs bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold"
-                  >
-                    Conseiller IA &rarr;
-                  </Button>
-                </Link>
-              </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-bold">
+                  <Lock className="h-3.5 w-3.5" />
+                  <span>Plan Entreprise</span>
+                </div>
+              )}
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-xs text-slate-200 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/10">
-              {aiAnalysis.summary}
-            </p>
-            <div className="space-y-2">
-              {aiAnalysis.recommendations.slice(0, 3).map((rec) => (
-                <div
-                  key={rec.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-white/10 border border-white/10"
-                >
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`w-2 h-2 rounded-full ${rec.priority === "high"
-                            ? "bg-rose-400"
-                            : rec.priority === "medium"
-                              ? "bg-amber-300"
-                              : "bg-sky-300"
-                          }`}
-                      />
-                      <span className="text-xs font-bold text-white">{rec.title}</span>
+            {canAccessAdvisor ? (
+              <>
+                <p className="text-xs text-slate-200 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/10">
+                  {aiAnalysis.summary}
+                </p>
+                <div className="space-y-2">
+                  {aiAnalysis.recommendations.slice(0, 3).map((rec) => (
+                    <div
+                      key={rec.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-white/10 border border-white/10"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2 h-2 rounded-full ${rec.priority === "high"
+                                ? "bg-rose-400"
+                                : rec.priority === "medium"
+                                  ? "bg-amber-300"
+                                  : "bg-sky-300"
+                              }`}
+                          />
+                          <span className="text-xs font-bold text-white">{rec.title}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 leading-snug">{rec.description}</p>
+                      </div>
+                      {rec.actionHref && (
+                        <Link href={rec.actionHref} className="shrink-0 self-end sm:self-center">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-7 text-[11px] bg-white text-[#1E3A5F] hover:bg-slate-100 font-semibold"
+                          >
+                            {rec.actionLabel || "Agir"}
+                          </Button>
+                        </Link>
+                      )}
                     </div>
-                    <p className="text-[11px] text-slate-300 leading-snug">{rec.description}</p>
-                  </div>
-                  {rec.actionHref && (
-                    <Link href={rec.actionHref} className="shrink-0 self-end sm:self-center">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-7 text-[11px] bg-white text-[#1E3A5F] hover:bg-slate-100 font-semibold"
-                      >
-                        {rec.actionLabel || "Agir"}
-                      </Button>
-                    </Link>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
-            {debtAlerts.length > 0 && (
-              <div className="text-[11px] text-amber-300 flex items-center justify-between pt-1">
-                <span>🔔 {debtAlerts.length} alerte(s) d&apos;échéance de dette active(s)</span>
-                <Link href="/debts" className="underline hover:text-white">
-                  Voir les échéances &rarr;
+                {debtAlerts.length > 0 && (
+                  <div className="text-[11px] text-amber-300 flex items-center justify-between pt-1">
+                    <span>🔔 {debtAlerts.length} alerte(s) d&apos;échéance de dette active(s)</span>
+                    <Link href="/debts" className="underline hover:text-white">
+                      Voir les échéances &rarr;
+                    </Link>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="p-5 rounded-2xl bg-white/5 border border-white/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <p className="text-sm font-bold text-white flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-300 shrink-0" />
+                    <span>Débloquez votre Conseiller Financier IA personnalisé</span>
+                  </p>
+                  <p className="text-xs text-slate-300 leading-relaxed max-w-lg">
+                    Obtenez votre score de santé financière /100, un simulateur de fin de mois et des plans d&apos;action en 1 clic avec le <strong>Plan Entreprise &amp; Pro</strong> (2 500 FCFA/mois).
+                  </p>
+                </div>
+                <Link href="/settings?tab=subscription" className="shrink-0">
+                  <Button
+                    size="sm"
+                    className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl gap-1.5"
+                  >
+                    <Crown className="h-3.5 w-3.5" />
+                    <span>Passer à Entreprise</span>
+                  </Button>
                 </Link>
               </div>
             )}

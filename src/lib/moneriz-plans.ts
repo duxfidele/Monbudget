@@ -1,6 +1,21 @@
 export type SubscriptionPlanId = "free" | "personal" | "business";
 export type PaidSubscriptionPlanId = "personal" | "business";
 export type BillingCycle = "monthly" | "yearly";
+export type SubscriptionStatus = "active" | "canceled" | "expired";
+
+export interface SubscriptionCountdownInfo {
+  effectivePlanId: SubscriptionPlanId;
+  rawPlanId: SubscriptionPlanId;
+  status: SubscriptionStatus;
+  isPaidPlan: boolean;
+  isPaidActive: boolean;
+  isExpired: boolean;
+  isExpiringSoon: boolean;
+  daysRemaining: number | null;
+  hoursRemaining: number | null;
+  expiresAtMs: number | null;
+  formattedExpiresAt: string | null;
+}
 
 export interface PlanPricingTier {
   id: SubscriptionPlanId;
@@ -35,6 +50,7 @@ export const MONBUDGET_PLANS: Record<SubscriptionPlanId, PlanPricingTier> = {
       "Objectifs d'épargne & Cagnottes",
       "Suivi des Dettes & Créances",
       "Rapports avancés & Exports PDF/CSV",
+      "Stockage de reçus & justificatifs de dépenses",
       "Conseiller Financier IA",
     ],
   },
@@ -56,6 +72,7 @@ export const MONBUDGET_PLANS: Record<SubscriptionPlanId, PlanPricingTier> = {
     ],
     lockedFeatures: [
       "Rapports financiers avancés & Exports PDF/CSV",
+      "Stockage de reçus & justificatifs de dépenses",
       "Conseiller Financier IA personnalisé",
     ],
   },
@@ -84,7 +101,8 @@ export type ProtectedFeatureKey =
   | "savings"
   | "debts"
   | "reports"
-  | "advisor";
+  | "advisor"
+  | "receipts";
 
 const FEATURE_REQUIRED_PLAN: Record<ProtectedFeatureKey, PaidSubscriptionPlanId> = {
   budget: "personal",
@@ -92,6 +110,7 @@ const FEATURE_REQUIRED_PLAN: Record<ProtectedFeatureKey, PaidSubscriptionPlanId>
   debts: "personal",
   reports: "business",
   advisor: "business",
+  receipts: "business",
 };
 
 const PLAN_RANK: Record<SubscriptionPlanId, number> = {
@@ -99,6 +118,127 @@ const PLAN_RANK: Record<SubscriptionPlanId, number> = {
   personal: 1,
   business: 2,
 };
+
+function formatUtcDateFr(ms: number): string {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(ms));
+}
+
+/**
+ * Calcule le décompte de validité d'un abonnement et retourne le plan effectif.
+ * Un plan payant expiré (currentPeriodEnd <= now) ou inactif retombe immédiatement sur "free".
+ * Les Super-Administrateurs ne subissent jamais d'expiration.
+ */
+export function getSubscriptionCountdownInfo(params: {
+  planId?: SubscriptionPlanId | null;
+  status?: SubscriptionStatus | null;
+  expiresAt?: string | null;
+  isAdmin?: boolean;
+  now?: number | Date;
+}): SubscriptionCountdownInfo {
+  const nowMs =
+    typeof params.now === "number"
+      ? params.now
+      : params.now instanceof Date
+      ? params.now.getTime()
+      : Date.now();
+
+  if (params.isAdmin) {
+    return {
+      effectivePlanId: "business",
+      rawPlanId: "business",
+      status: "active",
+      isPaidPlan: true,
+      isPaidActive: true,
+      isExpired: false,
+      isExpiringSoon: false,
+      daysRemaining: null,
+      hoursRemaining: null,
+      expiresAtMs: null,
+      formattedExpiresAt: null,
+    };
+  }
+
+  const rawPlanId: SubscriptionPlanId = params.planId || "free";
+  const rawStatus: SubscriptionStatus = params.status || "active";
+  const parsedExpiresMs = params.expiresAt ? Date.parse(params.expiresAt) : NaN;
+  const hasValidExpiry = Boolean(params.expiresAt && Number.isFinite(parsedExpiresMs));
+  const hasInvalidExpiry = Boolean(params.expiresAt && !Number.isFinite(parsedExpiresMs));
+  const expiresAtMs = hasValidExpiry ? parsedExpiresMs : null;
+  const formattedExpiresAt = expiresAtMs !== null ? formatUtcDateFr(expiresAtMs) : null;
+
+  if (rawPlanId === "free") {
+    const expiredMarker =
+      rawStatus === "expired" || (expiresAtMs !== null && expiresAtMs <= nowMs);
+    return {
+      effectivePlanId: "free",
+      rawPlanId: "free",
+      status: rawStatus === "canceled" ? "canceled" : expiredMarker ? "expired" : "active",
+      isPaidPlan: false,
+      isPaidActive: false,
+      isExpired: expiredMarker,
+      isExpiringSoon: false,
+      daysRemaining: expiresAtMs !== null && expiredMarker ? 0 : null,
+      hoursRemaining: expiresAtMs !== null && expiredMarker ? 0 : null,
+      expiresAtMs,
+      formattedExpiresAt,
+    };
+  }
+
+  const isDateExpired = expiresAtMs !== null && expiresAtMs <= nowMs;
+  if (rawStatus !== "active" || isDateExpired || hasInvalidExpiry) {
+    return {
+      effectivePlanId: "free",
+      rawPlanId,
+      status: rawStatus === "canceled" ? "canceled" : "expired",
+      isPaidPlan: false,
+      isPaidActive: false,
+      isExpired: true,
+      isExpiringSoon: false,
+      daysRemaining: expiresAtMs !== null ? 0 : null,
+      hoursRemaining: expiresAtMs !== null ? 0 : null,
+      expiresAtMs,
+      formattedExpiresAt,
+    };
+  }
+
+  if (expiresAtMs !== null) {
+    const diffMs = Math.max(0, expiresAtMs - nowMs);
+    const daysRemaining = Math.max(1, Math.ceil(diffMs / 86_400_000));
+    const hoursRemaining = Math.max(1, Math.ceil(diffMs / 3_600_000));
+    return {
+      effectivePlanId: rawPlanId,
+      rawPlanId,
+      status: "active",
+      isPaidPlan: true,
+      isPaidActive: true,
+      isExpired: false,
+      isExpiringSoon: daysRemaining <= 5,
+      daysRemaining,
+      hoursRemaining,
+      expiresAtMs,
+      formattedExpiresAt,
+    };
+  }
+
+  return {
+    effectivePlanId: rawPlanId,
+    rawPlanId,
+    status: "active",
+    isPaidPlan: true,
+    isPaidActive: true,
+    isExpired: false,
+    isExpiringSoon: false,
+    daysRemaining: null,
+    hoursRemaining: null,
+    expiresAtMs: null,
+    formattedExpiresAt: null,
+  };
+}
 
 /**
  * Vérifie si un plan donné autorise l'accès à une fonctionnalité.
