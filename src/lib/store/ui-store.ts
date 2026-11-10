@@ -17,6 +17,30 @@ import {
   SubscriptionPlanId,
   SubscriptionStatus,
 } from "@/lib/moneriz-plans";
+import {
+  appendOfflineAuditLog,
+  clearOutboxEntriesForEntity,
+  closeAndDeleteUserOfflineDb,
+  ConflictRecord,
+  enqueueOutboxEntry,
+  exportOfflineBackupPackage,
+  listOutboxEntries,
+  listSyncConflicts,
+  OFFLINE_DB_SCHEMA_VERSION,
+  readOfflineSnapshot,
+  resolveSyncConflict,
+  verifyAndRestoreOfflineBackupPackage,
+  writeOfflineSnapshot,
+} from "@/lib/offline/db";
+import {
+  checkServerReachability,
+  ensureValidUuid,
+  migrateLegacyCacheToIndexedDb,
+  processOutboxQueue,
+  reconcileRecordsWithConflictDetection,
+  requestBackgroundSync,
+  SyncEngineState,
+} from "@/lib/offline/sync-engine";
 
 export type InAppNotificationType =
   | "welcome_trial"
@@ -74,6 +98,7 @@ export type Transaction = {
   linkedContributionId?: string;
   receiptUrl?: string;
   receiptName?: string;
+  pendingSync?: boolean;
 };
 
 export type SavingsContribution = {
@@ -96,6 +121,7 @@ export type SavingsGoal = {
 };
 
 export interface MonthData {
+  budgetId?: string | null;
   baseSalary: number;
   income: number;
   incomeEntries?: IncomeSourceEntry[];
@@ -173,15 +199,28 @@ interface UIState {
 
   // Offline & PWA Sync Engine
   isOnline: boolean;
+  syncStatus: SyncEngineState;
   pendingSyncCount: number;
+  pendingEntityIds: string[];
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+  unresolvedConflictsCount: number;
+  syncConflicts: ConflictRecord[];
   canInstallPwa: boolean;
   isPwaInstalled: boolean;
   setOnlineStatus: (online: boolean) => void;
   setDeferredPrompt: (prompt: any) => void;
   setAppInstalled: () => void;
   installPwa: () => Promise<boolean>;
-  syncPendingQueue: () => Promise<number>;
+  syncPendingQueue: (force?: boolean, quietIfSingle?: boolean) => Promise<number>;
   enqueueSyncAction: (action: Omit<PendingSyncAction, "id" | "timestamp">) => void;
+  refreshOfflineDiagnostics: () => Promise<void>;
+  resolveConflictChoice: (
+    conflictId: string,
+    choice: "keep_local" | "keep_remote" | "dismiss"
+  ) => Promise<void>;
+  exportOfflineBackup: () => Promise<void>;
+  restoreOfflineBackup: (jsonText: string) => Promise<{ ok: boolean; error?: string }>;
 
   // Global Data
   budget_id: string | null;
@@ -348,11 +387,55 @@ function loadLocalCache(uid?: string | null): LocalCache | null {
 
 function saveLocalCache(cache: LocalCache, uid?: string | null) {
   if (typeof window === "undefined") return;
+  const effectiveUid = uid ?? activeUserId;
   try {
-    const key = getStorageKey(uid);
+    const key = getStorageKey(effectiveUid);
     localStorage.setItem(key, JSON.stringify(cache));
   } catch (err) {
     console.warn("Could not save to localStorage", err);
+  }
+  if (effectiveUid) {
+    const monthsRecord: Record<
+      string,
+      {
+        monthKey: string;
+        baseSalary: number;
+        income: number;
+        incomeEntries?: IncomeSourceEntry[];
+        categories: Category[];
+        transactions: Transaction[];
+        updatedAt?: string;
+      }
+    > = {};
+    for (const [mKey, mVal] of Object.entries(cache.months || {})) {
+      monthsRecord[mKey] = {
+        monthKey: mKey,
+        baseSalary: mVal.baseSalary,
+        income: mVal.income,
+        incomeEntries: mVal.incomeEntries,
+        categories: mVal.categories,
+        transactions: mVal.transactions,
+      };
+    }
+    void writeOfflineSnapshot(effectiveUid, {
+      schemaVersion: OFFLINE_DB_SCHEMA_VERSION,
+      userId: effectiveUid,
+      currency: cache.currency || "FCFA",
+      payDay: cache.payDay || 28,
+      alertThreshold: cache.alertThreshold || 80,
+      fullName: cache.fullName,
+      notifications: cache.notifications,
+      months: monthsRecord,
+      savingsGoals: cache.savingsGoals || [],
+      debts: cache.debts || [],
+      subscriptionPlan: cache.subscriptionPlan,
+      billingCycle: cache.billingCycle,
+      subscriptionExpiresAt: cache.subscriptionExpiresAt ?? null,
+      subscriptionTrialEndsAt: cache.subscriptionTrialEndsAt ?? null,
+      trialChoiceMadeAt: cache.trialChoiceMadeAt ?? null,
+      subscriptionStatus: cache.subscriptionStatus,
+      updatedAt: new Date().toISOString(),
+    });
   }
 }
 
@@ -391,6 +474,7 @@ function canModifyPaidFeature(
 export const useUIStore = create<UIState>((set, get) => ({
   userId: activeUserId,
   resetStore: () => {
+    const prevUserId = activeUserId;
     if (typeof window !== "undefined") {
       try {
         const currentKey = getStorageKey();
@@ -398,6 +482,9 @@ export const useUIStore = create<UIState>((set, get) => ({
         localStorage.removeItem("monbudget_local_cache_v3");
         localStorage.removeItem("monbudget_local_cache_anon");
       } catch {}
+    }
+    if (prevUserId) {
+      void closeAndDeleteUserOfflineDb(prevUserId);
     }
     activeUserId = null;
     set({
@@ -425,6 +512,13 @@ export const useUIStore = create<UIState>((set, get) => ({
       subscriptionStatus: "active",
       inAppNotifications: [],
       unreadNotificationsCount: 0,
+      syncStatus: "idle",
+      pendingSyncCount: 0,
+      pendingEntityIds: [],
+      lastSyncedAt: null,
+      lastSyncError: null,
+      unresolvedConflictsCount: 0,
+      syncConflicts: [],
     });
   },
 
@@ -658,12 +752,26 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   // Offline & PWA Sync State
   isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+  syncStatus:
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "idle",
   pendingSyncCount: initialCache?.pendingSyncQueue?.length || 0,
+  pendingEntityIds: [],
+  lastSyncedAt: null,
+  lastSyncError: null,
+  unresolvedConflictsCount: 0,
+  syncConflicts: [],
   canInstallPwa: false,
   isPwaInstalled: false,
 
   setOnlineStatus: (online) => {
-    set({ isOnline: online });
+    set((state) => ({
+      isOnline: online,
+      syncStatus: !online
+        ? "offline"
+        : state.syncStatus === "offline"
+        ? "idle"
+        : state.syncStatus,
+    }));
   },
 
   setDeferredPrompt: (prompt) => {
@@ -695,6 +803,469 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
   },
 
+  refreshOfflineDiagnostics: async () => {
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+    const [outbox, conflicts, snapshot] = await Promise.all([
+      listOutboxEntries(uid),
+      listSyncConflicts(uid, true),
+      readOfflineSnapshot(uid),
+    ]);
+    const entityIds = Array.from(new Set(outbox.map((o) => o.entityId)));
+    const hasAuthPaused = outbox.some((o) => o.status === "auth_paused");
+    const failedOp = outbox.find((o) => o.status === "failed");
+
+    if (!get().isOnline && outbox.length > 0) {
+      void requestBackgroundSync();
+    }
+
+    set((state) => ({
+      pendingSyncCount: outbox.length,
+      pendingEntityIds: entityIds,
+      unresolvedConflictsCount: conflicts.length,
+      syncConflicts: conflicts,
+      lastSyncedAt: snapshot?.lastSuccessfulSyncAt || state.lastSyncedAt,
+      lastSyncError: failedOp?.lastError || (hasAuthPaused ? "Session expirée — reconnexion requise." : null),
+      syncStatus: !state.isOnline
+        ? "offline"
+        : hasAuthPaused
+        ? "auth_expired"
+        : failedOp
+        ? "error"
+        : state.syncStatus === "syncing"
+        ? "syncing"
+        : "idle",
+      transactions: state.transactions.map((tx) => ({
+        ...tx,
+        pendingSync: entityIds.includes(tx.id),
+      })),
+    }));
+  },
+
+  resolveConflictChoice: async (conflictId, choice) => {
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    const allConflicts = await listSyncConflicts(uid, false);
+    const conflict = allConflicts.find((c) => c.id === conflictId);
+    if (!conflict) {
+      await get().refreshOfflineDiagnostics();
+      return;
+    }
+
+    if (choice === "dismiss") {
+      await resolveSyncConflict(uid, conflictId, "manual_review");
+      await appendOfflineAuditLog(uid, {
+        level: "info",
+        event: "conflict_dismissed",
+        details: `Conflit [${conflict.entityType}] « ${conflict.label} » marqué comme révisé.`,
+      });
+      await get().refreshOfflineDiagnostics();
+      toast.info("Conflit marqué comme révisé.");
+      return;
+    }
+
+    const target = choice === "keep_local" ? conflict.localData : conflict.remoteData;
+    if (!target) {
+      await resolveSyncConflict(uid, conflictId, "manual_review");
+      await get().refreshOfflineDiagnostics();
+      return;
+    }
+
+    const isDeletedVersion = Boolean(target._deleted || target.deletedAt);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cleanObj: Record<string, any> = { ...target };
+    delete cleanObj._deleted;
+    delete cleanObj.deletedAt;
+    delete cleanObj.updatedAt;
+
+    const curState = get();
+    const curMonthKey = getMonthKey(curState.activeMonth.year, curState.activeMonth.month);
+    const fallbackDateStr =
+      typeof cleanObj.date === "string"
+        ? cleanObj.date
+        : typeof cleanObj.transaction_date === "string"
+        ? cleanObj.transaction_date
+        : typeof cleanObj.received_date === "string"
+        ? cleanObj.received_date
+        : null;
+    const derivedMonthKey =
+      conflict.monthKey ||
+      (fallbackDateStr && /^\d{4}-\d{2}/.test(fallbackDateStr)
+        ? fallbackDateStr.slice(0, 7)
+        : curMonthKey);
+    const [mYearStr, mMonthStr] = derivedMonthKey.split("-");
+    const targetYear = Number(mYearStr) || curState.activeMonth.year;
+    const targetMonth = Number(mMonthStr) || curState.activeMonth.month;
+
+    const snapshot = await readOfflineSnapshot(uid);
+    const cache = loadLocalCache(uid);
+    const nextSnapshot = snapshot || {
+      schemaVersion: OFFLINE_DB_SCHEMA_VERSION,
+      userId: uid,
+      currency: curState.currency,
+      payDay: curState.payDay,
+      alertThreshold: curState.alertThreshold,
+      months: {},
+      savingsGoals: curState.savingsGoals,
+      debts: curState.debts,
+      updatedAt: new Date().toISOString(),
+    };
+    if (!nextSnapshot.months) nextSnapshot.months = {};
+
+    const nowIso = new Date().toISOString();
+    await clearOutboxEntriesForEntity(uid, conflict.entityId);
+
+    if (conflict.entityType === "transaction") {
+      const existingMonth = nextSnapshot.months[derivedMonthKey] ||
+        cache?.months?.[derivedMonthKey] || {
+          monthKey: derivedMonthKey,
+          budgetId: derivedMonthKey === curMonthKey ? curState.budget_id : null,
+          baseSalary: derivedMonthKey === curMonthKey ? curState.baseSalary : 0,
+          income: derivedMonthKey === curMonthKey ? curState.income : 0,
+          incomeEntries: derivedMonthKey === curMonthKey ? curState.incomeEntries : [],
+          categories: derivedMonthKey === curMonthKey ? curState.categories : [],
+          transactions: derivedMonthKey === curMonthKey ? curState.transactions : [],
+        };
+
+      const sourceTxs: Transaction[] =
+        derivedMonthKey === curMonthKey
+          ? curState.transactions
+          : existingMonth.transactions || [];
+      const sourceBaseSalary =
+        derivedMonthKey === curMonthKey
+          ? curState.baseSalary
+          : existingMonth.baseSalary || 0;
+
+      const rawType = cleanObj.type;
+      const normType: "income" | "expense" =
+        rawType === "income" || rawType === "income_adjustment" ? "income" : "expense";
+      const normalizedTx: Transaction = {
+        id: String(cleanObj.id || conflict.entityId),
+        label: String(
+          cleanObj.label ??
+            cleanObj.description ??
+            (normType === "income" ? "Revenu complémentaire" : "Dépense")
+        ),
+        amount: Number(cleanObj.amount) || 0,
+        category: String(
+          cleanObj.category || (normType === "income" ? "Revenu" : "Autre (Hors Budget)")
+        ),
+        category_id: cleanObj.category_id ? String(cleanObj.category_id) : undefined,
+        date: String(
+          cleanObj.date ?? cleanObj.transaction_date ?? new Date().toISOString().split("T")[0]
+        ),
+        type: normType,
+        linkedDebtId: cleanObj.linkedDebtId,
+        linkedPaymentId: cleanObj.linkedPaymentId,
+        linkedSavingsGoalId: cleanObj.linkedSavingsGoalId,
+        linkedContributionId: cleanObj.linkedContributionId,
+        receiptUrl: cleanObj.receiptUrl,
+        receiptName: cleanObj.receiptName,
+        pendingSync: !isDeletedVersion,
+      };
+
+      const nextTxs = isDeletedVersion
+        ? sourceTxs.filter((t) => t.id !== conflict.entityId)
+        : sourceTxs.some((t) => t.id === normalizedTx.id)
+        ? sourceTxs.map((t) => (t.id === normalizedTx.id ? normalizedTx : t))
+        : [normalizedTx, ...sourceTxs].sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+
+      const additionalIncomes = nextTxs
+        .filter((t) => t.type === "income" || t.type === "income_adjustment")
+        .reduce((s, t) => s + Number(t.amount || 0), 0);
+      const nextIncome = sourceBaseSalary + additionalIncomes;
+
+      if (derivedMonthKey === curMonthKey) {
+        set({ transactions: nextTxs, income: nextIncome });
+      }
+
+      nextSnapshot.months[derivedMonthKey] = {
+        ...existingMonth,
+        monthKey: derivedMonthKey,
+        transactions: nextTxs,
+        income: nextIncome,
+        updatedAt: nowIso,
+      };
+      if (cache) {
+        cache.months[derivedMonthKey] = {
+          ...(cache.months[derivedMonthKey] || existingMonth),
+          transactions: nextTxs,
+          income: nextIncome,
+        };
+      }
+
+      if (isDeletedVersion) {
+        await enqueueOutboxEntry(uid, {
+          entityType: "transaction",
+          entityId: conflict.entityId,
+          monthKey: derivedMonthKey,
+          type: "delete_transaction",
+          payload: { id: conflict.entityId },
+          clientUpdatedAt: nowIso,
+        });
+      } else {
+        let catId = normalizedTx.category_id || null;
+        if (!catId && normType !== "income") {
+          const matchedCat = (existingMonth.categories || []).find(
+            (c: Category) => c.name.trim().toLowerCase() === normalizedTx.category.trim().toLowerCase()
+          );
+          if (matchedCat && UUID_REGEX.test(matchedCat.id)) {
+            catId = matchedCat.id;
+          }
+        }
+        await enqueueOutboxEntry(uid, {
+          entityType: "transaction",
+          entityId: normalizedTx.id,
+          monthKey: derivedMonthKey,
+          type: "upsert_transaction",
+          payload: {
+            id: normalizedTx.id,
+            monthly_budget_id: existingMonth.budgetId || null,
+            year: targetYear,
+            month: targetMonth,
+            category_id: normType === "income" ? null : catId,
+            amount: normalizedTx.amount,
+            description: normalizedTx.label,
+            transaction_date: normalizedTx.date,
+            type: normType === "income" ? "income_adjustment" : "expense",
+          },
+          clientUpdatedAt: nowIso,
+        });
+      }
+    } else if (conflict.entityType === "income_entry") {
+      const existingMonth = nextSnapshot.months[derivedMonthKey] ||
+        cache?.months?.[derivedMonthKey] || {
+          monthKey: derivedMonthKey,
+          budgetId: derivedMonthKey === curMonthKey ? curState.budget_id : null,
+          baseSalary: derivedMonthKey === curMonthKey ? curState.baseSalary : 0,
+          income: derivedMonthKey === curMonthKey ? curState.income : 0,
+          incomeEntries: derivedMonthKey === curMonthKey ? curState.incomeEntries : [],
+          categories: derivedMonthKey === curMonthKey ? curState.categories : [],
+          transactions: derivedMonthKey === curMonthKey ? curState.transactions : [],
+        };
+
+      const sourceEntries: IncomeSourceEntry[] =
+        derivedMonthKey === curMonthKey
+          ? curState.incomeEntries
+          : existingMonth.incomeEntries || [];
+      const sourceTxs: Transaction[] =
+        derivedMonthKey === curMonthKey
+          ? curState.transactions
+          : existingMonth.transactions || [];
+
+      const normalizedInc: IncomeSourceEntry = {
+        id: String(cleanObj.id || conflict.entityId),
+        label: String(cleanObj.label || "Revenu"),
+        sourceType: String(cleanObj.sourceType ?? cleanObj.source_type ?? "Salaire"),
+        amount: Number(cleanObj.amount) || 0,
+        date: cleanObj.date ?? cleanObj.received_date ?? undefined,
+      };
+
+      const nextEntries = isDeletedVersion
+        ? sourceEntries.filter((e) => e.id !== conflict.entityId)
+        : sourceEntries.some((e) => e.id === normalizedInc.id)
+        ? sourceEntries.map((e) => (e.id === normalizedInc.id ? normalizedInc : e))
+        : [...sourceEntries, normalizedInc];
+
+      const nextBaseSalary = nextEntries.reduce((s, e) => s + Number(e.amount || 0), 0);
+      const additionalIncomes = sourceTxs
+        .filter((t) => t.type === "income" || t.type === "income_adjustment")
+        .reduce((s, t) => s + Number(t.amount || 0), 0);
+      const nextIncome = nextBaseSalary + additionalIncomes;
+
+      if (derivedMonthKey === curMonthKey) {
+        set({
+          incomeEntries: nextEntries,
+          baseSalary: nextBaseSalary,
+          income: nextIncome,
+        });
+      }
+
+      nextSnapshot.months[derivedMonthKey] = {
+        ...existingMonth,
+        monthKey: derivedMonthKey,
+        incomeEntries: nextEntries,
+        baseSalary: nextBaseSalary,
+        income: nextIncome,
+        updatedAt: nowIso,
+      };
+      if (cache) {
+        cache.months[derivedMonthKey] = {
+          ...(cache.months[derivedMonthKey] || existingMonth),
+          incomeEntries: nextEntries,
+          baseSalary: nextBaseSalary,
+          income: nextIncome,
+        };
+      }
+
+      if (isDeletedVersion) {
+        await enqueueOutboxEntry(uid, {
+          entityType: "income_entry",
+          entityId: conflict.entityId,
+          monthKey: derivedMonthKey,
+          type: "delete_income_entry",
+          payload: { id: conflict.entityId },
+          clientUpdatedAt: nowIso,
+        });
+      } else {
+        await enqueueOutboxEntry(uid, {
+          entityType: "income_entry",
+          entityId: normalizedInc.id,
+          monthKey: derivedMonthKey,
+          type: "upsert_income_entry",
+          payload: {
+            id: normalizedInc.id,
+            monthly_budget_id: existingMonth.budgetId || null,
+            year: targetYear,
+            month: targetMonth,
+            label: normalizedInc.label,
+            source_type: normalizedInc.sourceType,
+            amount: normalizedInc.amount,
+            received_date: normalizedInc.date || new Date().toISOString().split("T")[0],
+          },
+          clientUpdatedAt: nowIso,
+        });
+      }
+    } else if (conflict.entityType === "savings_goal") {
+      const normalizedGoal: SavingsGoal = {
+        id: String(cleanObj.id || conflict.entityId),
+        name: String(cleanObj.name || "Objectif d'épargne"),
+        target: Number(cleanObj.target ?? cleanObj.target_amount) || 0,
+        current: Number(cleanObj.current ?? cleanObj.current_amount) || 0,
+        color: String(cleanObj.color || "bg-blue-500"),
+        target_date: cleanObj.target_date ?? undefined,
+        status: (cleanObj.status as "active" | "completed" | "paused") || "active",
+        contributions: Array.isArray(cleanObj.contributions) ? cleanObj.contributions : [],
+      };
+
+      const nextGoals = isDeletedVersion
+        ? curState.savingsGoals.filter((g) => g.id !== conflict.entityId)
+        : curState.savingsGoals.some((g) => g.id === normalizedGoal.id)
+        ? curState.savingsGoals.map((g) => (g.id === normalizedGoal.id ? normalizedGoal : g))
+        : [normalizedGoal, ...curState.savingsGoals];
+
+      set({ savingsGoals: nextGoals });
+      nextSnapshot.savingsGoals = nextGoals;
+      if (cache) cache.savingsGoals = nextGoals;
+
+      if (isDeletedVersion) {
+        await enqueueOutboxEntry(uid, {
+          entityType: "savings_goal",
+          entityId: conflict.entityId,
+          type: "delete_savings_goal",
+          payload: { id: conflict.entityId },
+          clientUpdatedAt: nowIso,
+        });
+      } else {
+        await enqueueOutboxEntry(uid, {
+          entityType: "savings_goal",
+          entityId: normalizedGoal.id,
+          type: "upsert_savings_goal",
+          payload: {
+            id: normalizedGoal.id,
+            name: normalizedGoal.name,
+            target_amount: normalizedGoal.target,
+            current_amount: normalizedGoal.current,
+            color: normalizedGoal.color,
+            target_date: normalizedGoal.target_date || null,
+            status: normalizedGoal.status,
+          },
+          clientUpdatedAt: nowIso,
+        });
+      }
+    } else if (conflict.entityType === "debt") {
+      const normalizedDebt: DebtItem = {
+        id: String(cleanObj.id || conflict.entityId),
+        type: cleanObj.type === "receivable" ? "receivable" : "payable",
+        personName: String(cleanObj.personName ?? cleanObj.person_name ?? "Contact"),
+        phone: cleanObj.phone ?? undefined,
+        totalAmount: Number(cleanObj.totalAmount ?? cleanObj.total_amount) || 0,
+        remainingAmount:
+          Number(
+            cleanObj.remainingAmount ??
+              cleanObj.remaining_amount ??
+              cleanObj.totalAmount ??
+              cleanObj.total_amount
+          ) || 0,
+        dueDate: cleanObj.dueDate ?? cleanObj.due_date ?? undefined,
+        status: (cleanObj.status as "pending" | "partial" | "paid") || "pending",
+        notes: cleanObj.notes ?? undefined,
+        payments: Array.isArray(cleanObj.payments) ? cleanObj.payments : [],
+        createdAt: String(cleanObj.createdAt ?? cleanObj.created_at ?? nowIso),
+      };
+
+      const nextDebts = isDeletedVersion
+        ? curState.debts.filter((d) => d.id !== conflict.entityId)
+        : curState.debts.some((d) => d.id === normalizedDebt.id)
+        ? curState.debts.map((d) => (d.id === normalizedDebt.id ? normalizedDebt : d))
+        : [normalizedDebt, ...curState.debts];
+
+      set({ debts: nextDebts });
+      nextSnapshot.debts = nextDebts;
+      if (cache) cache.debts = nextDebts;
+
+      if (isDeletedVersion) {
+        await enqueueOutboxEntry(uid, {
+          entityType: "debt",
+          entityId: conflict.entityId,
+          type: "delete_debt",
+          payload: { id: conflict.entityId },
+          clientUpdatedAt: nowIso,
+        });
+      } else {
+        await enqueueOutboxEntry(uid, {
+          entityType: "debt",
+          entityId: normalizedDebt.id,
+          type: "upsert_debt",
+          payload: {
+            id: normalizedDebt.id,
+            type: normalizedDebt.type,
+            person_name: normalizedDebt.personName,
+            phone: normalizedDebt.phone || null,
+            total_amount: normalizedDebt.totalAmount,
+            remaining_amount: normalizedDebt.remainingAmount,
+            due_date: normalizedDebt.dueDate || null,
+            status: normalizedDebt.status,
+            notes: normalizedDebt.notes || null,
+          },
+          clientUpdatedAt: nowIso,
+        });
+      }
+    }
+
+    if (cache && typeof window !== "undefined") {
+      try {
+        localStorage.setItem(getStorageKey(uid), JSON.stringify(cache));
+      } catch {}
+    }
+    await writeOfflineSnapshot(uid, nextSnapshot);
+
+    await resolveSyncConflict(
+      uid,
+      conflictId,
+      choice === "keep_local" ? "local_wins" : "remote_wins"
+    );
+    await appendOfflineAuditLog(uid, {
+      level: "info",
+      event: "conflict_manually_resolved",
+      details: `Conflit [${conflict.entityType}] « ${conflict.label} » résolu manuellement (${choice}).`,
+    });
+    await get().refreshOfflineDiagnostics();
+
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
+    }
+
+    toast.success(
+      choice === "keep_local"
+        ? "Version locale conservée et planifiée pour synchronisation."
+        : "Version serveur appliquée et conservée."
+    );
+  },
+
   enqueueSyncAction: (action) => {
     const syncAction: PendingSyncAction = {
       id: `sync-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -706,97 +1277,188 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (!cache.pendingSyncQueue) cache.pendingSyncQueue = [];
       cache.pendingSyncQueue.push(syncAction);
       saveLocalCache(cache);
-      set({ pendingSyncCount: cache.pendingSyncQueue.length });
     }
+
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    void (async () => {
+      if (action.type === "add_transaction") {
+        const txId = ensureValidUuid(action.payload?.id);
+        await enqueueOutboxEntry(uid, {
+          id: syncAction.id,
+          entityType: "transaction",
+          entityId: txId,
+          type: "upsert_transaction",
+          payload: { ...action.payload, id: txId },
+          clientUpdatedAt: new Date(syncAction.timestamp).toISOString(),
+        });
+      } else if (action.type === "remove_transaction" && action.payload?.id) {
+        await enqueueOutboxEntry(uid, {
+          id: syncAction.id,
+          entityType: "transaction",
+          entityId: String(action.payload.id),
+          type: "delete_transaction",
+          payload: { id: String(action.payload.id) },
+          clientUpdatedAt: new Date(syncAction.timestamp).toISOString(),
+        });
+      } else if (action.type === "update_category_amount") {
+        const catId = String(action.payload?.categoryId || "");
+        await enqueueOutboxEntry(uid, {
+          id: syncAction.id,
+          entityType: "allocation",
+          entityId: catId,
+          coalesceKey: `alloc:${action.payload?.budgetId || "active"}:${catId}`,
+          type: "upsert_allocation",
+          payload: action.payload || {},
+          clientUpdatedAt: new Date(syncAction.timestamp).toISOString(),
+        });
+      }
+      await get().refreshOfflineDiagnostics();
+    })();
   },
 
-  syncPendingQueue: async () => {
-    const cache = loadLocalCache();
-    if (!cache || !cache.pendingSyncQueue || cache.pendingSyncQueue.length === 0) {
-      set({ pendingSyncCount: 0 });
+  syncPendingQueue: async (force = false, quietIfSingle = false) => {
+    let uid = get().userId || activeUserId;
+    if (!uid) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      uid = sessionData?.session?.user?.id || null;
+      if (uid) {
+        activeUserId = uid;
+        set({ userId: uid });
+      }
+    }
+    if (!uid) return 0;
+
+    // Migrer d'éventuelles opérations résiduelles du cache localStorage vers IndexedDB
+    const legacyCache = loadLocalCache(uid);
+    if (legacyCache?.pendingSyncQueue && legacyCache.pendingSyncQueue.length > 0) {
+      await migrateLegacyCacheToIndexedDb(uid, legacyCache);
+      legacyCache.pendingSyncQueue = [];
+      saveLocalCache(legacyCache, uid);
+    }
+
+    const beforeQueue = await listOutboxEntries(uid);
+    if (beforeQueue.length === 0) {
+      set({
+        pendingSyncCount: 0,
+        pendingEntityIds: [],
+        lastSyncError: null,
+        syncStatus: get().isOnline ? "idle" : "offline",
+      });
       return 0;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return 0;
+    const hadOfflineBacklog =
+      force ||
+      !quietIfSingle ||
+      beforeQueue.length > 1 ||
+      beforeQueue.some((item) => item.retryCount > 0 || item.status === "failed");
 
-    const queue = [...cache.pendingSyncQueue];
-    let synced = 0;
-    const remaining: PendingSyncAction[] = [];
+    set({ syncStatus: "syncing", lastSyncError: null });
 
-    for (const item of queue) {
-      try {
-        switch (item.type) {
-          case "add_transaction":
-            await supabase.from("transactions").insert(item.payload);
-            synced++;
-            break;
-          case "remove_transaction":
-            await supabase.from("transactions").delete().eq("id", item.payload.id);
-            synced++;
-            break;
-          case "update_category_amount":
-            if (item.payload.allocation_id) {
-              await supabase.from("budget_allocations").update({ allocated_amount: item.payload.amount }).eq("id", item.payload.allocation_id);
-            } else if (item.payload.budgetId && item.payload.categoryId) {
-              await supabase.from("budget_allocations").insert({
-                monthly_budget_id: item.payload.budgetId,
-                category_id: item.payload.categoryId,
-                allocated_amount: item.payload.amount,
-              });
-            }
-            synced++;
-            break;
-          case "add_income_entry":
-            await supabase.from("income_entries").insert(item.payload);
-            synced++;
-            break;
-          case "remove_income_entry":
-            await supabase.from("income_entries").delete().eq("id", item.payload.id);
-            synced++;
-            break;
-          case "add_savings_goal":
-            await supabase.from("savings_goals").insert(item.payload);
-            synced++;
-            break;
-          case "add_savings_contribution":
-            if (item.payload.goalId) {
-              await supabase.from("savings_contributions").insert({
-                savings_goal_id: item.payload.goalId,
-                amount: item.payload.amount,
-                notes: item.payload.notes,
-                contribution_date: item.payload.date,
-              });
-            }
-            synced++;
-            break;
-          case "add_debt":
-            await supabase.from("debts").insert(item.payload);
-            synced++;
-            break;
-          case "remove_debt":
-            await supabase.from("debts").delete().eq("id", item.payload.id);
-            synced++;
-            break;
-          default:
-            synced++;
-            break;
-        }
-      } catch (err) {
-        console.warn("Échec de synchronisation de l'action :", item, err);
-        remaining.push(item);
+    const result = await processOutboxQueue(supabase, uid, { force });
+    const remainingOutbox = await listOutboxEntries(uid);
+    const pendingIds = Array.from(new Set(remainingOutbox.map((o) => o.entityId)));
+
+    if (
+      result.status === "offline" ||
+      (result.pending > 0 && result.status !== "auth_expired")
+    ) {
+      void requestBackgroundSync();
+    }
+
+    const nowIso = new Date().toISOString();
+    if (result.synced > 0) {
+      const snap = await readOfflineSnapshot(uid);
+      if (snap) {
+        await writeOfflineSnapshot(uid, {
+          ...snap,
+          lastSyncedAt: result.serverTime || nowIso,
+          lastSuccessfulSyncAt: nowIso,
+        });
       }
     }
 
-    cache.pendingSyncQueue = remaining;
-    saveLocalCache(cache);
-    set({ pendingSyncCount: remaining.length });
+    set((state) => ({
+      isOnline: result.status === "offline" ? false : true,
+      syncStatus: result.status,
+      pendingSyncCount: result.pending,
+      pendingEntityIds: pendingIds,
+      lastSyncedAt: result.synced > 0 ? nowIso : state.lastSyncedAt,
+      lastSyncError: result.lastError || null,
+      transactions: state.transactions.map((tx) => ({
+        ...tx,
+        pendingSync: pendingIds.includes(tx.id),
+      })),
+    }));
 
-    if (synced > 0) {
-      toast.success(`Synchronisation terminée : ${synced} opération(s) synchronisée(s) !`);
-      get().initStore();
+    if (result.status === "auth_expired") {
+      toast.warning(
+        "Session expirée pendant le mode hors-ligne. Vos données sont en sécurité : reconnectez-vous pour finaliser la synchronisation."
+      );
+      return 0;
     }
-    return synced;
+
+    if (result.synced > 0 && hadOfflineBacklog) {
+      toast.success(
+        `Synchronisation terminée : ${result.synced} opération(s) enregistrée(s) sur le serveur !`
+      );
+      await get().initStore();
+    }
+    return result.synced;
+  },
+
+  exportOfflineBackup: async () => {
+    const uid = get().userId || activeUserId;
+    if (!uid || typeof window === "undefined") return;
+    try {
+      const pkg = await exportOfflineBackupPackage(uid);
+      const blob = new Blob([JSON.stringify(pkg, null, 2)], {
+        type: "application/json;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const dateStr = new Date().toISOString().split("T")[0];
+      a.href = url;
+      a.download = `monbudget-sauvegarde-offline-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      await appendOfflineAuditLog(uid, {
+        level: "info",
+        event: "backup_exported",
+        details: `Sauvegarde locale exportée (${pkg.outbox.length} opération(s) en attente).`,
+      });
+      toast.success("Sauvegarde locale vérifiée (SHA-256) téléchargée !");
+    } catch {
+      toast.error("Impossible de générer la sauvegarde locale.");
+    }
+  },
+
+  restoreOfflineBackup: async (jsonText: string) => {
+    const uid = get().userId || activeUserId;
+    if (!uid) {
+      return { ok: false, error: "Utilisateur non identifié." };
+    }
+    try {
+      const parsed = JSON.parse(jsonText);
+      const res = await verifyAndRestoreOfflineBackupPackage(uid, parsed);
+      if (!res.ok) {
+        toast.error(res.error || "Échec de la restauration.");
+        return { ok: false, error: res.error };
+      }
+      await get().initStore();
+      toast.success(
+        `Sauvegarde restaurée (${res.restoredMonths} mois, ${res.restoredOutbox} opération(s) en file).`
+      );
+      return { ok: true };
+    } catch {
+      const err = "Fichier JSON invalide ou corrompu.";
+      toast.error(err);
+      return { ok: false, error: err };
+    }
   },
   categories: (initialMonthData?.categories && initialMonthData.categories.length > 0)
     ? deduplicateCategories(initialMonthData.categories)
@@ -817,17 +1479,35 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   initStore: async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // 1. Identifier l'utilisateur localement (fonctionne même 100 % hors-ligne via session locale)
+      let resolvedUserId: string | null = null;
+      let resolvedUserEmail: string | undefined;
+      let resolvedUserMetaName: string | undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let resolvedUserMetaNotifs: any;
 
-      activeUserId = user.id;
-      set({ userId: user.id });
-      const subscriptionPromise = get().refreshSubscription().catch(() => {});
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.user) {
+          resolvedUserId = sessionData.session.user.id;
+          resolvedUserEmail = sessionData.session.user.email;
+          resolvedUserMetaName = sessionData.session.user.user_metadata?.full_name;
+          resolvedUserMetaNotifs = sessionData.session.user.user_metadata?.notifications;
+        }
+      } catch {}
 
-      // Clean up legacy non-partitioned cache & migrate to user partition if needed
+      if (!resolvedUserId) {
+        resolvedUserId = activeUserId || getSavedUserId();
+      }
+      if (!resolvedUserId) return;
+
+      activeUserId = resolvedUserId;
+      set({ userId: resolvedUserId });
+
+      // Nettoyer l'ancien cache global non partitionné et migrer vers IndexedDB par utilisateur
       if (typeof window !== "undefined") {
         try {
-          const userKey = getStorageKey(user.id);
+          const userKey = getStorageKey(resolvedUserId);
           if (!localStorage.getItem(userKey)) {
             const legacy = localStorage.getItem("monbudget_local_cache_v3");
             if (legacy) {
@@ -838,47 +1518,184 @@ export const useUIStore = create<UIState>((set, get) => ({
         } catch {}
       }
 
+      const legacyUserCache = loadLocalCache(resolvedUserId);
+      if (legacyUserCache) {
+        await migrateLegacyCacheToIndexedDb(resolvedUserId, legacyUserCache);
+        if (legacyUserCache.pendingSyncQueue && legacyUserCache.pendingSyncQueue.length > 0) {
+          legacyUserCache.pendingSyncQueue = [];
+          saveLocalCache(legacyUserCache, resolvedUserId);
+        }
+      }
+
       const { year, month } = get().activeMonth;
       const monthKey = getMonthKey(year, month);
 
-      // 1. Profil & Préférences
-      const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      // 2. Hydratation immédiate depuis IndexedDB (démarrage instantané hors-ligne comme en ligne)
+      const [idbSnapshot, pendingOutboxBeforeSync, unresolvedConflictsBeforeSync] =
+        await Promise.all([
+          readOfflineSnapshot(resolvedUserId),
+          listOutboxEntries(resolvedUserId),
+          listSyncConflicts(resolvedUserId, true),
+        ]);
+      const pendingIds = Array.from(new Set(pendingOutboxBeforeSync.map((o) => o.entityId)));
+
+      if (idbSnapshot) {
+        const idbMonth = idbSnapshot.months?.[monthKey];
+        set((state) => ({
+          currency: idbSnapshot.currency || state.currency,
+          payDay: idbSnapshot.payDay || state.payDay,
+          alertThreshold: idbSnapshot.alertThreshold ?? state.alertThreshold,
+          notifications: idbSnapshot.notifications
+            ? { ...defaultNotifications, ...idbSnapshot.notifications }
+            : state.notifications,
+          budget_id: idbMonth?.budgetId || state.budget_id,
+          baseSalary: idbMonth ? idbMonth.baseSalary : state.baseSalary,
+          income: idbMonth ? idbMonth.income : state.income,
+          incomeEntries: idbMonth?.incomeEntries || state.incomeEntries,
+          categories:
+            idbMonth?.categories && idbMonth.categories.length > 0
+              ? deduplicateCategories(idbMonth.categories)
+              : state.categories,
+          transactions: idbMonth?.transactions
+            ? idbMonth.transactions.map((tx: Transaction) => ({
+                ...tx,
+                pendingSync: pendingIds.includes(tx.id),
+              }))
+            : state.transactions,
+          savingsGoals:
+            idbSnapshot.savingsGoals && idbSnapshot.savingsGoals.length > 0
+              ? idbSnapshot.savingsGoals
+              : state.savingsGoals,
+          debts:
+            idbSnapshot.debts && idbSnapshot.debts.length > 0
+              ? idbSnapshot.debts
+              : state.debts,
+          subscriptionPlan:
+            (idbSnapshot.subscriptionPlan as SubscriptionPlanId) || state.subscriptionPlan,
+          billingCycle:
+            (idbSnapshot.billingCycle as BillingCycle | "none") || state.billingCycle,
+          subscriptionExpiresAt:
+            idbSnapshot.subscriptionExpiresAt !== undefined
+              ? idbSnapshot.subscriptionExpiresAt
+              : state.subscriptionExpiresAt,
+          subscriptionTrialEndsAt:
+            idbSnapshot.subscriptionTrialEndsAt !== undefined
+              ? idbSnapshot.subscriptionTrialEndsAt
+              : state.subscriptionTrialEndsAt,
+          trialChoiceMadeAt:
+            idbSnapshot.trialChoiceMadeAt !== undefined
+              ? idbSnapshot.trialChoiceMadeAt
+              : state.trialChoiceMadeAt,
+          subscriptionStatus:
+            (idbSnapshot.subscriptionStatus as SubscriptionStatus) || state.subscriptionStatus,
+          lastSyncedAt: idbSnapshot.lastSuccessfulSyncAt || state.lastSyncedAt,
+          pendingSyncCount: pendingOutboxBeforeSync.length,
+          pendingEntityIds: pendingIds,
+          unresolvedConflictsCount: unresolvedConflictsBeforeSync.length,
+          syncConflicts: unresolvedConflictsBeforeSync,
+        }));
+      } else {
+        set({
+          pendingSyncCount: pendingOutboxBeforeSync.length,
+          pendingEntityIds: pendingIds,
+          unresolvedConflictsCount: unresolvedConflictsBeforeSync.length,
+          syncConflicts: unresolvedConflictsBeforeSync,
+        });
+      }
+
+      // 3. Vérifier si le serveur est réellement joignable avant toute requête réseau
+      const probe = await checkServerReachability(3500);
+      if (!probe.reachable) {
+        if (pendingOutboxBeforeSync.length > 0) {
+          void requestBackgroundSync();
+        }
+        set({
+          isOnline: false,
+          syncStatus: "offline",
+          subscriptionHydrated: true,
+        });
+        return;
+      }
+
+      set({ isOnline: true });
+
+      // 4. Vider d'abord la file d'attente locale vers Supabase AVANT de tirer les données distantes
+      if (pendingOutboxBeforeSync.length > 0) {
+        set({ syncStatus: "syncing" });
+        const pushRes = await processOutboxQueue(supabase, resolvedUserId);
+        if (pushRes.status === "auth_expired") {
+          set({
+            syncStatus: "auth_expired",
+            lastSyncError: pushRes.lastError || "Session expirée.",
+            subscriptionHydrated: true,
+          });
+          return;
+        }
+      }
+
+      // 5. Validation serveur de l'utilisateur authentifié
+      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      const user = authData?.user;
+      if (authErr || !user) {
+        const afterOutbox = await listOutboxEntries(resolvedUserId);
+        if (afterOutbox.length > 0) {
+          set({
+            syncStatus: "auth_expired",
+            pendingSyncCount: afterOutbox.length,
+            lastSyncError: "Session expirée — reconnexion requise pour synchroniser.",
+            subscriptionHydrated: true,
+          });
+        }
+        return;
+      }
+
+      // Préchauffer l'App Shell PWA dans le Service Worker pour garantir la navigation hors-ligne
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        navigator.serviceWorker.ready
+          .then((reg) => reg.active?.postMessage({ type: "WARM_APP_SHELL" }))
+          .catch(() => {});
+      }
+
+      const subscriptionPromise = get().refreshSubscription().catch(() => {});
+      const activeOutbox = await listOutboxEntries(user.id);
+      const lastSyncedCursor = idbSnapshot?.lastSyncedAt || null;
+
+      // 6. Profil & Préférences
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+
       if (!profile) {
         await supabase.from("profiles").insert({
           id: user.id,
-          full_name: user.user_metadata?.full_name || "Utilisateur",
+          full_name: resolvedUserMetaName || "Utilisateur",
           currency: "FCFA",
           alert_threshold_percent: 80,
           pay_day: 28,
         });
         set({ currency: "FCFA", alertThreshold: 80, payDay: 28 });
       } else {
-        let cur = profile.currency && profile.currency.trim() ? profile.currency.trim() : "FCFA";
-        // Migration automatique des comptes avec devise historique EUR vers FCFA
-        if (cur === "EUR" || cur === "€") {
-          cur = "FCFA";
-          supabase.from("profiles").update({ currency: "FCFA" }).eq("id", user.id).then();
-        }
-        const th = profile.alert_threshold_percent ? Number(profile.alert_threshold_percent) : 80;
-        const pd = profile.pay_day ? Number(profile.pay_day) : 28;
-        
-        // Charger les préférences de notifications
-        const remoteNotifs = profile.notifications || user.user_metadata?.notifications;
-        const finalNotifs = remoteNotifs 
-          ? { ...defaultNotifications, ...remoteNotifs } 
-          : (get().notifications || defaultNotifications);
+        const hasPendingPrefs = activeOutbox.some((o) => o.entityType === "preferences");
+        if (!hasPendingPrefs) {
+          let cur = profile.currency && profile.currency.trim() ? profile.currency.trim() : "FCFA";
+          if (cur === "EUR" || cur === "€") {
+            cur = "FCFA";
+            await supabase.from("profiles").update({ currency: "FCFA" }).eq("id", user.id);
+          }
+          const th = profile.alert_threshold_percent ? Number(profile.alert_threshold_percent) : 80;
+          const pd = profile.pay_day ? Number(profile.pay_day) : 28;
+          const remoteNotifs = profile.notifications || resolvedUserMetaNotifs;
+          const finalNotifs = remoteNotifs
+            ? { ...defaultNotifications, ...remoteNotifs }
+            : get().notifications || defaultNotifications;
 
-        set({ currency: cur, alertThreshold: th, payDay: pd, notifications: finalNotifs });
-
-        const cache = loadLocalCache();
-        if (cache) {
-          cache.currency = cur;
-          cache.notifications = finalNotifs;
-          saveLocalCache(cache);
+          set({ currency: cur, alertThreshold: th, payDay: pd, notifications: finalNotifs });
         }
       }
 
-      // 2. Budget mensuel
+      // 7. Budget mensuel
       let { data: budget } = await supabase
         .from("monthly_budgets")
         .select("*")
@@ -899,31 +1716,45 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (budget) {
         set({ budget_id: budget.id });
 
-        // 3. Revenus de base (multi-sources)
+        // 8. Revenus de base (multi-sources) avec réconciliation & tombstones deleted_at
         const { data: incomes } = await supabase
           .from("income_entries")
           .select("*")
           .eq("monthly_budget_id", budget.id);
 
-        const remoteIncomeEntries: IncomeSourceEntry[] = (incomes || []).map((inc) => ({
+        const remoteIncomeEntries: (IncomeSourceEntry & {
+          updatedAt?: string;
+          deletedAt?: string | null;
+        })[] = (incomes || []).map((inc) => ({
           id: inc.id,
           label: inc.label || "Salaire principal",
           sourceType: inc.source_type || "Salaire",
           amount: Number(inc.amount) || 0,
           date: inc.received_date || undefined,
+          updatedAt: inc.updated_at,
+          deletedAt: inc.deleted_at || null,
         }));
 
-        const fetchedBaseSalary = remoteIncomeEntries.reduce((sum, inc) => sum + inc.amount, 0);
+        const reconciledIncomeEntries = await reconcileRecordsWithConflictDetection({
+          userId: user.id,
+          entityType: "income_entry",
+          monthKey,
+          remoteItems: remoteIncomeEntries,
+          localItems: get().incomeEntries,
+          pendingOutbox: activeOutbox,
+          lastSyncedAt: lastSyncedCursor,
+          getLabel: (item) => item.label,
+        });
 
-        // 4. Catégories & Allocations
+        const fetchedBaseSalary = reconciledIncomeEntries.reduce((sum, inc) => sum + inc.amount, 0);
+
+        // 9. Catégories & Allocations (exclusion stricte de deleted_at non nul)
         let { data: allCategories } = await supabase
           .from("categories")
           .select("*")
           .eq("user_id", user.id)
           .eq("is_active", true);
 
-        // Si l'utilisateur n'a aucune catégorie (nouveau compte inscrit ou profil sans catégories),
-        // générer automatiquement les 11 catégories africaines par défaut avec prévisions à 0 FCFA
         if (!allCategories || allCategories.length === 0) {
           try {
             const defaultCatsToInsert = AFRICAN_EXPENSE_CATEGORIES.map((cat) => ({
@@ -944,37 +1775,57 @@ export const useUIStore = create<UIState>((set, get) => ({
           }
         }
 
-        const effectiveCategoriesList = (allCategories && allCategories.length > 0)
-          ? allCategories
-          : AFRICAN_EXPENSE_CATEGORIES.map((cat, idx) => ({
-              id: `cat-default-${idx}`,
-              name: cat.name,
-              color: cat.color,
-              user_id: user.id,
-              is_active: true,
-            }));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const activeRemoteCategories = (allCategories || []).filter((cat: any) => !cat.deleted_at);
+
+        const effectiveCategoriesList =
+          activeRemoteCategories.length > 0
+            ? activeRemoteCategories
+            : allCategories && allCategories.length > 0
+            ? []
+            : AFRICAN_EXPENSE_CATEGORIES.map((cat, idx) => ({
+                id: `cat-default-${idx}`,
+                name: cat.name,
+                color: cat.color,
+                user_id: user.id,
+                is_active: true,
+              }));
 
         const { data: allocations } = await supabase
           .from("budget_allocations")
           .select("*")
           .eq("monthly_budget_id", budget.id);
 
-        const rawCategories: Category[] = effectiveCategoriesList.map((cat: any) => {
-          const alloc = allocations?.find((a) => a.category_id === cat.id);
-          return {
-            id: cat.id,
-            name: cat.name.trim(),
-            color: cat.color || "bg-blue-500",
-            amount: alloc ? Number(alloc.allocated_amount) : 0,
-            allocation_id: alloc?.id,
-          };
-        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const activeAllocations = (allocations || []).filter((a: any) => !a.deleted_at);
+
+        const pendingDeletedCatIds = new Set(
+          activeOutbox
+            .filter((o) => o.type === "delete_category")
+            .map((o) => o.entityId)
+        );
+
+        const rawCategories: (Category & { updatedAt?: string })[] = effectiveCategoriesList
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .filter((cat: any) => !cat.deleted_at && !pendingDeletedCatIds.has(cat.id))
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((cat: any) => {
+            const alloc = activeAllocations.find((a) => a.category_id === cat.id);
+            return {
+              id: cat.id,
+              name: cat.name.trim(),
+              color: cat.color || "bg-blue-500",
+              amount: alloc ? Number(alloc.allocated_amount) : 0,
+              allocation_id: alloc?.id,
+              updatedAt: alloc?.updated_at || cat.updated_at,
+            };
+          });
         const categoriesMap: Category[] = deduplicateCategories(rawCategories);
 
-        // Si des catégories en doublon existent dans Supabase, archiver les doublons superflus
+        // Archiver les éventuels doublons de catégories actives côté serveur
         const seenCatNames = new Set<string>();
         const redundantCatIds: string[] = [];
-        for (const cat of (allCategories || [])) {
+        for (const cat of activeRemoteCategories) {
           const norm = cat.name.trim().toLowerCase();
           if (seenCatNames.has(norm)) {
             redundantCatIds.push(cat.id);
@@ -983,17 +1834,19 @@ export const useUIStore = create<UIState>((set, get) => ({
           }
         }
         if (redundantCatIds.length > 0) {
-          supabase.from("categories").update({ is_active: false }).in("id", redundantCatIds).then();
+          void supabase.from("categories").update({ is_active: false }).in("id", redundantCatIds);
         }
 
-        // 5. Transactions
+        // 10. Transactions avec réconciliation anti-résurrection, tombstones & détection de conflits
         const { data: txs } = await supabase
           .from("transactions")
           .select("*, categories(name)")
           .eq("monthly_budget_id", budget.id)
           .order("transaction_date", { ascending: false });
 
-        const mappedTxs: Transaction[] = (txs || []).map((tx) => {
+        const mappedTxs: (Transaction & { updatedAt?: string; deletedAt?: string | null })[] = (
+          txs || []
+        ).map((tx) => {
           const isInc = tx.type === "income" || tx.type === "income_adjustment";
           const desc = tx.description || (isInc ? "Revenu complémentaire" : "Dépense");
           const isDebtRepay = desc.startsWith("Remboursement dette :");
@@ -1016,71 +1869,68 @@ export const useUIStore = create<UIState>((set, get) => ({
             category_id: isInc ? undefined : tx.category_id,
             date: tx.transaction_date,
             type: isInc ? "income" : "expense",
+            updatedAt: tx.updated_at,
+            deletedAt: tx.deleted_at || null,
           };
         });
 
-        // Nettoyer en arrière-plan tout rattachement erroné de catégorie sur des revenus historiques dans Supabase
-        const badIncomeTxs = (txs || []).filter(t => (t.type === "income" || t.type === "income_adjustment") && t.category_id !== null);
-        if (badIncomeTxs.length > 0) {
-          const badIds = badIncomeTxs.map(t => t.id);
-          supabase.from("transactions").update({ category_id: null }).in("id", badIds).then();
-        }
-
-        // FUSION RIGOUREUSE DES TRANSACTIONS : Préserver toutes les transactions locales
-        const currentTxs = get().transactions;
-        const mergedTxsMap = new Map<string, Transaction>();
-        
-        // 1. D'abord les transactions distantes
-        for (const rTx of mappedTxs) {
-          mergedTxsMap.set(rTx.id, rTx);
-        }
-        
-        // 2. Ensuite les transactions locales qui ne sont pas encore dans Supabase
-        for (const lTx of currentTxs) {
-          const alreadyInRemote = mappedTxs.some(
-            (r) => r.id === lTx.id || (r.date === lTx.date && r.amount === lTx.amount && r.label === lTx.label)
-          );
-          if (!alreadyInRemote) {
-            mergedTxsMap.set(lTx.id, lTx);
-            if (budget && user) {
-              const isInc = lTx.type === "income" || lTx.type === "income_adjustment";
-              const safeCatId =
-                !isInc && lTx.category_id && UUID_REGEX.test(lTx.category_id)
-                  ? lTx.category_id
-                  : null;
-              supabase.from("transactions").insert({
-                monthly_budget_id: budget.id,
-                description: lTx.label,
-                amount: lTx.amount,
-                type: lTx.type,
-                transaction_date: lTx.date || new Date().toISOString().split("T")[0],
-                category_id: safeCatId,
-              }).then();
-            }
-          }
-        }
-
-        const finalTxs = Array.from(mergedTxsMap.values()).sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        const badIncomeTxs = (txs || []).filter(
+          (t) =>
+            !t.deleted_at &&
+            (t.type === "income" || t.type === "income_adjustment") &&
+            t.category_id !== null
         );
+        if (badIncomeTxs.length > 0) {
+          const badIds = badIncomeTxs.map((t) => t.id);
+          void supabase.from("transactions").update({ category_id: null }).in("id", badIds);
+        }
 
-        // Calcul du revenu total : Salaire de base + revenus supplémentaires des transactions fusionnées
+        const currentOutboxIds = new Set(activeOutbox.map((o) => o.entityId));
+        const reconciledTxs = await reconcileRecordsWithConflictDetection({
+          userId: user.id,
+          entityType: "transaction",
+          monthKey,
+          remoteItems: mappedTxs,
+          localItems: get().transactions,
+          pendingOutbox: activeOutbox,
+          lastSyncedAt: lastSyncedCursor,
+          getLabel: (item) => `${item.label} (${item.amount} FCFA)`,
+        });
+
+        const finalTxs = reconciledTxs
+          .map((tx) => ({
+            ...tx,
+            pendingSync: currentOutboxIds.has(tx.id),
+          }))
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
         const finalAdditionalIncomes = finalTxs
           .filter((t) => t.type === "income")
           .reduce((sum, t) => sum + t.amount, 0);
 
-        // FUSION RIGOUREUSE : Ne JAMAIS écraser les montants saisis localement avec 0
         const currentCats = get().categories;
         const mergedCats: Category[] = categoriesMap.map((remoteCat) => {
           const localMatch = currentCats.find(
-            (c) => c.name.trim().toLowerCase() === remoteCat.name.trim().toLowerCase()
+            (c) =>
+              c.id === remoteCat.id ||
+              c.name.trim().toLowerCase() === remoteCat.name.trim().toLowerCase()
           );
-          // Si Supabase a une allocation > 0, on prend la valeur distante
+          const hasPendingAlloc = activeOutbox.some(
+            (o) =>
+              o.entityType === "allocation" &&
+              (o.entityId === remoteCat.id || (localMatch && o.entityId === localMatch.id))
+          );
+          if (hasPendingAlloc && localMatch) {
+            return {
+              ...remoteCat,
+              amount: localMatch.amount,
+              color: localMatch.color || remoteCat.color,
+            };
+          }
           if (remoteCat.amount > 0) {
             return remoteCat;
           }
-          // Si le local a une valeur > 0 saisie par l'utilisateur, ON LA PRÉSERVE IMPÉRATIVEMENT
-          if (localMatch && localMatch.amount > 0) {
+          if (localMatch && localMatch.amount > 0 && !remoteCat.allocation_id) {
             return {
               ...remoteCat,
               amount: localMatch.amount,
@@ -1090,8 +1940,8 @@ export const useUIStore = create<UIState>((set, get) => ({
           return remoteCat;
         });
 
-        // Conserver également toute catégorie locale non présente dans remoteCat
         for (const localCat of currentCats) {
+          if (pendingDeletedCatIds.has(localCat.id)) continue;
           const exists = mergedCats.some(
             (c) => c.name.trim().toLowerCase() === localCat.name.trim().toLowerCase()
           );
@@ -1102,18 +1952,31 @@ export const useUIStore = create<UIState>((set, get) => ({
 
         const finalCats = mergedCats.length > 0 ? deduplicateCategories(mergedCats) : currentCats;
 
-        // Pour le salaire & entrées de revenus : préserver la saisie locale si elle est > 0
         const localBaseSalary = get().baseSalary;
-        const localIncomeEntries = get().incomeEntries;
+        const hasPendingSalary = activeOutbox.some((o) => o.entityType === "primary_salary");
+        const hasRemoteDeletedIncomes = (incomes || []).some((inc) => Boolean(inc.deleted_at));
+        const finalBaseSalary = hasPendingSalary
+          ? localBaseSalary
+          : fetchedBaseSalary > 0
+          ? fetchedBaseSalary
+          : hasRemoteDeletedIncomes
+          ? 0
+          : localBaseSalary > 0
+          ? localBaseSalary
+          : 0;
         const finalIncomeEntries =
-          remoteIncomeEntries.length > 0
-            ? remoteIncomeEntries
-            : localIncomeEntries.length > 0
-            ? localIncomeEntries
-            : localBaseSalary > 0
-            ? [{ id: "local-salary", label: "Salaire principal", sourceType: "Salaire", amount: localBaseSalary }]
+          reconciledIncomeEntries.length > 0
+            ? reconciledIncomeEntries
+            : finalBaseSalary > 0
+            ? [
+                {
+                  id: "local-salary",
+                  label: "Salaire principal",
+                  sourceType: "Salaire",
+                  amount: finalBaseSalary,
+                },
+              ]
             : [];
-        const finalBaseSalary = localBaseSalary > 0 ? localBaseSalary : (fetchedBaseSalary > 0 ? fetchedBaseSalary : 0);
         const finalIncome = finalBaseSalary + finalAdditionalIncomes;
 
         set({
@@ -1124,45 +1987,169 @@ export const useUIStore = create<UIState>((set, get) => ({
           transactions: finalTxs,
         });
 
-        // 8. Abonnement SaaS Moneriz & statut admin (lecture serveur) avant les écritures payantes éventuelles
         await subscriptionPromise;
 
-        // Synchroniser en arrière-plan les allocations locales vers Supabase si l'accès Budget est actif
-        if (budget && user) {
-          if (canModifyPaidFeature(get())) {
-            for (const cat of finalCats) {
-              if (cat.amount > 0 && !cat.allocation_id && UUID_REGEX.test(cat.id)) {
-                supabase
-                  .from("budget_allocations")
-                  .upsert(
-                    { monthly_budget_id: budget.id, category_id: cat.id, allocated_amount: cat.amount },
-                    { onConflict: "monthly_budget_id,category_id" }
-                  )
-                  .then();
-              }
-            }
-          }
-          if (finalBaseSalary > 0 && fetchedBaseSalary === 0) {
-            supabase
-              .from("income_entries")
-              .insert({
-                monthly_budget_id: budget.id,
-                label: "Salaire principal",
-                amount: finalBaseSalary,
-                received_date: new Date().toISOString().split("T")[0],
-              })
-              .then();
-          }
+        // 11. Objectifs d'épargne avec réconciliation & filtrage des contributions supprimées (deleted_at)
+        const { data: goals } = await supabase
+          .from("savings_goals")
+          .select("*, savings_contributions(*)")
+          .eq("user_id", user.id);
+
+        if (goals) {
+          const mappedGoals: (SavingsGoal & { updatedAt?: string; deletedAt?: string | null })[] =
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            goals.map((g: any) => {
+              const contributions: SavingsContribution[] = (g.savings_contributions || [])
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                .filter((c: any) => !c.deleted_at)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                .map((c: any) => ({
+                  id: c.id,
+                  amount: Number(c.amount),
+                  date: c.contribution_date,
+                  notes: c.notes || undefined,
+                }))
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+              const sumContribs = contributions.reduce((s, c) => s + c.amount, 0);
+              const current = contributions.length > 0 ? sumContribs : Number(g.current_amount || 0);
+
+              return {
+                id: g.id,
+                name: g.name,
+                target: Number(g.target_amount),
+                current,
+                target_date: g.target_date || undefined,
+                status: (g.status as "active" | "completed" | "paused") || "active",
+                color: g.color || "bg-blue-500",
+                contributions,
+                updatedAt: g.updated_at,
+                deletedAt: g.deleted_at || null,
+              };
+            });
+
+          const reconciledGoals = await reconcileRecordsWithConflictDetection({
+            userId: user.id,
+            entityType: "savings_goal",
+            remoteItems: mappedGoals,
+            localItems: get().savingsGoals,
+            pendingOutbox: activeOutbox,
+            lastSyncedAt: lastSyncedCursor,
+            getLabel: (item) => item.name,
+          });
+          set({ savingsGoals: reconciledGoals });
         }
 
-        // Mettre à jour le cache local avec l'abonnement à jour
-        const cache = loadLocalCache() || {
+        // Synchroniser automatiquement l'enveloppe Épargne dans Mon Budget si des épargnes existent
+        const activeGoals = get().savingsGoals;
+        const monthlySavingsAmount = getMonthlySavingsContributions(activeGoals, year, month);
+        const txSavingsAmount = getSpentByCategory(get().transactions, "Épargne", monthlySavingsAmount);
+        const effectiveMonthlySavings = Math.max(monthlySavingsAmount, txSavingsAmount);
+        if (canModifyPaidFeature(get()) && effectiveMonthlySavings > 0) {
+          const currentCats2 = get().categories;
+          const hasSavingsCat = currentCats2.some(
+            (c) => c.name.trim().toLowerCase() === "épargne" || c.name.trim().toLowerCase() === "epargne"
+          );
+          let syncedSavingsCats = currentCats2;
+          if (!hasSavingsCat) {
+            const newSavCat: Category = {
+              id: ensureValidUuid(null),
+              name: "Épargne",
+              amount: effectiveMonthlySavings,
+              color: "bg-emerald-600",
+            };
+            syncedSavingsCats = deduplicateCategories([...currentCats2, newSavCat]);
+          } else {
+            syncedSavingsCats = currentCats2.map((c) => {
+              const norm = c.name.trim().toLowerCase();
+              if (norm === "épargne" || norm === "epargne") {
+                return { ...c, amount: Math.max(Number(c.amount) || 0, effectiveMonthlySavings) };
+              }
+              return c;
+            });
+          }
+          set({ categories: syncedSavingsCats });
+        }
+
+        // 12. Dettes & Créances avec réconciliation & filtrage des paiements supprimés (deleted_at)
+        try {
+          const { data: remoteDebts } = await supabase
+            .from("debts")
+            .select("*, debt_payments(*)")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+
+          if (remoteDebts) {
+            const mappedDebts: (DebtItem & { updatedAt?: string; deletedAt?: string | null })[] =
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              remoteDebts.map((d: any) => {
+                const payments: DebtPaymentItem[] = (d.debt_payments || [])
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .filter((p: any) => !p.deleted_at)
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .map((p: any) => ({
+                    id: p.id,
+                    amount: Number(p.amount),
+                    date: p.payment_date,
+                    notes: p.notes || undefined,
+                  }))
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                const sumPaid = payments.reduce((s, p) => s + p.amount, 0);
+                const totalAmt = Number(d.total_amount) || 0;
+                const remainingAmt =
+                  payments.length > 0
+                    ? Math.max(0, totalAmt - sumPaid)
+                    : Number(d.remaining_amount ?? totalAmt);
+
+                return {
+                  id: d.id,
+                  type: (d.type === "receivable" ? "receivable" : "payable") as "payable" | "receivable",
+                  personName: d.person_name,
+                  phone: d.phone || undefined,
+                  totalAmount: totalAmt,
+                  remainingAmount: remainingAmt,
+                  dueDate: d.due_date || undefined,
+                  status: remainingAmt <= 0 ? "paid" : sumPaid > 0 ? "partial" : d.status || "pending",
+                  notes: d.notes || undefined,
+                  payments,
+                  createdAt: d.created_at,
+                  updatedAt: d.updated_at,
+                  deletedAt: d.deleted_at || null,
+                };
+              });
+
+            const reconciledDebts = await reconcileRecordsWithConflictDetection({
+              userId: user.id,
+              entityType: "debt",
+              remoteItems: mappedDebts,
+              localItems: get().debts,
+              pendingOutbox: activeOutbox,
+              lastSyncedAt: lastSyncedCursor,
+              getLabel: (item) => item.personName,
+            });
+            set({ debts: reconciledDebts });
+          }
+        } catch {}
+
+        // 13. Sauvegarder le snapshot complet réconcilié dans IndexedDB + miroir localStorage
+        const syncNowIso = probe.serverTime || new Date().toISOString();
+        const cache = loadLocalCache(user.id) || {
           currency: get().currency,
           payDay: get().payDay,
           alertThreshold: get().alertThreshold,
           months: {},
           savingsGoals: get().savingsGoals,
+          debts: get().debts,
         };
+        cache.currency = get().currency;
+        cache.payDay = get().payDay;
+        cache.alertThreshold = get().alertThreshold;
+        cache.notifications = get().notifications;
+        cache.savingsGoals = get().savingsGoals;
+        cache.debts = get().debts;
         cache.subscriptionPlan = get().subscriptionPlan;
         cache.billingCycle = get().billingCycle;
         cache.subscriptionExpiresAt = get().subscriptionExpiresAt;
@@ -1170,142 +2157,36 @@ export const useUIStore = create<UIState>((set, get) => ({
         cache.trialChoiceMadeAt = get().trialChoiceMadeAt;
         cache.subscriptionStatus = get().subscriptionStatus;
         cache.months[monthKey] = {
-          baseSalary: finalBaseSalary,
-          income: finalIncome,
-          incomeEntries: finalIncomeEntries,
-          categories: finalCats,
-          transactions: finalTxs,
+          baseSalary: get().baseSalary,
+          income: get().income,
+          incomeEntries: get().incomeEntries,
+          categories: get().categories,
+          transactions: get().transactions,
         };
-        saveLocalCache(cache);
+        saveLocalCache(cache, user.id);
+
+        const latestSnap = await readOfflineSnapshot(user.id);
+        if (latestSnap) {
+          if (latestSnap.months[monthKey]) {
+            latestSnap.months[monthKey].budgetId = budget.id;
+          }
+          await writeOfflineSnapshot(user.id, {
+            ...latestSnap,
+            lastSyncedAt: syncNowIso,
+            lastSuccessfulSyncAt: syncNowIso,
+          });
+        }
+
+        set({ lastSyncedAt: syncNowIso });
       } else {
         await subscriptionPromise;
       }
 
-      // 6. Objectifs d épargne
-      const { data: goals } = await supabase
-        .from("savings_goals")
-        .select("*, savings_contributions(*)")
-        .eq("user_id", user.id);
-
-      if (goals && goals.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mappedGoals: SavingsGoal[] = goals.map((g: any) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const contributions: SavingsContribution[] = (g.savings_contributions || []).map((c: any) => ({
-            id: c.id,
-            amount: Number(c.amount),
-            date: c.contribution_date,
-            notes: c.notes || undefined,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-          const sumContribs = contributions.reduce((s, c) => s + c.amount, 0);
-          const current = contributions.length > 0 ? sumContribs : Number(g.current_amount || 0);
-
-          return {
-            id: g.id,
-            name: g.name,
-            target: Number(g.target_amount),
-            current,
-            target_date: g.target_date || undefined,
-            status: (g.status as "active" | "completed" | "paused") || "active",
-            color: g.color || "bg-blue-500",
-            contributions,
-          };
-        });
-        set({ savingsGoals: mappedGoals });
-      }
-
-      // Synchroniser automatiquement l'enveloppe Épargne dans Mon Budget si des épargnes existent sur le mois actif
-      const activeGoals = get().savingsGoals;
-      const monthlySavingsAmount = getMonthlySavingsContributions(activeGoals, year, month);
-      const txSavingsAmount = getSpentByCategory(get().transactions, "Épargne", monthlySavingsAmount);
-      const effectiveMonthlySavings = Math.max(monthlySavingsAmount, txSavingsAmount);
-      if (canModifyPaidFeature(get()) && effectiveMonthlySavings > 0) {
-        const currentCats = get().categories;
-        const hasSavingsCat = currentCats.some(
-          (c) => c.name.trim().toLowerCase() === "épargne" || c.name.trim().toLowerCase() === "epargne"
-        );
-        let syncedSavingsCats = currentCats;
-        if (!hasSavingsCat) {
-          const newSavCat: Category = {
-            id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `cat-sav-${Date.now()}`,
-            name: "Épargne",
-            amount: effectiveMonthlySavings,
-            color: "bg-emerald-600",
-          };
-          syncedSavingsCats = deduplicateCategories([...currentCats, newSavCat]);
-        } else {
-          syncedSavingsCats = currentCats.map((c) => {
-            const norm = c.name.trim().toLowerCase();
-            if (norm === "épargne" || norm === "epargne") {
-              return { ...c, amount: Math.max(Number(c.amount) || 0, effectiveMonthlySavings) };
-            }
-            return c;
-          });
-        }
-        set({ categories: syncedSavingsCats });
-        const cacheAfterSavings = loadLocalCache();
-        if (cacheAfterSavings && cacheAfterSavings.months[monthKey]) {
-          cacheAfterSavings.months[monthKey].categories = syncedSavingsCats;
-          saveLocalCache(cacheAfterSavings);
-        }
-      }
-
-      // 7. Dettes & Créances
-      try {
-        const { data: remoteDebts } = await supabase
-          .from("debts")
-          .select("*, debt_payments(*)")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-
-        if (remoteDebts && remoteDebts.length > 0) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const mappedDebts: DebtItem[] = remoteDebts.map((d: any) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const payments: DebtPaymentItem[] = (d.debt_payments || []).map((p: any) => ({
-              id: p.id,
-              amount: Number(p.amount),
-              date: p.payment_date,
-              notes: p.notes || undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-            const sumPaid = payments.reduce((s, p) => s + p.amount, 0);
-            const totalAmt = Number(d.total_amount) || 0;
-            const remainingAmt = payments.length > 0 ? Math.max(0, totalAmt - sumPaid) : Number(d.remaining_amount ?? totalAmt);
-
-            return {
-              id: d.id,
-              type: (d.type === "receivable" ? "receivable" : "payable") as "payable" | "receivable",
-              personName: d.person_name,
-              phone: d.phone || undefined,
-              totalAmount: totalAmt,
-              remainingAmount: remainingAmt,
-              dueDate: d.due_date || undefined,
-              status: remainingAmt <= 0 ? "paid" : sumPaid > 0 ? "partial" : (d.status || "pending"),
-              notes: d.notes || undefined,
-              payments,
-              createdAt: d.created_at,
-            };
-          });
-          set({ debts: mappedDebts });
-          const cache = loadLocalCache();
-          if (cache) {
-            cache.debts = mappedDebts;
-            saveLocalCache(cache);
-          }
-        }
-      } catch {
-        // La table debts peut ne pas encore être créée sur Supabase ; on garde les dettes locales
-      }
-
-      // 8. Notifications in-app & relances automatiques
-      await subscriptionPromise;
+      await get().refreshOfflineDiagnostics();
       void get().refreshNotifications();
     } catch (e) {
       console.warn("Notice: Offline or local mode active", e);
+      await get().refreshOfflineDiagnostics();
     }
   },
 
@@ -1324,7 +2205,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       notifications: newNotifications,
     });
 
-    // Sauvegarde locale instantanée
+    // Sauvegarde locale instantanée (localStorage + IndexedDB)
     const cache = loadLocalCache() || {
       currency: newCurrency,
       payDay: newPayDay,
@@ -1332,47 +2213,46 @@ export const useUIStore = create<UIState>((set, get) => ({
       notifications: newNotifications,
       months: {},
       savingsGoals: get().savingsGoals,
+      debts: get().debts,
     };
     cache.currency = newCurrency;
     cache.alertThreshold = newAlert;
     cache.payDay = newPayDay;
     cache.notifications = newNotifications;
-    if (prefs.fullName) cache.fullName = prefs.fullName;
+    if (prefs.fullName !== undefined) cache.fullName = prefs.fullName;
     saveLocalCache(cache);
 
-    // Sync Supabase
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const updates: Record<string, any> = {};
-      if (prefs.alertThreshold !== undefined) updates.alert_threshold_percent = prefs.alertThreshold;
-      if (prefs.currency !== undefined) updates.currency = newCurrency;
-      if (prefs.payDay !== undefined) updates.pay_day = prefs.payDay;
-      if (prefs.fullName !== undefined) {
-        updates.full_name = prefs.fullName;
-      }
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
 
-      // Synchronisation auth user metadata pour persistance garantie
-      await supabase.auth.updateUser({
-        data: {
-          ...(prefs.fullName ? { full_name: prefs.fullName } : {}),
-          notifications: newNotifications,
-        }
-      });
+    await enqueueOutboxEntry(uid, {
+      entityType: "preferences",
+      entityId: uid,
+      coalesceKey: "preferences",
+      type: "update_preferences",
+      payload: {
+        ...(prefs.alertThreshold !== undefined ? { alertThreshold: newAlert } : {}),
+        ...(prefs.currency !== undefined ? { currency: newCurrency } : {}),
+        ...(prefs.payDay !== undefined ? { payDay: newPayDay } : {}),
+        ...(prefs.fullName !== undefined ? { fullName: prefs.fullName } : {}),
+        ...(prefs.notifications !== undefined ? { notifications: newNotifications } : {}),
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
 
-      // Synchronisation table profiles
-      try {
-        await supabase.from("profiles").update({
-          ...updates,
-          notifications: newNotifications,
-        }).eq("id", user.id);
-      } catch {
-        if (Object.keys(updates).length > 0) {
-          await supabase.from("profiles").update(updates).eq("id", user.id);
-        }
+    if (get().isOnline) {
+      if (prefs.fullName !== undefined || prefs.notifications !== undefined) {
+        supabase.auth
+          .updateUser({
+            data: {
+              ...(prefs.fullName !== undefined ? { full_name: prefs.fullName } : {}),
+              notifications: newNotifications,
+            },
+          })
+          .catch(() => {});
       }
-    } catch (err) {
-      console.warn("Could not sync preferences to Supabase", err);
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -1392,10 +2272,10 @@ export const useUIStore = create<UIState>((set, get) => ({
     const baseSalary = Math.max(0, salary);
     const totalIncome = baseSalary + additionalIncomes;
 
-    // 1. Mise à jour synchrone en mémoire : le salaire ne change jamais tout seul
+    // 1. Mise à jour synchrone en mémoire
     set({ baseSalary, income: totalIncome });
 
-    // 2. Sauvegarde locale instantanée
+    // 2. Sauvegarde locale instantanée (en préservant budgetId et incomeEntries)
     const { year, month } = get().activeMonth;
     const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache() || {
@@ -1404,8 +2284,13 @@ export const useUIStore = create<UIState>((set, get) => ({
       alertThreshold: get().alertThreshold,
       months: {},
       savingsGoals: get().savingsGoals,
+      debts: get().debts,
     };
+    const existingMonth = cache.months[monthKey];
     cache.months[monthKey] = {
+      ...existingMonth,
+      budgetId: existingMonth?.budgetId ?? get().budget_id,
+      incomeEntries: existingMonth?.incomeEntries ?? get().incomeEntries,
       baseSalary,
       income: totalIncome,
       categories: get().categories,
@@ -1413,40 +2298,34 @@ export const useUIStore = create<UIState>((set, get) => ({
     };
     saveLocalCache(cache);
 
-    // 3. Sync Supabase debouncée
+    // 3. File d'attente persistante IndexedDB (coalescée) + synchronisation
     if (incomeDebounceTimer) clearTimeout(incomeDebounceTimer);
     incomeDebounceTimer = setTimeout(async () => {
-      try {
-        const budgetId = get().budget_id;
-        if (!budgetId) return;
-        const { data: existing } = await supabase
-          .from("income_entries")
-          .select("id")
-          .eq("monthly_budget_id", budgetId);
-
-        if (existing && existing.length > 0) {
-          await supabase
-            .from("income_entries")
-            .update({ amount: baseSalary, label: "Salaire principal" })
-            .eq("id", existing[0].id);
-        } else {
-          await supabase
-            .from("income_entries")
-            .insert({
-              monthly_budget_id: budgetId,
-              label: "Salaire principal",
-              amount: baseSalary,
-              received_date: new Date().toISOString().split("T")[0],
-            });
-        }
-      } catch (err) {
-        console.warn("Could not sync income to Supabase", err);
+      const uid = get().userId || activeUserId;
+      if (!uid) return;
+      await enqueueOutboxEntry(uid, {
+        entityType: "primary_salary",
+        entityId: monthKey,
+        monthKey,
+        coalesceKey: `primary_salary:${monthKey}`,
+        type: "set_primary_salary",
+        payload: {
+          budgetId: get().budget_id,
+          year,
+          month,
+          amount: baseSalary,
+          received_date: new Date().toISOString().split("T")[0],
+        },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+      await get().refreshOfflineDiagnostics();
+      if (get().isOnline) {
+        void get().syncPendingQueue(false, true);
       }
-    }, 600);
+    }, 450);
   },
 
   setIncome: async (income) => {
-    // Si l'utilisateur saisit directement un revenu, on le traite comme son salaire principal
     await get().setSalary(income);
   },
 
@@ -1454,20 +2333,30 @@ export const useUIStore = create<UIState>((set, get) => ({
     const cleanAmount = Math.max(0, Number(entry.amount) || 0);
     if (cleanAmount <= 0) return;
 
+    const entryId = ensureValidUuid(null);
+    const entryDate = entry.date || new Date().toISOString().split("T")[0];
     const newItem: IncomeSourceEntry = {
-      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      id: entryId,
       label: entry.label.trim() || entry.sourceType || "Revenu",
       sourceType: entry.sourceType || "Salaire",
       amount: cleanAmount,
-      date: entry.date || new Date().toISOString().split("T")[0],
+      date: entryDate,
     };
 
     const currentEntries = get().incomeEntries;
-    // Si aucune entrée mais baseSalary > 0, convertir d'abord baseSalary en entrée initiale
-    const baseEntries: IncomeSourceEntry[] =
-      currentEntries.length === 0 && get().baseSalary > 0
-        ? [{ id: "initial-salary", label: "Salaire principal", sourceType: "Salaire", amount: get().baseSalary }]
-        : currentEntries;
+    const hadImplicitBaseSalary = currentEntries.length === 0 && get().baseSalary > 0;
+    const initialSalaryId = hadImplicitBaseSalary ? ensureValidUuid(null) : null;
+    const baseEntries: IncomeSourceEntry[] = hadImplicitBaseSalary
+      ? [
+          {
+            id: initialSalaryId!,
+            label: "Salaire principal",
+            sourceType: "Salaire",
+            amount: get().baseSalary,
+            date: entryDate,
+          },
+        ]
+      : currentEntries;
 
     const updatedEntries = [...baseEntries, newItem];
     const newBaseSalary = updatedEntries.reduce((sum, item) => sum + item.amount, 0);
@@ -1492,7 +2381,10 @@ export const useUIStore = create<UIState>((set, get) => ({
       savingsGoals: get().savingsGoals,
       debts: get().debts,
     };
+    const existingMonth = cache.months[monthKey];
     cache.months[monthKey] = {
+      ...existingMonth,
+      budgetId: existingMonth?.budgetId ?? get().budget_id,
       baseSalary: newBaseSalary,
       income: totalIncome,
       incomeEntries: updatedEntries,
@@ -1501,38 +2393,49 @@ export const useUIStore = create<UIState>((set, get) => ({
     };
     saveLocalCache(cache);
 
-    try {
-      const budgetId = get().budget_id;
-      if (!budgetId) return;
-      const { data: created } = await supabase
-        .from("income_entries")
-        .insert({
-          monthly_budget_id: budgetId,
-          label: newItem.label,
-          source_type: newItem.sourceType,
-          amount: newItem.amount,
-          received_date: newItem.date,
-        })
-        .select()
-        .maybeSingle();
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
 
-      if (created) {
-        newItem.id = created.id;
-      }
-    } catch {
-      // Fallback sans source_type si la colonne n'est pas encore créée
-      try {
-        const budgetId = get().budget_id;
-        if (!budgetId) return;
-        await supabase.from("income_entries").insert({
-          monthly_budget_id: budgetId,
-          label: `${newItem.sourceType} - ${newItem.label}`,
-          amount: newItem.amount,
-          received_date: newItem.date,
-        });
-      } catch (e) {
-        console.warn("Could not sync income entry to Supabase", e);
-      }
+    if (hadImplicitBaseSalary && initialSalaryId) {
+      await enqueueOutboxEntry(uid, {
+        entityType: "income_entry",
+        entityId: initialSalaryId,
+        monthKey,
+        type: "upsert_income_entry",
+        payload: {
+          id: initialSalaryId,
+          monthly_budget_id: get().budget_id,
+          year,
+          month,
+          label: "Salaire principal",
+          source_type: "Salaire",
+          amount: get().baseSalary,
+          received_date: entryDate,
+        },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+    }
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "income_entry",
+      entityId: entryId,
+      monthKey,
+      type: "upsert_income_entry",
+      payload: {
+        id: entryId,
+        monthly_budget_id: get().budget_id,
+        year,
+        month,
+        label: newItem.label,
+        source_type: newItem.sourceType,
+        amount: newItem.amount,
+        received_date: newItem.date,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -1560,10 +2463,20 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      await supabase.from("income_entries").delete().eq("id", id);
-    } catch (err) {
-      console.warn("Could not delete income entry from Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "income_entry",
+      entityId: id,
+      monthKey,
+      type: "delete_income_entry",
+      payload: { id },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -1577,8 +2490,13 @@ export const useUIStore = create<UIState>((set, get) => ({
       alertThreshold: curState.alertThreshold,
       months: {},
       savingsGoals: curState.savingsGoals,
+      debts: curState.debts,
     };
+    const existingMonth = cache.months[monthKey];
     cache.months[monthKey] = {
+      ...existingMonth,
+      budgetId: existingMonth?.budgetId ?? curState.budget_id,
+      incomeEntries: existingMonth?.incomeEntries ?? curState.incomeEntries,
       baseSalary: curState.baseSalary,
       income: curState.income,
       categories: curState.categories,
@@ -1586,55 +2504,52 @@ export const useUIStore = create<UIState>((set, get) => ({
     };
     saveLocalCache(cache);
 
-    try {
-      const budgetId = curState.budget_id;
-      if (!budgetId) return;
+    const uid = curState.userId || activeUserId;
+    if (!uid) return;
 
-      // Sauvegarde salaire Supabase
-      const { data: existing } = await supabase
-        .from("income_entries")
-        .select("id")
-        .eq("monthly_budget_id", budgetId);
+    await enqueueOutboxEntry(uid, {
+      entityType: "primary_salary",
+      entityId: monthKey,
+      monthKey,
+      coalesceKey: `primary_salary:${monthKey}`,
+      type: "set_primary_salary",
+      payload: {
+        budgetId: curState.budget_id,
+        year,
+        month,
+        amount: curState.baseSalary,
+        received_date: new Date().toISOString().split("T")[0],
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
 
-      if (existing && existing.length > 0) {
-        await supabase
-          .from("income_entries")
-          .update({ amount: curState.baseSalary, label: "Salaire principal" })
-          .eq("id", existing[0].id);
-      } else if (curState.baseSalary > 0) {
-        await supabase
-          .from("income_entries")
-          .insert({
-            monthly_budget_id: budgetId,
-            label: "Salaire principal",
-            amount: curState.baseSalary,
-            received_date: new Date().toISOString().split("T")[0],
-          });
+    if (canModifyPaidFeature(curState)) {
+      for (const cat of curState.categories) {
+        if (!UUID_REGEX.test(cat.id)) continue;
+        await enqueueOutboxEntry(uid, {
+          entityType: "allocation",
+          entityId: cat.id,
+          monthKey,
+          coalesceKey: `alloc:${monthKey}:${cat.id}`,
+          type: "upsert_allocation",
+          payload: {
+            allocation_id: cat.allocation_id,
+            budgetId: curState.budget_id,
+            year,
+            month,
+            categoryId: cat.id,
+            categoryName: cat.name,
+            categoryColor: cat.color,
+            amount: cat.amount,
+          },
+          clientUpdatedAt: new Date().toISOString(),
+        });
       }
+    }
 
-      // Sauvegarde des allocations pour chaque catégorie (réservé aux formules débloquant le Budget)
-      if (canModifyPaidFeature(curState)) {
-        for (const cat of curState.categories) {
-          if (!UUID_REGEX.test(cat.id)) continue;
-          if (cat.allocation_id) {
-            await supabase
-              .from("budget_allocations")
-              .update({ allocated_amount: cat.amount })
-              .eq("id", cat.allocation_id);
-          } else {
-            const { data: newAlloc } = await supabase
-              .from("budget_allocations")
-              .insert({ monthly_budget_id: budgetId, category_id: cat.id, allocated_amount: cat.amount })
-              .select()
-              .single();
-            if (newAlloc) {
-              cat.allocation_id = newAlloc.id;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("Could not sync budget to Supabase", e);
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -1646,21 +2561,17 @@ export const useUIStore = create<UIState>((set, get) => ({
     const trimmedName = cat.name.trim();
     if (!trimmedName) return;
 
-    // Empêcher l ajout de doublon (ex: Déplacement déjà existant)
     const exists = get().categories.some((c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase());
     if (exists) {
       return;
     }
 
-    // Générer un UUID valide si l'id n'est pas au format UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const catId = uuidRegex.test(cat.id) ? cat.id : (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : cat.id);
-    const newCategoryItem = { ...cat, id: catId, name: trimmedName };
+    const catId = ensureValidUuid(cat.id);
+    const newCategoryItem: Category = { ...cat, id: catId, name: trimmedName };
 
     const updated = deduplicateCategories([...get().categories, newCategoryItem]);
     set({ categories: updated });
 
-    // Sauvegarde locale immédiate
     const { year, month } = get().activeMonth;
     const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache();
@@ -1669,25 +2580,45 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: newCat } = await supabase
-        .from("categories")
-        .insert({ id: catId, user_id: user.id, name: trimmedName, color: cat.color })
-        .select()
-        .single();
-      if (newCat) {
-        cat.id = newCat.id;
-        const syncedCats = get().categories.map((c) => (c.name === trimmedName ? { ...c, id: newCat.id } : c));
-        set({ categories: syncedCats });
-        if (cache && cache.months[monthKey]) {
-          cache.months[monthKey].categories = syncedCats;
-          saveLocalCache(cache);
-        }
-      }
-    } catch (err) {
-      console.warn("Could not sync category to Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "category",
+      entityId: catId,
+      monthKey,
+      type: "upsert_category",
+      payload: {
+        id: catId,
+        name: trimmedName,
+        color: cat.color || "bg-blue-500",
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+
+    if ((Number(cat.amount) || 0) > 0) {
+      await enqueueOutboxEntry(uid, {
+        entityType: "allocation",
+        entityId: catId,
+        monthKey,
+        coalesceKey: `alloc:${monthKey}:${catId}`,
+        type: "upsert_allocation",
+        payload: {
+          budgetId: get().budget_id,
+          year,
+          month,
+          categoryId: catId,
+          categoryName: trimmedName,
+          categoryColor: cat.color || "bg-blue-500",
+          amount: Number(cat.amount) || 0,
+        },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+    }
+
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -1707,10 +2638,20 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      await supabase.from("categories").update({ is_active: false }).eq("id", id);
-    } catch (err) {
-      console.warn("Could not remove category from Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "category",
+      entityId: id,
+      monthKey,
+      type: "delete_category",
+      payload: { id },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -1730,10 +2671,21 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      await supabase.from("categories").update(updates).eq("id", id);
-    } catch (err) {
-      console.warn("Could not update category in Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "category",
+      entityId: id,
+      monthKey,
+      coalesceKey: `upd_cat:${id}`,
+      type: "update_category",
+      payload: { id, ...updates },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -1755,62 +2707,54 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     if (allocationDebounceTimers[id]) clearTimeout(allocationDebounceTimers[id]);
     allocationDebounceTimers[id] = setTimeout(async () => {
-      try {
-        if (!get().isOnline) {
-          throw new Error("Mode hors-ligne");
-        }
-        const budgetId = get().budget_id;
-        if (!budgetId) return;
-        const category = get().categories.find((c) => c.id === id);
-        if (!category) return;
-
-        if (category.allocation_id) {
-          await supabase.from("budget_allocations").update({ allocated_amount: amount }).eq("id", category.allocation_id);
-        } else {
-          const { data: newAlloc } = await supabase
-            .from("budget_allocations")
-            .insert({ monthly_budget_id: budgetId, category_id: id, allocated_amount: amount })
-            .select()
-            .single();
-          if (newAlloc) {
-            set((state) => ({
-              categories: state.categories.map((c) => (c.id === id ? { ...c, allocation_id: newAlloc.id } : c)),
-            }));
-          }
-        }
-      } catch (err) {
-        console.warn("Could not sync allocation to Supabase (queued)", err);
-        const budgetId = get().budget_id;
-        const category = get().categories.find((c) => c.id === id);
-        get().enqueueSyncAction({
-          type: "update_category_amount",
-          payload: {
-            allocation_id: category?.allocation_id,
-            budgetId,
-            categoryId: id,
-            amount,
-          },
-        });
+      const uid = get().userId || activeUserId;
+      if (!uid) return;
+      const category = get().categories.find((c) => c.id === id);
+      await enqueueOutboxEntry(uid, {
+        entityType: "allocation",
+        entityId: id,
+        monthKey,
+        coalesceKey: `alloc:${monthKey}:${id}`,
+        type: "upsert_allocation",
+        payload: {
+          allocation_id: category?.allocation_id,
+          budgetId: get().budget_id,
+          year,
+          month,
+          categoryId: id,
+          categoryName: category?.name,
+          categoryColor: category?.color,
+          amount,
+        },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+      await get().refreshOfflineDiagnostics();
+      if (get().isOnline) {
+        void get().syncPendingQueue(false, true);
       }
-    }, 600);
+    }, 450);
   },
 
   addTransaction: async (tx) => {
     const isInc = tx.type === "income" || tx.type === "income_adjustment";
     const normalizedType: "income" | "expense" = isInc ? "income" : "expense";
     const assignedCatName = (tx.category || (isInc ? "Revenu" : "Autre (Hors Budget)")).trim();
+    const txId = ensureValidUuid(tx.id);
     const transactionItem: Transaction = {
       ...tx,
+      id: txId,
       type: normalizedType,
       category: assignedCatName,
+      pendingSync: true,
     };
 
     const newTransactions = [transactionItem, ...get().transactions];
     const newIncome = isInc ? get().income + tx.amount : get().income;
 
-    // Si c'est une dépense sur une catégorie qui n'est pas encore dans Mon Budget, l'ajouter automatiquement à Mon Budget
-    // Et si c'est une épargne (ou non budgétisé), comptabiliser automatiquement le montant dans l'enveloppe
     let updatedCategories = get().categories;
+    let newlyCreatedCategory: Category | null = null;
+    let updatedSavingsAllocationCat: Category | null = null;
+
     const isSavingsCat =
       assignedCatName.toLowerCase() === "épargne" ||
       assignedCatName.toLowerCase() === "epargne" ||
@@ -1827,21 +2771,23 @@ export const useUIStore = create<UIState>((set, get) => ({
         (c) => c.name.trim().toLowerCase() === assignedCatName.toLowerCase()
       );
       if (!catExists) {
-        const newCatId =
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `cat-${Date.now()}`;
+        const newCatId = ensureValidUuid(null);
         const newCat: Category = {
           id: newCatId,
           name: assignedCatName,
           amount: isSavingsCat ? catSpentAfter : 0,
           color: isSavingsCat ? "bg-emerald-600" : "bg-blue-500",
         };
+        newlyCreatedCategory = newCat;
         updatedCategories = deduplicateCategories([...updatedCategories, newCat]);
       } else if (isSavingsCat) {
         updatedCategories = updatedCategories.map((c) => {
           if (c.name.trim().toLowerCase() === assignedCatName.toLowerCase()) {
-            return { ...c, amount: Math.max(Number(c.amount) || 0, catSpentAfter) };
+            const nextAmount = Math.max(Number(c.amount) || 0, catSpentAfter);
+            if (nextAmount !== Number(c.amount)) {
+              updatedSavingsAllocationCat = { ...c, amount: nextAmount };
+            }
+            return { ...c, amount: nextAmount };
           }
           return c;
         });
@@ -1854,7 +2800,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       categories: updatedCategories,
     });
 
-    // Sauvegarde locale instantanée
+    // Sauvegarde locale instantanée (localStorage + IndexedDB)
     const { year, month } = get().activeMonth;
     const monthKey = getMonthKey(year, month);
     const cache = loadLocalCache();
@@ -1865,53 +2811,91 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      if (!get().isOnline) {
-        throw new Error("Mode hors-ligne");
-      }
-      const budgetId = get().budget_id;
-      if (!budgetId) return;
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
 
-      let category_id: string | null = null;
-      if (!isInc) {
-        const cat = get().categories.find((c) => c.name.toLowerCase() === tx.category.toLowerCase());
-        if (cat && UUID_REGEX.test(cat.id)) category_id = cat.id;
-      }
-
-      const { data: newTx } = await supabase
-        .from("transactions")
-        .insert({
-          monthly_budget_id: budgetId,
-          category_id,
-          amount: tx.amount,
-          description: tx.label,
-          transaction_date: tx.date,
-          type: isInc ? "income_adjustment" : "expense",
-        })
-        .select()
-        .single();
-
-      if (newTx) {
-        transactionItem.id = newTx.id;
-      }
-    } catch (err) {
-      console.warn("Could not sync transaction to Supabase immediately (queued)", err);
-      let category_id: string | null = null;
-      if (!isInc) {
-        const cat = get().categories.find((c) => c.name.toLowerCase() === tx.category.toLowerCase());
-        if (cat && UUID_REGEX.test(cat.id)) category_id = cat.id;
-      }
-      get().enqueueSyncAction({
-        type: "add_transaction",
+    if (newlyCreatedCategory) {
+      await enqueueOutboxEntry(uid, {
+        entityType: "category",
+        entityId: newlyCreatedCategory.id,
+        monthKey,
+        type: "upsert_category",
         payload: {
-          monthly_budget_id: get().budget_id,
-          category_id,
-          amount: tx.amount,
-          description: tx.label,
-          transaction_date: tx.date,
-          type: isInc ? "income_adjustment" : "expense",
+          id: newlyCreatedCategory.id,
+          name: newlyCreatedCategory.name,
+          color: newlyCreatedCategory.color,
         },
+        clientUpdatedAt: new Date().toISOString(),
       });
+      if (newlyCreatedCategory.amount > 0) {
+        await enqueueOutboxEntry(uid, {
+          entityType: "allocation",
+          entityId: newlyCreatedCategory.id,
+          monthKey,
+          coalesceKey: `alloc:${monthKey}:${newlyCreatedCategory.id}`,
+          type: "upsert_allocation",
+          payload: {
+            budgetId: get().budget_id,
+            year,
+            month,
+            categoryId: newlyCreatedCategory.id,
+            categoryName: newlyCreatedCategory.name,
+            categoryColor: newlyCreatedCategory.color,
+            amount: newlyCreatedCategory.amount,
+          },
+          clientUpdatedAt: new Date().toISOString(),
+        });
+      }
+    } else if (updatedSavingsAllocationCat) {
+      const catToSync = updatedSavingsAllocationCat as Category;
+      await enqueueOutboxEntry(uid, {
+        entityType: "allocation",
+        entityId: catToSync.id,
+        monthKey,
+        coalesceKey: `alloc:${monthKey}:${catToSync.id}`,
+        type: "upsert_allocation",
+        payload: {
+          allocation_id: catToSync.allocation_id,
+          budgetId: get().budget_id,
+          year,
+          month,
+          categoryId: catToSync.id,
+          categoryName: catToSync.name,
+          categoryColor: catToSync.color,
+          amount: catToSync.amount,
+        },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+    }
+
+    let category_id: string | null = null;
+    if (!isInc) {
+      const cat = get().categories.find((c) => c.name.toLowerCase() === assignedCatName.toLowerCase());
+      if (cat && UUID_REGEX.test(cat.id)) category_id = cat.id;
+    }
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "transaction",
+      entityId: txId,
+      monthKey,
+      type: "upsert_transaction",
+      payload: {
+        id: txId,
+        monthly_budget_id: get().budget_id,
+        year,
+        month,
+        category_id,
+        amount: tx.amount,
+        description: tx.label,
+        transaction_date: tx.date,
+        type: isInc ? "income_adjustment" : "expense",
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -1923,7 +2907,6 @@ export const useUIStore = create<UIState>((set, get) => ({
       newIncome = Math.max(0, newIncome - tx.amount);
     }
 
-    // Si cette transaction provenait d'un remboursement de dette/créance, synchroniser la dette automatiquement
     let updatedDebts = get().debts;
     let syncedPaymentIdToRemove: string | null = null;
     let syncedDebtToUpdate: DebtItem | null = null;
@@ -1958,7 +2941,7 @@ export const useUIStore = create<UIState>((set, get) => ({
           return updatedD;
         });
       }
-      // Si cette transaction provenait d'un versement d'épargne, synchroniser automatiquement l'objectif d'épargne
+
       const isSavingsTx =
         tx.linkedContributionId ||
         tx.label.startsWith("Épargne :") ||
@@ -2032,31 +3015,53 @@ export const useUIStore = create<UIState>((set, get) => ({
         saveLocalCache(cache);
       }
 
-      try {
-        if (!get().isOnline) throw new Error("Mode hors-ligne");
-        await supabase.from("transactions").delete().eq("id", id);
-        if (syncedPaymentIdToRemove && syncedDebtToUpdate) {
-          const dUpd = syncedDebtToUpdate as DebtItem;
-          await supabase.from("debt_payments").delete().eq("id", syncedPaymentIdToRemove);
-          await supabase
-            .from("debts")
-            .update({ remaining_amount: dUpd.remainingAmount, status: dUpd.status })
-            .eq("id", dUpd.id);
-        }
-        if (syncedContribIdToRemove && syncedGoalToUpdate) {
-          const gUpd = syncedGoalToUpdate as SavingsGoal;
-          await supabase.from("savings_contributions").delete().eq("id", syncedContribIdToRemove);
-          await supabase
-            .from("savings_goals")
-            .update({ current_amount: gUpd.current, status: gUpd.status })
-            .eq("id", gUpd.id);
-        }
-      } catch (err) {
-        console.warn("Could not delete transaction from Supabase immediately (queued)", err);
-        get().enqueueSyncAction({
-          type: "remove_transaction",
-          payload: { id },
+      const uid = get().userId || activeUserId;
+      if (!uid) return;
+
+      await enqueueOutboxEntry(uid, {
+        entityType: "transaction",
+        entityId: id,
+        monthKey,
+        type: "delete_transaction",
+        payload: { id },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+
+      if (syncedPaymentIdToRemove && syncedDebtToUpdate) {
+        const dUpd = syncedDebtToUpdate as DebtItem;
+        await enqueueOutboxEntry(uid, {
+          entityType: "debt_payment",
+          entityId: syncedPaymentIdToRemove,
+          type: "delete_debt_payment",
+          payload: {
+            id: syncedPaymentIdToRemove,
+            debtId: dUpd.id,
+            remainingAmount: dUpd.remainingAmount,
+            debtStatus: dUpd.status,
+          },
+          clientUpdatedAt: new Date().toISOString(),
         });
+      }
+
+      if (syncedContribIdToRemove && syncedGoalToUpdate) {
+        const gUpd = syncedGoalToUpdate as SavingsGoal;
+        await enqueueOutboxEntry(uid, {
+          entityType: "savings_contribution",
+          entityId: syncedContribIdToRemove,
+          type: "delete_savings_contribution",
+          payload: {
+            id: syncedContribIdToRemove,
+            goalId: gUpd.id,
+            newCurrent: gUpd.current,
+            goalStatus: gUpd.status,
+          },
+          clientUpdatedAt: new Date().toISOString(),
+        });
+      }
+
+      await get().refreshOfflineDiagnostics();
+      if (get().isOnline) {
+        void get().syncPendingQueue(false, true);
       }
       return;
     }
@@ -2079,23 +3084,20 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      if (!get().isOnline) throw new Error("Mode hors-ligne");
-      await supabase.from("transactions").delete().eq("id", id);
-      if (syncedPaymentIdToRemove && syncedDebtToUpdate) {
-        const dUpd = syncedDebtToUpdate as DebtItem;
-        await supabase.from("debt_payments").delete().eq("id", syncedPaymentIdToRemove);
-        await supabase
-          .from("debts")
-          .update({ remaining_amount: dUpd.remainingAmount, status: dUpd.status })
-          .eq("id", dUpd.id);
-      }
-    } catch (err) {
-      console.warn("Could not delete transaction from Supabase immediately (queued)", err);
-      get().enqueueSyncAction({
-        type: "remove_transaction",
-        payload: { id },
-      });
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "transaction",
+      entityId: id,
+      monthKey,
+      type: "delete_transaction",
+      payload: { id },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -2109,16 +3111,23 @@ export const useUIStore = create<UIState>((set, get) => ({
     const prevMonth = month === 1 ? 12 : month - 1;
     const prevMonthName = new Date(prevYear, prevMonth - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
     const prevKey = getMonthKey(prevYear, prevMonth);
+    const currentKey = getMonthKey(year, month);
 
+    const uid = get().userId || activeUserId;
     const cache = loadLocalCache();
-    const prevMonthData = cache?.months?.[prevKey];
+    let prevMonthData = cache?.months?.[prevKey];
+    if (!prevMonthData && uid) {
+      const idbSnap = await readOfflineSnapshot(uid);
+      prevMonthData = idbSnap?.months?.[prevKey];
+    }
 
     let copiedIncome = 0;
     let allocationsCount = 0;
+    let duplicatedCats: Category[] = get().categories;
 
     if (prevMonthData && prevMonthData.categories.length > 0) {
       copiedIncome = prevMonthData.baseSalary || prevMonthData.income;
-      const duplicatedCats = prevMonthData.categories.map((c) => ({ ...c, allocation_id: undefined }));
+      duplicatedCats = prevMonthData.categories.map((c) => ({ ...c, allocation_id: undefined }));
       allocationsCount = duplicatedCats.filter((c) => c.amount > 0).length;
 
       set({
@@ -2127,18 +3136,26 @@ export const useUIStore = create<UIState>((set, get) => ({
         categories: duplicatedCats,
       });
 
-      const currentKey = getMonthKey(year, month);
-      if (cache) {
-        cache.months[currentKey] = {
-          baseSalary: copiedIncome,
-          income: copiedIncome,
-          categories: duplicatedCats,
-          transactions: get().transactions,
-        };
-        saveLocalCache(cache);
-      }
-    } else {
-      // Tenter depuis Supabase
+      const targetCache = cache || {
+        currency: get().currency,
+        payDay: get().payDay,
+        alertThreshold: get().alertThreshold,
+        months: {},
+        savingsGoals: get().savingsGoals,
+        debts: get().debts,
+      };
+      const existingCurMonth = targetCache.months[currentKey];
+      targetCache.months[currentKey] = {
+        ...existingCurMonth,
+        budgetId: existingCurMonth?.budgetId ?? get().budget_id,
+        incomeEntries: existingCurMonth?.incomeEntries ?? get().incomeEntries,
+        baseSalary: copiedIncome,
+        income: copiedIncome,
+        categories: duplicatedCats,
+        transactions: get().transactions,
+      };
+      saveLocalCache(targetCache);
+    } else if (get().isOnline) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: prevBudget } = await supabase
@@ -2152,28 +3169,81 @@ export const useUIStore = create<UIState>((set, get) => ({
         if (prevBudget) {
           const { data: prevIncomes } = await supabase
             .from("income_entries")
-            .select("amount")
+            .select("*")
             .eq("monthly_budget_id", prevBudget.id);
 
           const { data: prevAllocations } = await supabase
             .from("budget_allocations")
-            .select("category_id, allocated_amount")
+            .select("*")
             .eq("monthly_budget_id", prevBudget.id);
 
-          if (prevIncomes && prevIncomes.length > 0) {
-            copiedIncome = prevIncomes.reduce((s, i) => s + Number(i.amount), 0);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const activePrevIncomes = (prevIncomes || []).filter((i: any) => !i.deleted_at);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const activePrevAllocations = (prevAllocations || []).filter((a: any) => !a.deleted_at);
+
+          if (activePrevIncomes.length > 0) {
+            copiedIncome = activePrevIncomes.reduce((s, i) => s + Number(i.amount), 0);
           }
 
-          if (prevAllocations && prevAllocations.length > 0) {
-            allocationsCount = prevAllocations.length;
-            const updatedCats = get().categories.map((c) => {
-              const prev = prevAllocations.find((a) => a.category_id === c.id);
-              return { ...c, amount: prev ? Number(prev.allocated_amount) : c.amount };
+          if (activePrevAllocations.length > 0) {
+            allocationsCount = activePrevAllocations.length;
+            duplicatedCats = get().categories.map((c) => {
+              const prev = activePrevAllocations.find((a) => a.category_id === c.id);
+              return { ...c, allocation_id: undefined, amount: prev ? Number(prev.allocated_amount) : c.amount };
             });
-            set({ categories: updatedCats });
           }
-          await get().setIncome(copiedIncome);
+
+          set({
+            baseSalary: copiedIncome,
+            income: copiedIncome,
+            categories: duplicatedCats,
+          });
         }
+      }
+    }
+
+    if (uid && (copiedIncome > 0 || allocationsCount > 0)) {
+      await enqueueOutboxEntry(uid, {
+        entityType: "primary_salary",
+        entityId: currentKey,
+        monthKey: currentKey,
+        coalesceKey: `primary_salary:${currentKey}`,
+        type: "set_primary_salary",
+        payload: {
+          budgetId: get().budget_id,
+          year,
+          month,
+          amount: copiedIncome,
+          received_date: new Date().toISOString().split("T")[0],
+        },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+
+      for (const cat of duplicatedCats) {
+        if (!UUID_REGEX.test(cat.id)) continue;
+        await enqueueOutboxEntry(uid, {
+          entityType: "allocation",
+          entityId: cat.id,
+          monthKey: currentKey,
+          coalesceKey: `alloc:${currentKey}:${cat.id}`,
+          type: "upsert_allocation",
+          payload: {
+            budgetId: get().budget_id,
+            year,
+            month,
+            categoryId: cat.id,
+            categoryName: cat.name,
+            categoryColor: cat.color,
+            amount: cat.amount,
+          },
+          clientUpdatedAt: new Date().toISOString(),
+        });
+      }
+
+      await get().refreshOfflineDiagnostics();
+      if (get().isOnline) {
+        void get().syncPendingQueue(false, true);
       }
     }
 
@@ -2189,8 +3259,9 @@ export const useUIStore = create<UIState>((set, get) => ({
       toast.error(LOCKED_FEATURE_TOAST);
       return;
     }
+    const goalId = ensureValidUuid(null);
     const newGoal: SavingsGoal = {
-      id: Date.now().toString(),
+      id: goalId,
       name: goal.name,
       target: goal.target,
       current: 0,
@@ -2209,27 +3280,27 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: created } = await supabase
-        .from("savings_goals")
-        .insert({
-          user_id: user.id,
-          name: goal.name,
-          target_amount: goal.target,
-          color: goal.color || "bg-blue-500",
-          target_date: goal.target_date || null,
-          status: "active",
-          current_amount: 0,
-        })
-        .select()
-        .single();
-      if (created) {
-        newGoal.id = created.id;
-      }
-    } catch (err) {
-      console.warn("Could not sync goal to Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "savings_goal",
+      entityId: goalId,
+      type: "upsert_savings_goal",
+      payload: {
+        id: goalId,
+        name: goal.name,
+        target_amount: goal.target,
+        current_amount: 0,
+        color: goal.color || "bg-blue-500",
+        target_date: goal.target_date || null,
+        status: "active",
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -2247,10 +3318,19 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      await supabase.from("savings_goals").delete().eq("id", id);
-    } catch (err) {
-      console.warn("Could not delete goal from Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "savings_goal",
+      entityId: id,
+      type: "delete_savings_goal",
+      payload: { id },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -2268,10 +3348,20 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      await supabase.from("savings_goals").update({ status }).eq("id", id);
-    } catch (err) {
-      console.warn("Could not update goal status in Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "savings_goal",
+      entityId: id,
+      coalesceKey: `goal_status:${id}`,
+      type: "update_savings_goal_status",
+      payload: { id, status },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -2284,12 +3374,10 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (!goal) return;
 
     const contributionDate = date || new Date().toISOString().split("T")[0];
-    const txId =
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `tx-sav-${Date.now()}`;
+    const txId = ensureValidUuid(null);
+    const contribId = ensureValidUuid(null);
     const contribItem: SavingsContribution = {
-      id: Date.now().toString(),
+      id: contribId,
       amount,
       date: contributionDate,
       notes: notes || undefined,
@@ -2297,17 +3385,18 @@ export const useUIStore = create<UIState>((set, get) => ({
     };
 
     const newCurrent = goal.current + amount;
+    const nextGoalStatus: "active" | "completed" | "paused" =
+      newCurrent >= goal.target ? "completed" : goal.status;
     const updatedGoals = get().savingsGoals.map((g) => {
       if (g.id !== goalId) return g;
       return {
         ...g,
         current: newCurrent,
-        status: newCurrent >= g.target ? ("completed" as const) : g.status,
+        status: nextGoalStatus,
         contributions: [contribItem, ...(g.contributions || [])],
       };
     });
 
-    // Créer automatiquement la transaction liée pour que Transactions et Mon Budget soient synchronisés
     const txLabel = `Épargne : ${goal.name}${notes?.trim() ? ` (${notes.trim()})` : ""}`;
     const linkedTx: Transaction = {
       id: txId,
@@ -2318,11 +3407,11 @@ export const useUIStore = create<UIState>((set, get) => ({
       type: "expense",
       linkedSavingsGoalId: goalId,
       linkedContributionId: contribItem.id,
+      pendingSync: true,
     };
 
     const updatedTransactions = [linkedTx, ...get().transactions];
 
-    // Comptabiliser automatiquement l'épargne dans Mon Budget même si elle n'était pas budgétisée
     const { year, month } = get().activeMonth;
     const monthlySavingsTotal = Math.max(
       getMonthlySavingsContributions(updatedGoals, year, month),
@@ -2336,10 +3425,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     if (!hasSavingsCat) {
       const newSavCat: Category = {
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `cat-sav-${Date.now()}`,
+        id: ensureValidUuid(null),
         name: "Épargne",
         amount: monthlySavingsTotal,
         color: "bg-emerald-600",
@@ -2372,46 +3458,47 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      const { data: newContrib } = await supabase
-        .from("savings_contributions")
-        .insert({
-          savings_goal_id: goalId,
-          amount,
-          contribution_date: contributionDate,
-          notes: notes || null,
-        })
-        .select()
-        .single();
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
 
-      if (newContrib) {
-        contribItem.id = newContrib.id;
-        linkedTx.linkedContributionId = newContrib.id;
-      }
-      await supabase.from("savings_goals").update({ current_amount: newCurrent }).eq("id", goalId);
+    await enqueueOutboxEntry(uid, {
+      entityType: "savings_contribution",
+      entityId: contribId,
+      type: "upsert_savings_contribution",
+      payload: {
+        id: contribId,
+        savings_goal_id: goalId,
+        amount,
+        contribution_date: contributionDate,
+        notes: notes || null,
+        newCurrent,
+        goalStatus: nextGoalStatus,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
 
-      const budgetId = get().budget_id;
-      if (budgetId) {
-        const { data: createdTx } = await supabase
-          .from("transactions")
-          .insert({
-            monthly_budget_id: budgetId,
-            category_id: null,
-            amount,
-            description: txLabel,
-            transaction_date: contributionDate,
-            type: "expense",
-          })
-          .select()
-          .maybeSingle();
+    await enqueueOutboxEntry(uid, {
+      entityType: "transaction",
+      entityId: txId,
+      monthKey,
+      type: "upsert_transaction",
+      payload: {
+        id: txId,
+        monthly_budget_id: get().budget_id,
+        year,
+        month,
+        category_id: null,
+        amount,
+        description: txLabel,
+        transaction_date: contributionDate,
+        type: "expense",
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
 
-        if (createdTx) {
-          linkedTx.id = createdTx.id;
-          contribItem.linkedTransactionId = createdTx.id;
-        }
-      }
-    } catch (err) {
-      console.warn("Could not sync savings contribution to Supabase", err);
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -2435,7 +3522,6 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     });
 
-    // Supprimer automatiquement la transaction liée dans Transactions
     let txToRemoveId: string | null = null;
     const currentTxs = get().transactions;
     const matchingTx = currentTxs.find(
@@ -2491,20 +3577,37 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      await supabase.from("savings_contributions").delete().eq("id", contributionId);
-      const updatedGoal = updatedGoals.find((g) => g.id === goalId);
-      if (updatedGoal) {
-        await supabase
-          .from("savings_goals")
-          .update({ current_amount: updatedGoal.current, status: updatedGoal.status })
-          .eq("id", goalId);
-      }
-      if (txToRemoveId) {
-        await supabase.from("transactions").delete().eq("id", txToRemoveId);
-      }
-    } catch (err) {
-      console.warn("Could not delete savings contribution from Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    const updatedGoal = updatedGoals.find((g) => g.id === goalId);
+    await enqueueOutboxEntry(uid, {
+      entityType: "savings_contribution",
+      entityId: contributionId,
+      type: "delete_savings_contribution",
+      payload: {
+        id: contributionId,
+        goalId,
+        newCurrent: updatedGoal?.current,
+        goalStatus: updatedGoal?.status,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+
+    if (txToRemoveId) {
+      await enqueueOutboxEntry(uid, {
+        entityType: "transaction",
+        entityId: txToRemoveId,
+        monthKey,
+        type: "delete_transaction",
+        payload: { id: txToRemoveId },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+    }
+
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -2520,8 +3623,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     const cleanAmount = Math.max(0, Number(debt.totalAmount) || 0);
     if (!debt.personName.trim() || cleanAmount <= 0) return;
 
+    const debtId = ensureValidUuid(null);
     const newDebt: DebtItem = {
-      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      id: debtId,
       type: debt.type,
       personName: debt.personName.trim(),
       phone: debt.phone?.trim() || undefined,
@@ -2548,30 +3652,29 @@ export const useUIStore = create<UIState>((set, get) => ({
     cache.debts = updatedDebts;
     saveLocalCache(cache);
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: created } = await supabase
-        .from("debts")
-        .insert({
-          user_id: user.id,
-          type: newDebt.type,
-          person_name: newDebt.personName,
-          phone: newDebt.phone || null,
-          total_amount: newDebt.totalAmount,
-          remaining_amount: newDebt.remainingAmount,
-          due_date: newDebt.dueDate || null,
-          status: "pending",
-          notes: newDebt.notes || null,
-        })
-        .select()
-        .maybeSingle();
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
 
-      if (created) {
-        newDebt.id = created.id;
-      }
-    } catch (err) {
-      console.warn("Could not sync debt to Supabase", err);
+    await enqueueOutboxEntry(uid, {
+      entityType: "debt",
+      entityId: debtId,
+      type: "upsert_debt",
+      payload: {
+        id: debtId,
+        type: newDebt.type,
+        person_name: newDebt.personName,
+        phone: newDebt.phone || null,
+        total_amount: newDebt.totalAmount,
+        remaining_amount: newDebt.remainingAmount,
+        due_date: newDebt.dueDate || null,
+        status: "pending",
+        notes: newDebt.notes || null,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -2589,10 +3692,19 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      await supabase.from("debts").delete().eq("id", id);
-    } catch (err) {
-      console.warn("Could not delete debt from Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "debt",
+      entityId: id,
+      type: "delete_debt",
+      payload: { id },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -2608,9 +3720,10 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (cleanAmount <= 0) return;
 
     const paymentDate = date || new Date().toISOString().split("T")[0];
-    const txId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tx-${Date.now()}`;
+    const txId = ensureValidUuid(null);
+    const paymentId = ensureValidUuid(null);
     const paymentItem: DebtPaymentItem = {
-      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      id: paymentId,
       amount: cleanAmount,
       date: paymentDate,
       notes: notes?.trim() || undefined,
@@ -2631,7 +3744,6 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     });
 
-    // Répercussion automatique sur les Transactions, Revenus/Dépenses et Solde disponible
     const isReceivable = debt.type === "receivable";
     const txLabel = isReceivable
       ? `Remboursement reçu : ${debt.personName}${notes?.trim() ? ` (${notes.trim()})` : ""}`
@@ -2646,6 +3758,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       type: isReceivable ? "income" : "expense",
       linkedDebtId: debtId,
       linkedPaymentId: paymentItem.id,
+      pendingSync: true,
     };
 
     const updatedTransactions = [linkedTx, ...get().transactions];
@@ -2670,6 +3783,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     cache.debts = updatedDebts;
     if (!cache.months[monthKey]) {
       cache.months[monthKey] = {
+        budgetId: get().budget_id,
         baseSalary: get().baseSalary,
         income: updatedIncome,
         incomeEntries: get().incomeEntries,
@@ -2682,51 +3796,47 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
     saveLocalCache(cache);
 
-    try {
-      const { data: createdPayment } = await supabase
-        .from("debt_payments")
-        .insert({
-          debt_id: debtId,
-          amount: cleanAmount,
-          payment_date: paymentDate,
-          notes: notes?.trim() || null,
-        })
-        .select()
-        .maybeSingle();
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
 
-      if (createdPayment) {
-        paymentItem.id = createdPayment.id;
-        linkedTx.linkedPaymentId = createdPayment.id;
-      }
+    await enqueueOutboxEntry(uid, {
+      entityType: "debt_payment",
+      entityId: paymentId,
+      type: "upsert_debt_payment",
+      payload: {
+        id: paymentId,
+        debt_id: debtId,
+        amount: cleanAmount,
+        payment_date: paymentDate,
+        notes: notes?.trim() || null,
+        remainingAmount: newRemaining,
+        debtStatus: newStatus,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
 
-      await supabase
-        .from("debts")
-        .update({ remaining_amount: newRemaining, status: newStatus })
-        .eq("id", debtId);
+    await enqueueOutboxEntry(uid, {
+      entityType: "transaction",
+      entityId: txId,
+      monthKey,
+      type: "upsert_transaction",
+      payload: {
+        id: txId,
+        monthly_budget_id: get().budget_id,
+        year,
+        month,
+        category_id: null,
+        amount: cleanAmount,
+        description: txLabel,
+        transaction_date: paymentDate,
+        type: isReceivable ? "income_adjustment" : "expense",
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
 
-      // Synchroniser également la transaction liée dans Supabase
-      const budgetId = get().budget_id;
-      if (budgetId) {
-        const { data: createdTx } = await supabase
-          .from("transactions")
-          .insert({
-            monthly_budget_id: budgetId,
-            category_id: null,
-            amount: cleanAmount,
-            description: txLabel,
-            transaction_date: paymentDate,
-            type: isReceivable ? "income_adjustment" : "expense",
-          })
-          .select()
-          .maybeSingle();
-
-        if (createdTx) {
-          linkedTx.id = createdTx.id;
-          paymentItem.linkedTransactionId = createdTx.id;
-        }
-      }
-    } catch (err) {
-      console.warn("Could not sync debt payment to Supabase", err);
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 
@@ -2753,7 +3863,6 @@ export const useUIStore = create<UIState>((set, get) => ({
       };
     });
 
-    // Supprimer automatiquement la transaction liée et réajuster le revenu / solde
     let txToRemoveId: string | null = null;
     const currentTxs = get().transactions;
     const matchingTx = currentTxs.find(
@@ -2796,20 +3905,37 @@ export const useUIStore = create<UIState>((set, get) => ({
       saveLocalCache(cache);
     }
 
-    try {
-      await supabase.from("debt_payments").delete().eq("id", paymentId);
-      const updatedDebt = updatedDebts.find((d) => d.id === debtId);
-      if (updatedDebt) {
-        await supabase
-          .from("debts")
-          .update({ remaining_amount: updatedDebt.remainingAmount, status: updatedDebt.status })
-          .eq("id", debtId);
-      }
-      if (txToRemoveId) {
-        await supabase.from("transactions").delete().eq("id", txToRemoveId);
-      }
-    } catch (err) {
-      console.warn("Could not delete debt payment from Supabase", err);
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    const updatedDebt = updatedDebts.find((d) => d.id === debtId);
+    await enqueueOutboxEntry(uid, {
+      entityType: "debt_payment",
+      entityId: paymentId,
+      type: "delete_debt_payment",
+      payload: {
+        id: paymentId,
+        debtId,
+        remainingAmount: updatedDebt?.remainingAmount,
+        debtStatus: updatedDebt?.status,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+
+    if (txToRemoveId) {
+      await enqueueOutboxEntry(uid, {
+        entityType: "transaction",
+        entityId: txToRemoveId,
+        monthKey,
+        type: "delete_transaction",
+        payload: { id: txToRemoveId },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+    }
+
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
     }
   },
 }));

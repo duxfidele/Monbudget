@@ -8,8 +8,8 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
-  // Fast-path immédiat pour les webhooks signés (ex: Moneriz) : aucune inspection de cookie ni redirection
-  if (pathname.startsWith('/api/webhooks/')) {
+  // Fast-path immédiat pour les webhooks signés (ex: Moneriz) et la sonde santé
+  if (pathname.startsWith('/api/webhooks/') || pathname === '/api/health') {
     return supabaseResponse
   }
 
@@ -49,8 +49,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Si un cookie Supabase est présent, vérification avec timeout de sécurité
+  // Si un cookie Supabase est présent, vérification avec distinction réseau vs rejet explicite
   let user = null
+  let networkUnavailable = false
   try {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,21 +74,44 @@ export async function updateSession(request: NextRequest) {
       }
     )
 
-    // Timeout de 2.5 secondes max pour ne jamais bloquer le rendu
-    const timeoutPromise = new Promise<{ data: { user: null } }>((resolve) =>
-      setTimeout(() => resolve({ data: { user: null } }), 2500)
+    // Timeout de 2.5 secondes max pour ne jamais bloquer le rendu hors-ligne
+    const timeoutPromise = new Promise<{ data: { user: null }; timedOut: true }>((resolve) =>
+      setTimeout(() => resolve({ data: { user: null }, timedOut: true }), 2500)
     )
 
-    const userPromise = supabase.auth.getUser()
+    const userPromise = supabase.auth.getUser().then((res) => ({
+      ...res,
+      timedOut: false as const,
+    }))
     const result = await Promise.race([userPromise, timeoutPromise])
+    if (result.timedOut) {
+      networkUnavailable = true
+    } else if (result.error) {
+      const errMsg = (result.error.message || '').toLowerCase()
+      if (
+        errMsg.includes('fetch') ||
+        errMsg.includes('network') ||
+        errMsg.includes('timeout') ||
+        errMsg.includes('enotfound') ||
+        errMsg.includes('econnrefused')
+      ) {
+        networkUnavailable = true
+      }
+    }
     user = result?.data?.user || null
   } catch (err) {
     console.warn("Middleware Supabase auth error or network timeout:", err)
+    networkUnavailable = true
     user = null
   }
 
-  // Protection des routes privées
+  // Protection des routes privées : en cas de coupure réseau avec cookie de session présent,
+  // autoriser le démarrage en mode Offline-First local (les APIs serveur restent protégées).
   if (!user && !isPublicRoute) {
+    if (networkUnavailable && hasAuthCookie) {
+      supabaseResponse.headers.set('x-monbudget-offline-session', '1')
+      return supabaseResponse
+    }
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)

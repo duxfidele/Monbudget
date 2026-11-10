@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,13 +27,21 @@ import {
   CreditCard,
   Crown,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  Upload,
+  HardDrive,
+  ArrowLeftRight,
+  Smartphone,
+  Cloud,
+  Check,
+  Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useUIStore } from "@/lib/store/ui-store";
+import type { ConflictRecord } from "@/lib/offline/db";
 import { InstallButton } from "@/components/pwa/install-button";
 import { buildFullAccountExport, downloadJsonFile } from "@/lib/utils/account-export";
 import { getUserStorageKey } from "@/lib/utils/security";
@@ -45,6 +53,114 @@ import {
 } from "@/lib/moneriz-plans";
 
 type TabType = "profile" | "subscription" | "appearance" | "notifications" | "security";
+
+function getEntityTypeLabel(entityType: ConflictRecord["entityType"]): string {
+  switch (entityType) {
+    case "transaction":
+      return "Transaction";
+    case "income_entry":
+      return "Revenu";
+    case "savings_goal":
+      return "Épargne";
+    case "debt":
+      return "Dette / Créance";
+    default:
+      return entityType;
+  }
+}
+
+function getAutoResolutionLabel(resolution: ConflictRecord["resolution"]): string {
+  switch (resolution) {
+    case "local_wins":
+      return "Décision initiale : version locale conservée";
+    case "remote_wins":
+      return "Décision initiale : version serveur conservée";
+    case "delete_wins":
+      return "Décision initiale : suppression appliquée";
+    case "merged":
+      return "Décision initiale : fusionnée";
+    default:
+      return "Révision manuelle requise";
+  }
+}
+
+function formatConflictTimestamp(iso?: string): string {
+  if (!iso) return "Date inconnue";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Date inconnue";
+  return d.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatConflictVersionLines(
+  entityType: ConflictRecord["entityType"],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: Record<string, any> | undefined,
+  currency: string
+): { isDeleted: boolean; lines: Array<{ key: string; value: string }> } {
+  if (!data) {
+    return { isDeleted: false, lines: [] };
+  }
+  const isDeleted = Boolean(data._deleted || data.deletedAt);
+  const cur = currency || "FCFA";
+  const lines: Array<{ key: string; value: string }> = [];
+
+  if (entityType === "transaction") {
+    const lbl = data.label ?? data.description;
+    if (lbl) lines.push({ key: "Libellé", value: String(lbl) });
+    if (data.amount !== undefined) {
+      lines.push({ key: "Montant", value: `${Number(data.amount).toLocaleString("fr-FR")} ${cur}` });
+    }
+    if (data.category) lines.push({ key: "Catégorie", value: String(data.category) });
+    const dt = data.date ?? data.transaction_date;
+    if (dt) lines.push({ key: "Date", value: String(dt) });
+    if (data.type) {
+      lines.push({
+        key: "Type",
+        value: data.type === "income" || data.type === "income_adjustment" ? "Revenu" : "Dépense",
+      });
+    }
+  } else if (entityType === "income_entry") {
+    if (data.label) lines.push({ key: "Libellé", value: String(data.label) });
+    const st = data.sourceType ?? data.source_type;
+    if (st) lines.push({ key: "Source", value: String(st) });
+    if (data.amount !== undefined) {
+      lines.push({ key: "Montant", value: `${Number(data.amount).toLocaleString("fr-FR")} ${cur}` });
+    }
+    const dt = data.date ?? data.received_date;
+    if (dt) lines.push({ key: "Date", value: String(dt) });
+  } else if (entityType === "savings_goal") {
+    if (data.name) lines.push({ key: "Objectif", value: String(data.name) });
+    const tgt = data.target ?? data.target_amount;
+    if (tgt !== undefined) {
+      lines.push({ key: "Cible", value: `${Number(tgt).toLocaleString("fr-FR")} ${cur}` });
+    }
+    const curAmt = data.current ?? data.current_amount;
+    if (curAmt !== undefined) {
+      lines.push({ key: "Épargné", value: `${Number(curAmt).toLocaleString("fr-FR")} ${cur}` });
+    }
+    if (data.status) lines.push({ key: "Statut", value: String(data.status) });
+  } else if (entityType === "debt") {
+    const pn = data.personName ?? data.person_name;
+    if (pn) lines.push({ key: "Personne", value: String(pn) });
+    const tot = data.totalAmount ?? data.total_amount;
+    if (tot !== undefined) {
+      lines.push({ key: "Total", value: `${Number(tot).toLocaleString("fr-FR")} ${cur}` });
+    }
+    const rem = data.remainingAmount ?? data.remaining_amount;
+    if (rem !== undefined) {
+      lines.push({ key: "Reste dû", value: `${Number(rem).toLocaleString("fr-FR")} ${cur}` });
+    }
+    if (data.status) lines.push({ key: "Statut", value: String(data.status) });
+  }
+
+  return { isDeleted, lines };
+}
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>("profile");
@@ -58,7 +174,9 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setMounted(true);
-    if (typeof window !== "undefined") {
+
+    const syncFromUrlAndHash = () => {
+      if (typeof window === "undefined") return;
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab") as TabType | null;
       if (
@@ -71,7 +189,34 @@ export default function SettingsPage() {
       if (planParam === "personal" || planParam === "business") {
         setHighlightedPlan(planParam);
       }
-    }
+      if (window.location.hash === "#conflicts-review") {
+        setActiveTab("security");
+        setTimeout(() => {
+          document
+            .getElementById("conflicts-review")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 120);
+      }
+    };
+
+    const handleOpenConflicts = () => {
+      setActiveTab("security");
+      setTimeout(() => {
+        document
+          .getElementById("conflicts-review")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 120);
+    };
+
+    syncFromUrlAndHash();
+    window.addEventListener("hashchange", syncFromUrlAndHash);
+    window.addEventListener("popstate", syncFromUrlAndHash);
+    window.addEventListener("monbudget:open-conflicts-review", handleOpenConflicts);
+    return () => {
+      window.removeEventListener("hashchange", syncFromUrlAndHash);
+      window.removeEventListener("popstate", syncFromUrlAndHash);
+      window.removeEventListener("monbudget:open-conflicts-review", handleOpenConflicts);
+    };
   }, []);
 
   // Profile data
@@ -86,8 +231,15 @@ export default function SettingsPage() {
     payDay: storePayDay, 
     notifications: storeNotifications,
     isOnline,
+    syncStatus,
     pendingSyncCount,
+    lastSyncedAt,
+    unresolvedConflictsCount,
+    syncConflicts,
+    resolveConflictChoice,
     syncPendingQueue,
+    exportOfflineBackup,
+    restoreOfflineBackup,
     updatePreferences, 
     updateNotifications,
     resetStore,
@@ -300,6 +452,34 @@ export default function SettingsPage() {
   };
 
   const [isExportingAll, setIsExportingAll] = useState(false);
+  const [isRestoringOffline, setIsRestoringOffline] = useState(false);
+  const [resolvingConflictId, setResolvingConflictId] = useState<string | null>(null);
+  const offlineBackupInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleResolveConflict = async (
+    conflictId: string,
+    choice: "keep_local" | "keep_remote" | "dismiss"
+  ) => {
+    setResolvingConflictId(conflictId);
+    try {
+      await resolveConflictChoice(conflictId, choice);
+    } finally {
+      setResolvingConflictId(null);
+    }
+  };
+
+  const handleRestoreOfflineFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsRestoringOffline(true);
+    try {
+      const text = await file.text();
+      await restoreOfflineBackup(text);
+    } finally {
+      setIsRestoringOffline(false);
+      e.target.value = "";
+    }
+  };
 
   const handleExportAllData = () => {
     setIsExportingAll(true);
@@ -435,6 +615,11 @@ export default function SettingsPage() {
           >
             <Shield className="mr-2 h-4 w-4 shrink-0" />
             <span>Sécurité & Accès</span>
+            {unresolvedConflictsCount > 0 && (
+              <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white">
+                {unresolvedConflictsCount}
+              </span>
+            )}
           </Button>
 
           <div className="pt-2 md:pt-4 border-t border-slate-200 dark:border-slate-800 mt-2 md:mt-4">
@@ -866,7 +1051,7 @@ export default function SettingsPage() {
                     {pendingSyncCount > 0 ? (
                       <Button
                         size="sm"
-                        onClick={syncPendingQueue}
+                        onClick={() => void syncPendingQueue(true)}
                         disabled={!isOnline}
                         className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs shrink-0 gap-1.5"
                       >
@@ -1147,6 +1332,341 @@ export default function SettingsPage() {
                     >
                       <Download className={`h-4 w-4 ${isExportingAll ? "animate-bounce" : ""}`} />
                       {isExportingAll ? "Génération en cours..." : "Télécharger ma sauvegarde complète"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Révision Manuelle des Conflits Multi-Appareils */}
+              <Card
+                id="conflicts-review"
+                className="scroll-mt-24 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+              >
+                <CardHeader>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                        <ArrowLeftRight className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                        Révision Manuelle des Conflits Multi-Appareils
+                      </CardTitle>
+                      <CardDescription className="text-slate-500 dark:text-slate-400">
+                        Comparez la version de cet appareil avec celle du serveur lorsque deux appareils modifient ou suppriment la même donnée hors ligne.
+                      </CardDescription>
+                    </div>
+                    {syncConflicts.length > 0 ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/70 dark:border-amber-800">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        {syncConflicts.length} à réviser
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-800">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Aucun conflit
+                      </span>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {syncConflicts.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/50 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      <span>
+                        Aucun conflit concurrent en attente de révision. Vos appareils sont parfaitement alignés.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {syncConflicts.map((conflict) => {
+                        const localDetails = formatConflictVersionLines(
+                          conflict.entityType,
+                          conflict.localData,
+                          storeCurrency || localCurrency
+                        );
+                        const remoteDetails = formatConflictVersionLines(
+                          conflict.entityType,
+                          conflict.remoteData,
+                          storeCurrency || localCurrency
+                        );
+                        const isBusy = resolvingConflictId === conflict.id;
+                        const isDeleteVsEdit = conflict.conflictType === "delete_vs_edit";
+
+                        return (
+                          <div
+                            key={conflict.id}
+                            data-testid={`conflict-card-${conflict.id}`}
+                            className="rounded-xl border border-amber-300/70 dark:border-amber-800/70 bg-amber-50/40 dark:bg-amber-950/20 p-4 space-y-3"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-200/80 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
+                                    {getEntityTypeLabel(conflict.entityType)}
+                                  </span>
+                                  <span
+                                    className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                                      isDeleteVsEdit
+                                        ? "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                                        : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                                    }`}
+                                  >
+                                    {isDeleteVsEdit
+                                      ? "Suppression vs Édition"
+                                      : "Modification concurrente"}
+                                  </span>
+                                  {conflict.monthKey && (
+                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                                      Mois : {conflict.monthKey}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                  {conflict.label}
+                                </p>
+                              </div>
+                              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                {getAutoResolutionLabel(conflict.resolution)}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                              {/* Version locale */}
+                              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
+                                <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                                  <span className="inline-flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-100">
+                                    <Smartphone className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+                                    Version locale (cet appareil)
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                    {formatConflictTimestamp(conflict.localUpdatedAt)}
+                                  </span>
+                                </div>
+                                {localDetails.isDeleted ? (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 font-semibold">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Supprimé localement
+                                  </div>
+                                ) : (
+                                  <dl className="space-y-1">
+                                    {localDetails.lines.map((line) => (
+                                      <div
+                                        key={line.key}
+                                        className="flex items-center justify-between gap-2"
+                                      >
+                                        <dt className="text-slate-500 dark:text-slate-400">
+                                          {line.key}
+                                        </dt>
+                                        <dd className="font-semibold text-slate-800 dark:text-slate-200 text-right">
+                                          {line.value}
+                                        </dd>
+                                      </div>
+                                    ))}
+                                  </dl>
+                                )}
+                              </div>
+
+                              {/* Version serveur */}
+                              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
+                                <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-1.5">
+                                  <span className="inline-flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-100">
+                                    <Cloud className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    Version serveur (autre appareil)
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                    {formatConflictTimestamp(conflict.remoteUpdatedAt)}
+                                  </span>
+                                </div>
+                                {remoteDetails.isDeleted ? (
+                                  <div className="space-y-1.5">
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 font-semibold">
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      Supprimé sur un autre appareil
+                                    </div>
+                                    {remoteDetails.lines.length > 0 && (
+                                      <dl className="space-y-1 opacity-75">
+                                        {remoteDetails.lines.map((line) => (
+                                          <div
+                                            key={line.key}
+                                            className="flex items-center justify-between gap-2"
+                                          >
+                                            <dt className="text-slate-500 dark:text-slate-400">
+                                              {line.key}
+                                            </dt>
+                                            <dd className="font-medium text-slate-700 dark:text-slate-300 text-right line-through">
+                                              {line.value}
+                                            </dd>
+                                          </div>
+                                        ))}
+                                      </dl>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <dl className="space-y-1">
+                                    {remoteDetails.lines.map((line) => (
+                                      <div
+                                        key={line.key}
+                                        className="flex items-center justify-between gap-2"
+                                      >
+                                        <dt className="text-slate-500 dark:text-slate-400">
+                                          {line.key}
+                                        </dt>
+                                        <dd className="font-semibold text-slate-800 dark:text-slate-200 text-right">
+                                          {line.value}
+                                        </dd>
+                                      </div>
+                                    ))}
+                                  </dl>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={isBusy}
+                                onClick={() => handleResolveConflict(conflict.id, "keep_local")}
+                                className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs gap-1.5"
+                              >
+                                <Smartphone className="h-3.5 w-3.5" />
+                                Garder ma version locale
+                              </Button>
+
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={isBusy}
+                                onClick={() => handleResolveConflict(conflict.id, "keep_remote")}
+                                className="text-xs gap-1.5 border-slate-300 dark:border-slate-700"
+                              >
+                                <Cloud className="h-3.5 w-3.5" />
+                                {remoteDetails.isDeleted
+                                  ? "Confirmer la suppression serveur"
+                                  : "Garder la version serveur"}
+                              </Button>
+
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={isBusy}
+                                onClick={() => handleResolveConflict(conflict.id, "dismiss")}
+                                className="text-xs gap-1.5 text-slate-600 dark:text-slate-300"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                Valider tel quel et fermer
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Base Locale Offline-First & Restauration d'Urgence (SHA-256) */}
+              <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2 text-slate-900 dark:text-slate-100">
+                    <HardDrive className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                    Base Locale Offline-First & Récupération
+                  </CardTitle>
+                  <CardDescription className="text-slate-500 dark:text-slate-400">
+                    Contrôlez votre base locale IndexedDB isolée, relancez une synchronisation ou restaurez une archive vérifiée par empreinte SHA-256.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                      <span className="text-slate-500 dark:text-slate-400 block">État réseau & synchro</span>
+                      <strong className="text-slate-900 dark:text-slate-100 mt-0.5 block">
+                        {!isOnline
+                          ? "Hors-ligne (stockage local actif)"
+                          : syncStatus === "syncing"
+                          ? "Synchronisation en cours…"
+                          : syncStatus === "auth_expired"
+                          ? "Session expirée (en pause sûre)"
+                          : syncStatus === "error"
+                          ? "Erreur réseau (nouvel essai auto)"
+                          : "En ligne & synchronisé"}
+                      </strong>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                      <span className="text-slate-500 dark:text-slate-400 block">File d'attente locale</span>
+                      <strong className="text-slate-900 dark:text-slate-100 mt-0.5 block">
+                        {pendingSyncCount} opération{pendingSyncCount > 1 ? "s" : ""} en attente
+                      </strong>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                      <span className="text-slate-500 dark:text-slate-400 block">Dernière synchronisation</span>
+                      <strong className="text-slate-900 dark:text-slate-100 mt-0.5 block">
+                        {lastSyncedAt
+                          ? new Date(lastSyncedAt).toLocaleString("fr-FR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "En attente"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {unresolvedConflictsCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        document
+                          .getElementById("conflicts-review")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
+                      className="w-full text-left p-3 rounded-xl bg-amber-50 hover:bg-amber-100/70 dark:bg-amber-950/40 dark:hover:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 transition-colors cursor-pointer"
+                    >
+                      {unresolvedConflictsCount} conflit(s) multi-appareils à réviser ci-dessus. Cliquez ici pour y accéder.
+                    </button>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void syncPendingQueue(true)}
+                      className="text-xs gap-1.5"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Synchroniser maintenant
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void exportOfflineBackup()}
+                      className="text-xs gap-1.5"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Exporter base locale (SHA-256)
+                    </Button>
+
+                    <input
+                      ref={offlineBackupInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      onChange={handleRestoreOfflineFile}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isRestoringOffline}
+                      onClick={() => offlineBackupInputRef.current?.click()}
+                      className="text-xs gap-1.5"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      {isRestoringOffline ? "Restauration..." : "Restaurer une sauvegarde (.json)"}
                     </Button>
                   </div>
                 </CardContent>

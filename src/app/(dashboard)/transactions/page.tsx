@@ -19,7 +19,8 @@ import {
   Paperclip,
   Eye,
   Lock,
-  Search
+  Search,
+  Clock
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -73,6 +74,7 @@ export default function TransactionsPage() {
     subscriptionTrialEndsAt,
     trialChoiceMadeAt,
     isAdminUser,
+    pendingEntityIds,
   } = useUIStore();
 
   const subscriptionCountdown = getSubscriptionCountdownInfo({
@@ -758,6 +760,16 @@ export default function TransactionsPage() {
                           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${isInc ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"}`}>
                             {isInc ? "Revenu" : (tx.category || "Autre (Hors Budget)")}
                           </span>
+                          {(tx.pendingSync || pendingEntityIds.includes(tx.id)) && (
+                            <span
+                              data-testid="tx-pending-sync-badge"
+                              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                              title="Enregistrée localement dans IndexedDB — en attente de confirmation serveur"
+                            >
+                              <Clock className="h-2.5 w-2.5" />
+                              <span>En attente</span>
+                            </span>
+                          )}
                           {tx.receiptUrl && (
                             <button
                               type="button"
