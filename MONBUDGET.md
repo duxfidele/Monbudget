@@ -29,6 +29,7 @@
 15. [Guide d'Installation & Commandes Développeur](#-15-guide-dinstallation--commandes-développeur)
 16. [Architecture & Expérience Mobile-First](#-16-architecture--expérience-mobile-first)
 17. [Identité Visuelle & Nouveau Branding Officiel](#-17-identité-visuelle--nouveau-branding-officiel)
+18. [Abonnements, Essai 30 Jours & Paiements Moneriz](#-18-abonnements-essai-30-jours--paiements-moneriz)
 
 ---
 
@@ -49,19 +50,21 @@ La plupart des applications budgétaires occidentales sont conçues autour d'un 
 ```mermaid
 graph TD
     Client[Navigateur / Smartphone PWA] --> NextJS[Next.js 16 App Router & React 19]
-    NextJS --> ZustandStore[Zustand Store + LocalStorage Cache]
+    NextJS --> ZustandStore[Zustand Store + IndexedDB Offline Queue]
     NextJS --> SupabaseAuth[Supabase Auth - Sessions & JWT]
     NextJS --> SupabaseDB[(PostgreSQL Supabase + Row Level Security)]
-    Client --> ServiceWorker[Service Worker / Cache Hors-Ligne]
+    NextJS --> Moneriz[Moneriz Liveframe Checkout & Webhooks]
+    Client --> ServiceWorker[Service Worker / BackgroundSync Hors-Ligne]
 ```
 
 - **Frontend Framework** : [Next.js 16](https://nextjs.org/) (App Router, Turbopack, React 19).
 - **Langage** : TypeScript avec vérification stricte des types.
-- **Styling & UI** : Tailwind CSS, animations fluides, Radix UI primitives, Lucide Icons.
-- **Gestion d'État (State)** : [Zustand](https://github.com/pmndrs/zustand) avec persistance locale (`localStorage`) et synchronisation Supabase.
+- **Styling & UI** : Tailwind CSS, animations fluides, Base UI / Radix Primitives, Lucide Icons.
+- **Gestion d'État & Hors-Ligne** : [Zustand](https://github.com/pmndrs/zustand) couplé à **IndexedDB** ([`src/lib/offline/db.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/offline/db.ts)), moteur de synchronisation (`src/lib/offline/sync-engine.ts`), file d'attente persistante et endpoint `/api/offline/sync`.
 - **Backend & Base de Données** : [Supabase](https://supabase.com/) (PostgreSQL 15+, Row Level Security - RLS).
-- **PWA & Mobilité** : Manifeste PWA complet (`manifest.json`), Service Worker (`sw.js`), écran de secours hors-ligne (`offline.html`).
-- **Tests & Assurance Qualité** : Suite automatisée [Playwright](https://playwright.dev/) pour les tests de calculs financiers (`budget-calc.spec.ts`) et de sécurité (`security.spec.ts`).
+- **Monétisation & Paiements** : Offre d'essai 30 jours, contrôle d'accès par formule ([`src/lib/moneriz-plans.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/moneriz-plans.ts)) et paiement intégré **Moneriz** (`/api/checkout`, `/api/webhooks/moneriz`).
+- **PWA & Mobilité** : Manifeste PWA complet (`manifest.json`), Service Worker (`sw.js`), BackgroundSync et écran de secours hors-ligne (`offline.html`).
+- **Tests & Assurance Qualité** : Suite automatisée [Playwright](https://playwright.dev/) couvrant calculs financiers (`budget-calc.spec.ts`), sécurité (`security.spec.ts`), mode hors-ligne (`offline-first.spec.ts`), paiements (`moneriz.spec.ts`), emails, reçus, exports et support.
 
 ---
 
@@ -135,7 +138,11 @@ La modale d'installation propose une sélection dynamique adaptée à l'équipem
   1. 💻 **Sur Ordinateur (Chrome, Edge, Brave)** : Explique l'icône dans la barre d'adresse et le raccourci menu.
   2. 📱 **Sur Android (Chrome)** : Affiche un bouton d'action directe en 1 clic (*« Lancer l'installation sur Android maintenant »*) déclenchant l'invite native `beforeinstallprompt`, ainsi que la procédure alternative via le menu contextuel.
   3. 🍏 **Sur iPhone / iPad (Safari)** : Affiche la démarche guidée spécifique à iOS (*Bouton Partager* $\rightarrow$ *Sur l'écran d'accueil*).
-- **Fonctionnement Hors-Ligne** : Le Service Worker met en cache les pages et ressources essentielles. En cas de coupure internet, les données locales restent accessibles et modifiables. Dès le retour de la connexion, les données sont synchronisées de manière transparente avec Supabase.
+- **Architecture Offline-First Durcie (IndexedDB & Sync Engine)** :
+  - **Base locale IndexedDB ([`src/lib/offline/db.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/offline/db.ts))** : chaque ajout, modification ou suppression hors connexion est enregistré localement avec partitionnement par utilisateur et marqueurs de suppression (*tombstones*).
+  - **Moteur de synchronisation & BackgroundSync ([`src/lib/offline/sync-engine.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/offline/sync-engine.ts))** : au retour d'Internet (ou sur clic manuel), la file d'attente est rejouée automatiquement vers `/api/offline/sync` avec gestion des sessions expirées (`auth_expired`).
+  - **Résolution Manuelle des Conflits** : lorsqu'une même donnée a été modifiée en parallèle hors-ligne et sur le serveur, un lien direct dirige l'utilisateur vers `/settings?tab=security#conflicts-review` pour arbitrer sans perte de données.
+  - **Pastille d'État Réseau ([`src/components/pwa/network-status.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/pwa/network-status.tsx))** : affiche en direct l'état (*En ligne*, *Hors-ligne*, *Synchronisation…*, *En attente*, *Session expirée*, *Erreur de synchro*), le compteur d'opérations en file et un popover de synchronisation manuelle.
 
 ---
 
@@ -257,7 +264,7 @@ MonBudget propose un écosystème d'assistance conçu pour être immédiatement 
 ## 🚀 15. Guide d'Installation & Commandes Développeur
 
 ### Prérequis
-- Node.js 18.18+ ou 20+
+- Node.js 20+ (Node.js 22+ recommandé)
 - npm ou pnpm
 
 ### Installation
@@ -284,8 +291,8 @@ npm run dev
 # Vérification des types TypeScript
 npx tsc --noEmit
 
-# Exécution de la suite complète de 45 tests Playwright (calculs, sécurité, emails, reçus, admin, export, support)
-npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts tests/receipts.spec.ts tests/admin.spec.ts tests/export.spec.ts tests/support.spec.ts
+# Exécution des tests Playwright principaux (calculs, sécurité, hors-ligne, paiements Moneriz, emails, reçus, admin, export, support, légal)
+npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/offline-first.spec.ts tests/moneriz.spec.ts tests/email.spec.ts tests/receipts.spec.ts tests/admin.spec.ts tests/export.spec.ts tests/support.spec.ts tests/legal.spec.ts
 
 # Compiler pour la production
 npm run build
@@ -314,8 +321,12 @@ MonBudget a été pensé et restructuré comme une application native pour smart
 ### Grille KPI 2x2 Sans Défilement ([`src/app/(dashboard)/dashboard/page.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/(dashboard)/dashboard/page.tsx))
 - Les indicateurs clés (Solde Réel, Budget Quotidien, Dépenses Totales, Épargne du Mois, Dettes à Payer, Créances à Récupérer) sont organisés en grille 2x2 compacte avec typographie contrastée, permettant de consulter l'état de santé financière sans défilement vertical interminable.
 
-### Sélecteur de Mois Condensé ([`src/components/dashboard/month-selector.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/dashboard/month-selector.tsx))
-- Affiche un libellé raccourci sur mobile (ex. *"Nov. 2026"*) et complet sur écran large (ex. *"Novembre 2026"*), économisant l'espace dans l'en-tête pour éviter les retours à la ligne.
+### En-tête Mobile à Deux Rangées & Actions Espacées ([`src/components/layout/header.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/header.tsx))
+- Sur mobile (`< 640px`), l'en-tête adopte une structure sur deux niveaux pour supprimer tout chevauchement :
+  - **Ligne 1** : menu hamburger + logo compact (libellé masqué sous `410px`) à gauche, et barre d'actions espacées (`gap-2 sm:gap-3`) à droite regroupant [`NetworkStatus`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/pwa/network-status.tsx), [`InstallButton`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/pwa/install-button.tsx) (`36×36px` sur mobile), [`NotificationsBell`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/notifications/notifications-bell.tsx), `ThemeToggle` et [`UserMenu`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/user-menu.tsx).
+  - **Ligne 2** : barre secondaire dédiée centrant [`MonthSelector`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/dashboard/month-selector.tsx) (`Nov. 2026` sur mobile / `Novembre 2026` sur écran large).
+- Les menus déroulants et popovers de l'en-tête (`NetworkStatus`, notifications, sélecteur de mois, menu utilisateur) se positionnent à `top-[6.25rem]` sur mobile afin d'apparaître sous l'en-tête sans masquer la barre de mois.
+- L'ensemble des pages du tableau de bord, tableaux, cartes, onglets et formulaires est conçu *mobile-first* sans débordement horizontal sur `360px+`.
 
 ### Prise en Compte des Spécificités Matérielles Mobiles
 - **Safe Area Insets** : Déclaration de `viewportFit: "cover"` dans [`src/app/layout.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/layout.tsx) et des utilitaires CSS `@utility pb-safe` / `pt-safe` pour respecter les barres de geste et encoches matérielles (iPhone Dynamic Island, caméras poinçons Android).
@@ -343,6 +354,30 @@ MonBudget arbore une identité visuelle professionnelle et inspirante :
 | **Or / Ambre** | Gold Amber | `#F59E0B` | Alertes budgétaires (80%), pièces FCFA, objectifs d'épargne |
 | **Ciel / Cyan** | Electric Sky | `#0284C7` | Liens interactifs, boutons secondaires, mode sombre |
 | **Rose / Rouge** | Critical Rose | `#EF4444` | Dépassements, dettes échues, déconnexion |
+
+---
+
+## 💳 18. Abonnements, Essai 30 Jours & Paiements Moneriz
+
+MonBudget intègre un modèle freemium transparent piloté dans [`src/lib/moneriz-plans.ts`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/lib/moneriz-plans.ts) :
+
+### Grille Tarifaire Officielle (2 mois offerts sur la facturation annuelle)
+| Formule | Tarif Mensuel | Tarif Annuel (10 mois) | Fonctionnalités incluses |
+| :--- | :--- | :--- | :--- |
+| **Gratuit (`free`)** | **0 FCFA** | **0 FCFA** | Saisie illimitée des revenus & dépenses, historique/recherche/filtrage, ajout rapide mobile (`+`), synchronisation cloud & mode hors-ligne |
+| **Particulier (`personal`)** | **500 FCFA** | **5 000 FCFA** *(1 000 FCFA économisés)* | Tout du plan Gratuit + pilotage quotidien, enveloppes budgétaires & alertes 80%, épargne & cagnottes, dettes & créances (WhatsApp), rapports & exports PDF/CSV, reçus illimités, Conseiller IA |
+| **Entreprise & Pro (`business`)** | **1 500 FCFA** *(configurable)* | **15 000 FCFA** *(3 000 FCFA économisés)* | Tout du plan Particulier + support prioritaire 7j/7 et accès anticipé aux futurs modules dédiés Entreprise (multi-caisses, bilans pro, équipe) |
+
+> *Note :* Le tarif mensuel du plan Entreprise & Pro peut être ajusté sans modification de code via la variable `NEXT_PUBLIC_BUSINESS_MONTHLY_PRICE_XOF` (`1 500 FCFA` par défaut).
+
+### Cycle d'Essai 30 Jours & Contrôle d'Accès
+- **Essai Complet Automatique (`TRIAL_DURATION_DAYS = 30`)** : chaque nouvel utilisateur bénéficie pendant 30 jours de l'intégralité des fonctionnalités du plan Particulier (`Essai 30j Complet`).
+- **Visibilité Permanente ([`src/components/layout/sidebar.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/sidebar.tsx))** : la barre latérale affiche le badge du forfait actif ainsi qu'une pastille haute visibilité indiquant le décompte complet (*« X jours restants »* / *« 1 jour restant »*).
+- **Alertes & Fin d'Essai** : des notifications automatiques préviennent à **J-3** et **J0** (`/api/notifications`), puis à l'expiration l'utilisateur peut soit passer sur une formule payante, soit activer librement le plan **Gratuit** via `/api/subscription/choose-free` (les modules réservés affichent un verrouillage clair sans perte des transactions saisies).
+
+### Paiement Intégré Moneriz (Liveframe In-App & Webhooks)
+- **Liveframe In-App** : le règlement par Mobile Money ou carte bancaire s'ouvre directement dans l'application (routes `/api/checkout` et `/api/checkout/status`), puis redirige vers `/dashboard` avec notification de confirmation dès validation.
+- **Sécurité Webhook** : la route `/api/webhooks/moneriz` vérifie la signature cryptographique Moneriz (`src/lib/server/moneriz-signature.ts`) avant d'activer ou renouveler l'abonnement côté Supabase.
 
 ---
 

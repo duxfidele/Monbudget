@@ -10,7 +10,7 @@
     <img src="https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript" alt="TypeScript" />
     <img src="https://img.shields.io/badge/Tailwind_CSS-4.0-38bdf8?style=flat-square&logo=tailwindcss" alt="Tailwind CSS" />
     <img src="https://img.shields.io/badge/Supabase-Auth_%26_PostgreSQL-emerald?style=flat-square&logo=supabase" alt="Supabase" />
-    <img src="https://img.shields.io/badge/Tests-45%2F45_Playwright_Passing-brightgreen?style=flat-square" alt="Tests Playwright" />
+    <img src="https://img.shields.io/badge/Tests-Playwright_E2E_%26_Calculs-brightgreen?style=flat-square" alt="Tests Playwright" />
     <img src="https://img.shields.io/badge/PWA-Installable_%26_Offline-purple?style=flat-square" alt="PWA" />
   </p>
 </div>
@@ -20,9 +20,10 @@
 ## 🌟 Points Forts & Fonctionnalités Majeures
 
 - 📱 **Expérience Mobile-First & Navigation au Pouce** :
+  - **En-tête Mobile à Deux Rangées** : Actions espacées sur la ligne supérieure (statut réseau, installation PWA, notifications, thème, profil) et barre de mois centrée en dessous pour éviter tout chevauchement dès `360px`.
   - **Bouton Central `+` Surélevé** : Enregistrement d'une dépense ou rentrée d'argent en 2 secondes depuis n'importe quelle vue de l'application.
   - **Modales en Feuilles Basses (*Bottom Sheets*)** : Avec poignée tactile de glissement pour un usage fluide à une main sur smartphone.
-  - **Tableau de Bord Condensé 2x2** : Visualisation instantanée des 6 métriques financières fondamentales sans défilement vertical interminable.
+  - **Tableau de Bord Condensé 2x2** : Visualisation instantanée des indicateurs financiers fondamentaux sans défilement vertical interminable.
   - **Compatibilité Matérielle** : Respect des encoches et barres de geste (*Safe Area Insets*) et suppression des zooms forcés sur iOS Safari.
 
 - 💰 **Règle Fondamentale de l'Épargne Réalisée** :
@@ -34,9 +35,14 @@
 - 🌍 **Gestion Native du FCFA & Multi-Devises** :
   - Affichage optimisé sans décimales superflues pour le **FCFA** (UEMOA / CEMAC), et prise en charge de l'Euro (€) et du Dollar ($).
 
-- 📲 **PWA Autonome & Sélecteur d'Appareil Interactif** :
+- 📲 **PWA Autonome & Mode Hors-Ligne Durci (IndexedDB)** :
   - Détection automatique de votre appareil (Ordinateur, Android, iPhone/iPad) avec procédure pas-à-pas et bouton d'installation en 1 clic.
-  - Fonctionnement hors-ligne garanti grâce au Service Worker et au cache local chiffré/isolé.
+  - Persistance locale **IndexedDB** avec file d'attente de synchronisation, marqueurs de suppression (*tombstones*), BackgroundSync, résolution manuelle des conflits et pastille d'état réseau en temps réel.
+
+- 💳 **Abonnements Transparents, Essai 30 Jours & Paiement Moneriz** :
+  - **30 jours d'essai complet** offerts dès l'inscription avec décompte visible et alertes J-3 / J0.
+  - Formule **Gratuit** (0 FCFA), **Particulier** (**500 FCFA/mois** ou **5 000 FCFA/an**) et **Entreprise & Pro** (**1 500 FCFA/mois** ou **15 000 FCFA/an**, 2 mois offerts en annuel).
+  - Paiement sécurisé par Mobile Money et carte bancaire via **Moneriz Liveframe** intégré.
 
 - 🧾 **Justificatifs de Dépenses & Scan de Reçus** :
   - Prise de photo ou téléversement de reçus (JPEG, PNG, WebP, PDF jusqu'à 5 Mo) avec stockage sécurisé et partitionné par utilisateur.
@@ -57,10 +63,11 @@
 - **Framework** : [Next.js 16](https://nextjs.org/) (App Router, Turbopack, React 19)
 - **Langage** : TypeScript (mode strict, 0 erreur)
 - **Design & Interface** : Tailwind CSS, Base UI Dialog / Radix Primitives, Lucide Icons, Sonner Toasts
-- **État & Données** : Zustand avec persistance `localStorage` et synchronisation Supabase
+- **État, Hors-Ligne & Données** : Zustand couplé à IndexedDB (file de synchro, tombstones, conflits) et synchronisation Supabase
 - **Authentification & Base de Données** : Supabase (PostgreSQL 15+, Row Level Security)
+- **Paiements & Abonnements** : Moneriz Liveframe Checkout & Webhooks HMAC (`/api/checkout`, `/api/webhooks/moneriz`)
 - **Emails Transactionnels** : Resend avec fallback de simulation résilient
-- **Tests & Assurance Qualité** : Playwright Test (45 tests unitaires, de calcul financier et de sécurité)
+- **Tests & Assurance Qualité** : Playwright Test (calculs financiers, sécurité, offline-first, paiements Moneriz, emails, reçus, exports et support)
 
 ---
 
@@ -115,8 +122,8 @@ L'application est accessible à l'adresse [http://localhost:3000](http://localho
 # Vérification des types TypeScript
 npx tsc --noEmit
 
-# Exécution de la suite complète de 45 tests Playwright
-npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/email.spec.ts tests/receipts.spec.ts tests/admin.spec.ts tests/export.spec.ts tests/support.spec.ts
+# Exécution des tests Playwright principaux (calculs, sécurité, hors-ligne, Moneriz, emails, reçus, admin, export, support, légal)
+npx playwright test tests/budget-calc.spec.ts tests/security.spec.ts tests/offline-first.spec.ts tests/moneriz.spec.ts tests/email.spec.ts tests/receipts.spec.ts tests/admin.spec.ts tests/export.spec.ts tests/support.spec.ts tests/legal.spec.ts
 
 # Compiler pour la production
 npm run build
