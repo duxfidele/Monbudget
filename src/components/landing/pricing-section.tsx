@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Lock, Sparkles, Shield, Crown } from "lucide-react";
+import { ArrowRight, Check, Crown, Lock, Shield, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { BillingCycle, getPlanCatalog } from "@/lib/moneriz-plans";
+import { BillingCycle, getPlanCatalog, MONERIZ_PAYMENT_GATEWAYS } from "@/lib/moneriz-plans";
 
 export function LandingPricingSection() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
@@ -53,7 +53,7 @@ export function LandingPricingSection() {
             <button
               type="button"
               onClick={() => setBillingCycle("monthly")}
-              className={`px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              className={`cursor-pointer px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-[0.98] ${
                 billingCycle === "monthly"
                   ? "bg-sky-500 text-slate-950 shadow-md"
                   : "text-slate-300 hover:text-white"
@@ -64,7 +64,7 @@ export function LandingPricingSection() {
             <button
               type="button"
               onClick={() => setBillingCycle("yearly")}
-              className={`px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 ${
+              className={`cursor-pointer px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 active:scale-[0.98] ${
                 billingCycle === "yearly"
                   ? "bg-sky-500 text-slate-950 shadow-md"
                   : "text-slate-300 hover:text-white"
@@ -88,14 +88,16 @@ export function LandingPricingSection() {
           {plans.map((plan) => {
             const priceXof =
               billingCycle === "yearly" ? plan.yearlyPriceXof : plan.monthlyPriceXof;
+            const regularYearlyXof = plan.monthlyPriceXof * 12;
+            const monthlyEquivalent = Math.round(plan.yearlyPriceXof / 12);
 
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-3xl p-5 sm:p-8 flex flex-col justify-between transition-all duration-300 ${
+                className={`group relative rounded-3xl p-5 sm:p-8 flex flex-col justify-between transition-all duration-300 ${
                   plan.popular
-                    ? "bg-gradient-to-b from-[#122A4E] via-[#0E203B] to-[#0B1A30] border-2 border-sky-400 shadow-2xl shadow-sky-500/20 lg:-translate-y-2"
-                    : "bg-[#0E1E36] border border-slate-800 shadow-lg hover:border-slate-700"
+                    ? "bg-gradient-to-b from-[#122A4E] via-[#0E203B] to-[#0B1A30] border-2 border-sky-400 shadow-2xl shadow-sky-500/20 lg:-translate-y-2 hover:shadow-sky-400/30"
+                    : "bg-[#0E1E36] border border-slate-800 shadow-lg hover:border-sky-500/40 hover:-translate-y-1"
                 }`}
               >
                 {plan.popular && (
@@ -119,6 +121,16 @@ export function LandingPricingSection() {
                   </div>
 
                   <div className="mb-4">
+                    {plan.id !== "free" && billingCycle === "yearly" && (
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-slate-400 line-through">
+                          {regularYearlyXof.toLocaleString("fr-FR")} FCFA
+                        </span>
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                          -{plan.yearlySavingsXof.toLocaleString("fr-FR")} FCFA
+                        </span>
+                      </div>
+                    )}
                     <div className="flex flex-wrap items-baseline gap-1.5">
                       <span className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
                         {priceXof.toLocaleString("fr-FR")} FCFA
@@ -131,9 +143,9 @@ export function LandingPricingSection() {
                     </div>
                     <p className="text-xs text-slate-400 mt-1">
                       {plan.id === "free"
-                        ? "Après 30j d'essai complet • Entrées & Dépenses"
+                        ? "Après 30j d'essai complet • Budget, Revenus, Entrées & Dépenses"
                         : billingCycle === "yearly"
-                        ? `Soit ${plan.yearlySavingsXof.toLocaleString("fr-FR")} FCFA d'économie (2 mois offerts)`
+                        ? `Soit ${monthlyEquivalent.toLocaleString("fr-FR")} FCFA/mois (2 mois offerts)`
                         : `Ou ${plan.yearlyPriceXof.toLocaleString("fr-FR")} FCFA / an (2 mois offerts)`}
                     </p>
                   </div>
@@ -167,16 +179,21 @@ export function LandingPricingSection() {
                 </div>
 
                 <div>
-                  <Link href={plan.ctaHref} className="w-full block">
+                  <Link href={`${plan.ctaHref}${plan.id !== "free" ? `&cycle=${billingCycle}` : ""}`} className="w-full block">
                     <Button
                       size="lg"
-                      className={`w-full py-6 rounded-2xl font-semibold text-sm transition-all ${
+                      className={`cursor-pointer w-full py-6 rounded-2xl font-bold text-sm gap-2 transition-all active:scale-[0.98] ${
                         plan.popular
-                          ? "bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 text-white shadow-lg shadow-sky-500/25"
-                          : "bg-white/10 hover:bg-white/15 text-white border border-slate-700"
+                          ? "bg-gradient-to-r from-sky-400 to-emerald-400 hover:from-sky-300 hover:to-emerald-300 text-slate-950 shadow-lg shadow-sky-500/25"
+                          : "bg-white/10 hover:bg-white/15 text-white border border-slate-700 hover:border-sky-400/50"
                       }`}
                     >
-                      {plan.cta}
+                      <span>
+                        {plan.id === "free"
+                          ? plan.cta
+                          : `Essai 30j puis ${priceXof.toLocaleString("fr-FR")} F/${billingCycle === "yearly" ? "an" : "mois"}`}
+                      </span>
+                      <ArrowRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
                     </Button>
                   </Link>
                 </div>
@@ -186,15 +203,27 @@ export function LandingPricingSection() {
         </div>
 
         {/* Reassurance Footer */}
-        <div className="mt-12 text-center text-xs text-slate-400 flex flex-wrap items-center justify-center gap-6">
-          <span className="flex items-center gap-1.5">
-            <Shield className="w-4 h-4 text-emerald-400" />
-            Paiement sécurisé Moneriz (Wave, Orange Money, MTN, Moov & Carte)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Check className="w-4 h-4 text-sky-400" />
-            Activation immédiate après confirmation serveur
-          </span>
+        <div className="mt-12 text-center text-xs text-slate-400 space-y-4">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {MONERIZ_PAYMENT_GATEWAYS.map((gw) => (
+              <span
+                key={gw.id}
+                className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] font-semibold text-slate-200"
+              >
+                {gw.label}
+              </span>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            <span className="flex items-center gap-1.5">
+              <Shield className="w-4 h-4 text-emerald-400" />
+              Paiement sécurisé Moneriz (FCFA / XOF)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="w-4 h-4 text-sky-400" />
+              Activation immédiate après confirmation serveur
+            </span>
+          </div>
         </div>
       </div>
     </section>

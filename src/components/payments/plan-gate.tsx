@@ -83,16 +83,27 @@ export function PlanGate({
             </span>
           </div>
 
-          <Link href="/transactions">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs rounded-xl gap-1.5"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Retour aux Entrées &amp; Dépenses (Gratuit)</span>
-            </Button>
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/budget">
+              <Button
+                variant="outline"
+                size="sm"
+                className="cursor-pointer bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs rounded-xl gap-1.5"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Mon Budget (Gratuit)</span>
+              </Button>
+            </Link>
+            <Link href="/transactions">
+              <Button
+                variant="outline"
+                size="sm"
+                className="cursor-pointer bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs rounded-xl gap-1.5"
+              >
+                <span>Entrées &amp; Dépenses</span>
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <div className="space-y-2 max-w-2xl">
@@ -121,7 +132,7 @@ export function PlanGate({
               </>
             ) : (
               <>
-                Votre compte est actuellement sur le <strong>Plan Gratuit (Entrées &amp; Dépenses uniquement)</strong>. Prenez un abonnement <strong>{requiredPlan.name} à {requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA / mois</strong> (ou{" "}
+                Votre compte est actuellement sur le <strong>Plan Gratuit (Page Budget, Entrées &amp; Dépenses)</strong>. Prenez un abonnement <strong>{requiredPlan.name} à {requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA / mois</strong> (ou{" "}
                 <strong>{requiredPlan.yearlyPriceXof.toLocaleString("fr-FR")} FCFA / an</strong> avec 2 mois offerts) pour activer cet outil.
               </>
             )}

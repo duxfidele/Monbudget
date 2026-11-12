@@ -2,7 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Lock, Sparkles, ShieldCheck, Crown, Loader2 } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  CreditCard,
+  Crown,
+  Loader2,
+  Lock,
+  ShieldCheck,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,7 +26,10 @@ import {
   BillingCycle,
   getPlanCatalog,
   getSubscriptionCountdownInfo,
+  MONERIZ_PAYMENT_GATEWAYS,
+  MonerizPaymentGateway,
   PaidSubscriptionPlanId,
+  SubscriptionPlanId,
 } from "@/lib/moneriz-plans";
 import { useUIStore } from "@/lib/store/ui-store";
 import { MonerizLiveframe } from "@/components/payments/moneriz-liveframe";
@@ -50,7 +64,14 @@ export function SubscriptionPlansWidget({
     isAdmin: isAdminUser,
   });
   const effectivePlanId = countdown.effectivePlanId;
-  const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("monthly");
+  const [selectedCycle, setSelectedCycle] = useState<BillingCycle>(
+    activeCycle === "yearly" ? "yearly" : "monthly"
+  );
+  const [focusedPlan, setFocusedPlan] = useState<SubscriptionPlanId>(
+    highlightPlan ?? (effectivePlanId === "free" ? "personal" : effectivePlanId)
+  );
+  const [selectedGatewayId, setSelectedGatewayId] =
+    useState<MonerizPaymentGateway["id"]>("wave");
   const [checkoutTarget, setCheckoutTarget] = useState<PaidSubscriptionPlanId | null>(null);
   const [isChoosingFree, setIsChoosingFree] = useState(false);
   const redirectTimerRef = useRef<number | null>(null);
@@ -65,6 +86,9 @@ export function SubscriptionPlansWidget({
 
   const catalog = getPlanCatalog();
   const plansList = [catalog.free, catalog.personal, catalog.business];
+  const selectedGateway =
+    MONERIZ_PAYMENT_GATEWAYS.find((g) => g.id === selectedGatewayId) ??
+    MONERIZ_PAYMENT_GATEWAYS[0];
 
   const handleChooseFree = async () => {
     setIsChoosingFree(true);
@@ -72,7 +96,7 @@ export function SubscriptionPlansWidget({
       const ok = await chooseFreePlan();
       if (ok) {
         toast.info(
-          `Mode Gratuit limité activé : Entrées & Dépenses illimitées. Les outils avancés sont cadenassés et déblocables à tout moment dès ${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois.`
+          `Mode Gratuit activé : Page Budget (salaire & enveloppes) + Entrées & Dépenses illimitées. Les modules avancés sont déblocables dès ${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois.`
         );
       }
     } finally {
@@ -80,93 +104,187 @@ export function SubscriptionPlansWidget({
     }
   };
 
+  const openCheckout = (planId: PaidSubscriptionPlanId) => {
+    setFocusedPlan(planId);
+    setCheckoutTarget(planId);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Bascule Mensuel / Annuel (-2 mois offerts) */}
-      <div className="flex flex-col items-center justify-center gap-2">
-        <div
-          role="group"
-          aria-label="Périodicité de facturation"
-          className="inline-flex max-w-full flex-wrap justify-center items-center p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700"
-        >
-          <button
-            type="button"
-            onClick={() => setSelectedCycle("monthly")}
-            className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              selectedCycle === "monthly"
-                ? "bg-[#1E3A5F] text-white shadow-xs"
-                : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            Mensuel
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedCycle("yearly")}
-            className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
-              selectedCycle === "yearly"
-                ? "bg-[#1E3A5F] text-white shadow-xs"
-                : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <span>Annuel</span>
-            <span className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold uppercase rounded-full bg-emerald-500 text-white whitespace-nowrap">
-              2 mois offerts
+      {/* Barre de contrôles dynamiques : Périodicité + Passerelle Moneriz */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/70 p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Sélecteur Mensuel / Annuel */}
+          <div className="flex flex-col items-center md:items-start gap-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              1. Choisissez votre rythme de facturation
             </span>
-          </button>
+            <div
+              role="group"
+              aria-label="Périodicité de facturation"
+              className="inline-flex max-w-full flex-wrap justify-center items-center p-1 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs"
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedCycle("monthly")}
+                className={`cursor-pointer px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all active:scale-[0.98] ${
+                  selectedCycle === "monthly"
+                    ? "bg-[#1E3A5F] text-white shadow-sm dark:bg-sky-500 dark:text-slate-950"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                Mensuel
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCycle("yearly")}
+                className={`cursor-pointer px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 active:scale-[0.98] ${
+                  selectedCycle === "yearly"
+                    ? "bg-[#1E3A5F] text-white shadow-sm dark:bg-sky-500 dark:text-slate-950"
+                    : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <span>Annuel</span>
+                <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-emerald-500 text-white whitespace-nowrap shadow-xs">
+                  -2 mois offerts
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Sélecteur interactif de passerelle Moneriz */}
+          <div className="flex flex-col items-center md:items-end gap-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <Zap className="w-3 h-3 text-emerald-500" />
+              2. Moyen de paiement préféré (Moneriz)
+            </span>
+            <div className="flex flex-wrap items-center justify-center md:justify-end gap-1.5">
+              {MONERIZ_PAYMENT_GATEWAYS.map((gw) => {
+                const isSelected = selectedGatewayId === gw.id;
+                return (
+                  <button
+                    key={gw.id}
+                    type="button"
+                    onClick={() => setSelectedGatewayId(gw.id)}
+                    aria-pressed={isSelected}
+                    className={`cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all active:scale-95 ${
+                      isSelected
+                        ? `${gw.badgeClasses} ring-2 ring-sky-400/50 shadow-xs`
+                        : "bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600"
+                    }`}
+                  >
+                    {isSelected && <CheckCircle2 className="w-3 h-3 shrink-0" />}
+                    <span>{gw.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-          {selectedCycle === "yearly"
-            ? "Payez 10 mois au lieu de 12 : économisez 2 mois complets sur votre abonnement annuel."
-            : "Passez à l'abonnement annuel pour bénéficier de 2 mois offerts automatiquement."}
+
+        <p className="text-xs text-slate-600 dark:text-slate-300 text-center md:text-left">
+          {selectedCycle === "yearly" ? (
+            <>
+              🎉 Facturation annuelle active : payez{" "}
+              <strong>10 mois au lieu de 12</strong> et économisez jusqu&apos;à{" "}
+              <strong className="text-emerald-600 dark:text-emerald-400">
+                {catalog.business.yearlySavingsXof.toLocaleString("fr-FR")} FCFA/an
+              </strong>
+              .
+            </>
+          ) : (
+            <>
+              Astuce : basculez sur <strong>Annuel</strong> pour profiter automatiquement de{" "}
+              <strong className="text-emerald-600 dark:text-emerald-400">
+                2 mois offerts
+              </strong>{" "}
+              et réduire votre coût mensuel.
+            </>
+          )}
         </p>
       </div>
 
-      {/* Grille des 3 plans */}
+      {/* Grille des 3 plans interactifs */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
         {plansList.map((plan) => {
           const isCurrentPlan =
             effectivePlanId === plan.id &&
             (plan.id === "free" || (countdown.isPaidActive && activeCycle === selectedCycle));
           const isHighlighted =
-            highlightPlan ? plan.id === highlightPlan : Boolean(plan.popular);
+            highlightPlan
+              ? plan.id === highlightPlan
+              : focusedPlan === plan.id || (focusedPlan === "free" && Boolean(plan.popular));
           const priceXof =
             selectedCycle === "yearly" ? plan.yearlyPriceXof : plan.monthlyPriceXof;
+          const regularYearlyXof = plan.monthlyPriceXof * 12;
+          const monthlyEquivalent = Math.round(plan.yearlyPriceXof / 12);
+
+          const isPaidSamePlanOtherCycle =
+            plan.id !== "free" &&
+            countdown.isPaidActive &&
+            effectivePlanId === plan.id &&
+            activeCycle !== selectedCycle;
+          const isUpgradeToBusiness =
+            plan.id === "business" &&
+            countdown.isPaidActive &&
+            effectivePlanId === "personal";
 
           return (
             <div
               key={plan.id}
               data-testid={`plan-card-${plan.id}`}
-              className={`relative rounded-2xl p-5 sm:p-6 flex flex-col justify-between transition-all ${
+              onClick={() => setFocusedPlan(plan.id)}
+              className={`group relative rounded-2xl p-5 sm:p-6 flex flex-col justify-between transition-all duration-200 cursor-pointer ${
                 isHighlighted
-                  ? "bg-gradient-to-b from-[#1E3A5F] to-[#0F233F] text-white border-2 border-sky-400 shadow-xl"
-                  : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-xs"
+                  ? "bg-gradient-to-b from-[#1E3A5F] via-[#173052] to-[#0F233F] text-white border-2 border-sky-400 shadow-xl ring-2 ring-sky-400/20 hover:-translate-y-0.5"
+                  : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-xs hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-md hover:-translate-y-0.5"
               }`}
             >
-              {isHighlighted && (
+              {/* Badge supérieur */}
+              {isCurrentPlan ? (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[11px] font-extrabold uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs flex items-center gap-1 whitespace-nowrap">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>Formule Actuelle</span>
+                </div>
+              ) : isHighlighted ? (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-sky-400 to-emerald-400 text-slate-950 text-[11px] font-extrabold uppercase tracking-wider px-3 py-0.5 rounded-full shadow-xs flex items-center gap-1 whitespace-nowrap">
                   <Sparkles className="w-3 h-3" />
-                  <span>{plan.badge}</span>
+                  <span>{plan.popular ? "Recommandé • " + plan.badge : plan.badge}</span>
                 </div>
-              )}
+              ) : null}
 
               <div>
-                <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center justify-between gap-2 mb-3 pt-1">
                   <h3 className="text-lg font-extrabold flex items-center gap-1.5">
                     {plan.id === "business" && (
                       <Crown className="w-4 h-4 text-amber-400 shrink-0" />
                     )}
                     <span>{plan.name}</span>
                   </h3>
-                  {!isHighlighted && (
+                  {!isHighlighted && !isCurrentPlan && (
                     <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                       {plan.badge}
                     </span>
                   )}
                 </div>
 
-                {/* Prix */}
+                {/* Prix dynamique */}
                 <div className="mb-4">
+                  {plan.id !== "free" && selectedCycle === "yearly" && (
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className={`text-xs line-through ${
+                          isHighlighted ? "text-slate-300/80" : "text-slate-400"
+                        }`}
+                      >
+                        {regularYearlyXof.toLocaleString("fr-FR")} FCFA
+                      </span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-400/30">
+                        -{plan.yearlySavingsXof.toLocaleString("fr-FR")} FCFA
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-3xl font-extrabold tracking-tight">
                       {priceXof.toLocaleString("fr-FR")} FCFA
@@ -181,9 +299,10 @@ export function SubscriptionPlansWidget({
                       </span>
                     )}
                   </div>
+
                   {plan.id !== "free" && selectedCycle === "yearly" ? (
                     <p className="text-xs font-semibold text-emerald-400 mt-1">
-                      Économie de {plan.yearlySavingsXof.toLocaleString("fr-FR")} FCFA (2 mois gratuits)
+                      Soit {monthlyEquivalent.toLocaleString("fr-FR")} FCFA/mois (2 mois offerts)
                     </p>
                   ) : (
                     <p
@@ -192,7 +311,7 @@ export function SubscriptionPlansWidget({
                       }`}
                     >
                       {plan.id === "free"
-                        ? "Gratuit à vie • Entrées & Dépenses uniquement"
+                        ? "Gratuit à vie • Budget, Revenus, Entrées & Dépenses"
                         : `Ou ${plan.yearlyPriceXof.toLocaleString("fr-FR")} FCFA / an (2 mois offerts)`}
                     </p>
                   )}
@@ -210,7 +329,7 @@ export function SubscriptionPlansWidget({
                   </p>
                 )}
 
-                {/* Fonctionnalités incluses */}
+                {/* Fonctionnalités incluses & cadenassées */}
                 <ul className="space-y-2.5 mb-5">
                   {plan.features.map((feat) => (
                     <li key={feat} className="flex items-start gap-2 text-xs">
@@ -238,8 +357,8 @@ export function SubscriptionPlansWidget({
                 </ul>
               </div>
 
-              {/* Bouton d'action */}
-              <div>
+              {/* Boutons d'action dynamiques */}
+              <div onClick={(e) => e.stopPropagation()}>
                 {plan.id === "free" ? (
                   !isAdminUser && (countdown.needsPlanChoice || countdown.isTrialActive) ? (
                     <Button
@@ -247,43 +366,63 @@ export function SubscriptionPlansWidget({
                       variant="outline"
                       disabled={isChoosingFree}
                       onClick={handleChooseFree}
-                      className="w-full rounded-xl text-xs font-bold h-11"
+                      className="cursor-pointer w-full rounded-xl text-xs font-bold h-11 gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-[0.98]"
                     >
                       {isChoosingFree ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Activation en cours...</span>
+                        </>
                       ) : (
-                        "Choisir Gratuit (Entrées & Dépenses)"
+                        <>
+                          <span>Choisir Gratuit (Budget, Entrées &amp; Dépenses)</span>
+                          <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                        </>
                       )}
                     </Button>
                   ) : (
                     <Button
                       disabled
                       variant="outline"
-                      className="w-full rounded-xl text-xs font-bold h-11"
+                      className="w-full rounded-xl text-xs font-bold h-11 gap-1.5"
                     >
-                      {effectivePlanId === "free"
-                        ? "Formule Actuelle (Gratuit limité)"
-                        : "Inclus de base"}
+                      {effectivePlanId === "free" ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          <span>Formule Actuelle (Gratuit)</span>
+                        </>
+                      ) : (
+                        <span>Inclus de base</span>
+                      )}
                     </Button>
                   )
                 ) : isCurrentPlan ? (
                   <Button
                     disabled
-                    className="w-full rounded-xl text-xs font-bold h-11 bg-emerald-600 text-white"
+                    className="w-full rounded-xl text-xs font-bold h-11 bg-emerald-600 text-white gap-1.5"
                   >
-                    Abonnement Actif
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Abonnement Actif</span>
                   </Button>
                 ) : (
                   <Button
                     type="button"
-                    onClick={() => setCheckoutTarget(plan.id as PaidSubscriptionPlanId)}
-                    className={`w-full rounded-xl text-xs sm:text-sm font-bold h-11 transition-all ${
+                    onClick={() => openCheckout(plan.id as PaidSubscriptionPlanId)}
+                    className={`cursor-pointer w-full rounded-xl text-xs sm:text-sm font-bold h-11 gap-2 transition-all active:scale-[0.98] ${
                       isHighlighted
-                        ? "bg-sky-400 hover:bg-sky-300 text-slate-950 shadow-md"
-                        : "bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white dark:bg-sky-600 dark:hover:bg-sky-500"
+                        ? "bg-gradient-to-r from-sky-400 to-emerald-400 hover:from-sky-300 hover:to-emerald-300 text-slate-950 shadow-md shadow-sky-500/25"
+                        : "bg-[#1E3A5F] hover:bg-[#162C49] text-white dark:bg-sky-600 dark:hover:bg-sky-500 shadow-sm"
                     }`}
                   >
-                    Souscrire via Moneriz ({priceXof.toLocaleString("fr-FR")} FCFA)
+                    <CreditCard className="w-4 h-4 shrink-0" />
+                    <span>
+                      {isPaidSamePlanOtherCycle
+                        ? `Passer en ${selectedCycle === "yearly" ? "Annuel" : "Mensuel"} • ${priceXof.toLocaleString("fr-FR")} F`
+                        : isUpgradeToBusiness
+                        ? `Passer à Entreprise • ${priceXof.toLocaleString("fr-FR")} F/${selectedCycle === "yearly" ? "an" : "mois"}`
+                        : `Souscrire via ${selectedGateway.shortLabel} • ${priceXof.toLocaleString("fr-FR")} F/${selectedCycle === "yearly" ? "an" : "mois"}`}
+                    </span>
+                    <ArrowRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
                   </Button>
                 )}
               </div>
@@ -293,10 +432,10 @@ export function SubscriptionPlansWidget({
       </div>
 
       {/* Bandeau de réassurance Moneriz */}
-      <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-500 dark:text-slate-400 pt-2">
-        <span className="flex items-center gap-1.5">
-          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-          Paiement Mobile Money & Carte sécurisé par Moneriz (XOF)
+      <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-slate-500 dark:text-slate-400 pt-1">
+        <span className="flex items-center gap-1.5 font-medium">
+          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          Paiement chiffré en FCFA (XOF) via Moneriz • Activation instantanée après confirmation
         </span>
       </div>
 
@@ -315,11 +454,12 @@ export function SubscriptionPlansWidget({
       >
         <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg font-extrabold">
-              Paiement Sécurisé Moneriz
+            <DialogTitle className="text-lg font-extrabold flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Passerelle Sécurisée Moneriz</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Réglez directement dans MonBudget en FCFA (XOF) par Mobile Money ou Carte Bancaire. Votre accès au tableau de bord sera ouvert dès confirmation serveur.
+              Réglez directement dans MonBudget en FCFA (XOF) par {selectedGateway.label} ou tout autre moyen disponible. Votre accès sera débloqué dès confirmation serveur.
             </DialogDescription>
           </DialogHeader>
 
@@ -327,6 +467,7 @@ export function SubscriptionPlansWidget({
             <MonerizLiveframe
               planId={checkoutTarget}
               billingCycle={selectedCycle}
+              preferredGatewayLabel={selectedGateway.label}
               onSuccess={() => {
                 if (redirectTimerRef.current !== null) {
                   window.clearTimeout(redirectTimerRef.current);
@@ -351,4 +492,3 @@ export function SubscriptionPlansWidget({
     </div>
   );
 }
-

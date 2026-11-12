@@ -52,7 +52,6 @@ export const BottomNav = () => {
       icon: Wallet,
       href: "/budget",
       color: "text-emerald-500",
-      feature: "budget",
     },
   ];
 

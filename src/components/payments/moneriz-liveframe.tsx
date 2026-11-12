@@ -14,7 +14,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/lib/store/ui-store";
-import { BillingCycle, getPlanCatalog, PaidSubscriptionPlanId } from "@/lib/moneriz-plans";
+import {
+  BillingCycle,
+  getPlanCatalog,
+  MONERIZ_PAYMENT_GATEWAYS,
+  PaidSubscriptionPlanId,
+} from "@/lib/moneriz-plans";
 import { toast } from "sonner";
 
 export interface CheckoutSessionClientPayload {
@@ -39,6 +44,7 @@ interface ParsedLiveframeSession {
 interface MonerizLiveframeProps {
   planId: PaidSubscriptionPlanId;
   billingCycle: BillingCycle;
+  preferredGatewayLabel?: string | null;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -96,6 +102,7 @@ function parseLiveframeSession(
 export function MonerizLiveframe({
   planId,
   billingCycle,
+  preferredGatewayLabel,
   onSuccess,
   onCancel,
 }: MonerizLiveframeProps) {
@@ -434,28 +441,44 @@ export function MonerizLiveframe({
 
   return (
     <div className="flex flex-col gap-4 w-full">
-      {/* En-tête récapitulatif de la commande */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900 text-white border border-slate-800">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">
-              Formule {plan.name}
-            </span>
-            <span className="text-xs text-slate-300">
-              {billingCycle === "yearly" ? "Facturation Annuelle (-2 mois)" : "Facturation Mensuelle"}
-            </span>
+      {/* En-tête récapitulatif de la passerelle Moneriz */}
+      <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0F233F] via-[#173157] to-[#1E3A5F] text-white border border-sky-400/25 shadow-md space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-sky-400/20 text-sky-300 border border-sky-400/35">
+                Formule {plan.name}
+              </span>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-slate-200 border border-white/10">
+                {billingCycle === "yearly" ? "Annuel (-2 mois offerts)" : "Mensuel"}
+              </span>
+              {preferredGatewayLabel && (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/35">
+                  Moyen choisi : {preferredGatewayLabel}
+                </span>
+              )}
+            </div>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Mobile Money (Wave, Orange Money, MTN, Moov) & Carte Bancaire
-          </p>
+          <div className="text-left sm:text-right">
+            <p className="text-xl font-extrabold tracking-tight text-white">
+              {expectedAmount.toLocaleString("fr-FR")} FCFA
+            </p>
+            <p className="text-[11px] text-emerald-300 flex items-center sm:justify-end gap-1 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              <span>Passerelle sécurisée Moneriz</span>
+            </p>
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-lg font-extrabold text-white">
-            {expectedAmount.toLocaleString("fr-FR")} FCFA
-          </p>
-          <p className="text-[11px] text-emerald-400 flex items-center justify-end gap-1">
-            <ShieldCheck className="w-3.5 h-3.5" /> Paiement intégré Moneriz
-          </p>
+
+        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10">
+          {MONERIZ_PAYMENT_GATEWAYS.map((gw) => (
+            <span
+              key={gw.id}
+              className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/10 text-slate-200 border border-white/10"
+            >
+              {gw.label}
+            </span>
+          ))}
         </div>
       </div>
 

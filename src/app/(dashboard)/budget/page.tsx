@@ -25,10 +25,10 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   PiggyBank,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore, Category } from "@/lib/store/ui-store";
-import { PlanGate } from "@/components/payments/plan-gate";
 import { canAccessFeature, getSubscriptionCountdownInfo } from "@/lib/moneriz-plans";
 import { 
   formatMoney, 
@@ -530,6 +530,7 @@ export default function BudgetPage() {
     savingsGoals,
     debts,
     payDay,
+    subscriptionHydrated,
     subscriptionPlan,
     subscriptionStatus,
     subscriptionExpiresAt,
@@ -547,7 +548,11 @@ export default function BudgetPage() {
     isAdmin: isAdminUser,
   });
   const canUseBudget =
-    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "budget");
+    subscriptionHydrated &&
+    (isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "budget"));
+  const canUseDailyPilotage =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "daily_pilotage");
+  const showDailyPilotage = !subscriptionHydrated || canUseDailyPilotage;
 
   const [newCatName, setNewCatName] = useState("");
   const [newCatAmount, setNewCatAmount] = useState<number>(0);
@@ -764,11 +769,6 @@ export default function BudgetPage() {
   };
 
   return (
-    <PlanGate
-      feature="budget"
-      featureTitle="Budget Mensuel par Enveloppes"
-      featureDescription="Répartissez votre salaire par enveloppes (Alimentation, Loyer, Transport, Scolarité, Solidarité...), suivez votre Reste à vivre journalier jusqu'à la paie et recevez des alertes de dépassement."
-    >
     <div className="flex flex-col gap-8 pb-12">
       {/* Dialogue de confirmation de duplication */}
       <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
@@ -994,14 +994,29 @@ export default function BudgetPage() {
                 
                 {income > 0 && (
                   <div className="bg-white/10 p-2.5 rounded-lg border border-white/10 text-xs space-y-1.5 mt-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-200">Budget journalier conseillé :</span>
-                      <strong className="text-white">{formatMoney(dailyInfo.dailyBudget, currency)}/j</strong>
-                    </div>
-                    <div className="flex items-center justify-between text-emerald-300 font-semibold text-[11px]">
-                      <span>Disponible aujourd'hui (déduit auto) :</span>
-                      <span>{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</span>
-                    </div>
+                    {showDailyPilotage ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-200">Budget journalier conseillé :</span>
+                          <strong className="text-white">{formatMoney(dailyInfo.dailyBudget, currency)}/j</strong>
+                        </div>
+                        <div className="flex items-center justify-between text-emerald-300 font-semibold text-[11px]">
+                          <span>Disponible aujourd&apos;hui (déduit auto) :</span>
+                          <span>{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <Link
+                        href="/settings?tab=subscription&plan=personal"
+                        className="flex items-center justify-between gap-2 text-[11px] text-amber-300 hover:underline font-semibold"
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          <Lock className="h-3 w-3 shrink-0" />
+                          Pilotage journalier conseillé
+                        </span>
+                        <span>Débloquer (500 F) &rarr;</span>
+                      </Link>
+                    )}
                     <div className="flex items-center justify-between text-slate-300 text-[11px] pt-1 border-t border-white/10">
                       <span>Solde disponible en caisse :</span>
                       <strong className="text-white">{formatMoney(resteReel, currency)}</strong>
@@ -1386,6 +1401,5 @@ export default function BudgetPage() {
         </Card>
       </div>
     </div>
-    </PlanGate>
   );
 }

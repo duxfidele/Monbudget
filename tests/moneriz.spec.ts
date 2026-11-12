@@ -76,9 +76,10 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     }
   });
 
-  test("2. Restrictions par plan : Gratuit cadenassé (Entrées/Dépenses), Particulier 500 F débloque tout l'existant, Entreprise Option B", () => {
-    // Plan Gratuit : aucun accès à budget, savings, debts, reports, advisor, receipts
-    expect(canAccessFeature("free", "budget")).toBe(false);
+  test("2. Restrictions par plan : Gratuit ouvre Budget/Revenus & Entrées/Dépenses, Particulier 500 F débloque tout l'existant, Entreprise Option B", () => {
+    // Plan Gratuit : accès ouvert à budget (salaire/revenus/enveloppes), mais cadenassé pour pilotage quotidien, savings, debts, reports, advisor, receipts
+    expect(canAccessFeature("free", "budget")).toBe(true);
+    expect(canAccessFeature("free", "daily_pilotage")).toBe(false);
     expect(canAccessFeature("free", "savings")).toBe(false);
     expect(canAccessFeature("free", "debts")).toBe(false);
     expect(canAccessFeature("free", "reports")).toBe(false);
@@ -87,6 +88,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
 
     // Plan Particulier (500 FCFA/mois) : débloque 100 % des fonctionnalités actuelles
     expect(canAccessFeature("personal", "budget")).toBe(true);
+    expect(canAccessFeature("personal", "daily_pilotage")).toBe(true);
     expect(canAccessFeature("personal", "savings")).toBe(true);
     expect(canAccessFeature("personal", "debts")).toBe(true);
     expect(canAccessFeature("personal", "reports")).toBe(true);
@@ -95,13 +97,14 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
 
     // Plan Entreprise : débloque aussi toutes les fonctionnalités actuelles + avantages Option B
     expect(canAccessFeature("business", "budget")).toBe(true);
+    expect(canAccessFeature("business", "daily_pilotage")).toBe(true);
     expect(canAccessFeature("business", "savings")).toBe(true);
     expect(canAccessFeature("business", "debts")).toBe(true);
     expect(canAccessFeature("business", "reports")).toBe(true);
     expect(canAccessFeature("business", "advisor")).toBe(true);
     expect(canAccessFeature("business", "receipts")).toBe(true);
 
-    expect(getRequiredPlanForFeature("budget")).toBe("personal");
+    expect(getRequiredPlanForFeature("daily_pilotage")).toBe("personal");
     expect(getRequiredPlanForFeature("savings")).toBe("personal");
     expect(getRequiredPlanForFeature("debts")).toBe("personal");
     expect(getRequiredPlanForFeature("reports")).toBe("personal");

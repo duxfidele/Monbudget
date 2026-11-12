@@ -84,7 +84,7 @@ export default function DashboardPage() {
     isAdmin: isAdminUser,
   });
   const canUseBudgetTools =
-    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "budget");
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "daily_pilotage");
   const canViewSavings =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "savings");
   const canViewDebts =
@@ -625,7 +625,7 @@ export default function DashboardPage() {
                 Budget journalier conseillé &amp; reste à vivre automatique
               </h3>
               <p className="text-xs sm:text-sm text-slate-200 max-w-2xl leading-relaxed">
-                En mode Gratuit limité, vous profitez des Entrées et Dépenses illimitées. Prenez un abonnement{" "}
+                En mode Gratuit, vous profitez des Entrées, Dépenses et de la page Budget (salaire &amp; enveloppes). Prenez un abonnement{" "}
                 <strong className="text-amber-300">Particulier (500 FCFA / mois)</strong> pour débloquer votre budget journalier conseillé et le diagnostic du jour.
               </p>
             </div>

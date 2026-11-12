@@ -6,6 +6,46 @@ export type SubscriptionStatus = "active" | "canceled" | "expired";
 export const TRIAL_DURATION_DAYS = 30;
 export const DEFAULT_BUSINESS_MONTHLY_PRICE_XOF = 1500;
 
+export interface MonerizPaymentGateway {
+  id: "wave" | "orange_money" | "mtn_momo" | "moov_money" | "card";
+  label: string;
+  shortLabel: string;
+  badgeClasses: string;
+}
+
+export const MONERIZ_PAYMENT_GATEWAYS: MonerizPaymentGateway[] = [
+  {
+    id: "wave",
+    label: "Wave",
+    shortLabel: "Wave",
+    badgeClasses: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/40",
+  },
+  {
+    id: "orange_money",
+    label: "Orange Money",
+    shortLabel: "Orange",
+    badgeClasses: "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-400/40",
+  },
+  {
+    id: "mtn_momo",
+    label: "MTN MoMo",
+    shortLabel: "MTN",
+    badgeClasses: "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-400/40",
+  },
+  {
+    id: "moov_money",
+    label: "Moov Money",
+    shortLabel: "Moov",
+    badgeClasses: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/40",
+  },
+  {
+    id: "card",
+    label: "Visa / Mastercard",
+    shortLabel: "Carte",
+    badgeClasses: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-400/40",
+  },
+];
+
 export interface SubscriptionCountdownInfo {
   effectivePlanId: SubscriptionPlanId;
   rawPlanId: SubscriptionPlanId;
@@ -67,11 +107,12 @@ export function getPlanCatalog(): Record<SubscriptionPlanId, PlanPricingTier> {
       name: "Gratuit",
       badge: "Essentiel",
       description:
-        "Continuez gratuitement après vos 30 jours d'essai pour noter vos entrées et vos dépenses du quotidien.",
+        "Continuez gratuitement après vos 30 jours d'essai pour déclarer votre salaire, gérer votre budget et noter vos entrées et dépenses du quotidien.",
       monthlyPriceXof: 0,
       yearlyPriceXof: 0,
       yearlySavingsXof: 0,
       features: [
+        "Page Budget complète : saisie du salaire, sources de revenus & enveloppes",
         "Saisie illimitée des Entrées (Revenus) et Dépenses",
         "Historique, recherche et filtrage des transactions",
         "Ajout rapide mobile (+) en 2 secondes",
@@ -79,7 +120,6 @@ export function getPlanCatalog(): Record<SubscriptionPlanId, PlanPricingTier> {
       ],
       lockedFeatures: [
         "Pilotage quotidien & Reste à vivre journalier",
-        "Enveloppes budgétaires & alertes de seuil",
         "Objectifs d'épargne & Cagnottes",
         "Gestionnaire des Dettes & Créances",
         "Rapports avancés & Exports PDF/CSV",
@@ -130,14 +170,16 @@ export const MONBUDGET_PLANS: Record<SubscriptionPlanId, PlanPricingTier> = getP
 
 export type ProtectedFeatureKey =
   | "budget"
+  | "daily_pilotage"
   | "savings"
   | "debts"
   | "reports"
   | "advisor"
   | "receipts";
 
-const FEATURE_REQUIRED_PLAN: Record<ProtectedFeatureKey, PaidSubscriptionPlanId> = {
-  budget: "personal",
+const FEATURE_REQUIRED_PLAN: Record<ProtectedFeatureKey, SubscriptionPlanId> = {
+  budget: "free",
+  daily_pilotage: "personal",
   savings: "personal",
   debts: "personal",
   reports: "personal",
@@ -370,7 +412,8 @@ export function canAccessFeature(
  * Retourne le plan minimum requis pour débloquer une fonctionnalité.
  */
 export function getRequiredPlanForFeature(feature: ProtectedFeatureKey): PaidSubscriptionPlanId {
-  return FEATURE_REQUIRED_PLAN[feature];
+  const required = FEATURE_REQUIRED_PLAN[feature];
+  return required === "free" ? "personal" : required;
 }
 
 /**

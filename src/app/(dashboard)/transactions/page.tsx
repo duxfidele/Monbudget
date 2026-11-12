@@ -86,7 +86,7 @@ export default function TransactionsPage() {
     isAdmin: isAdminUser,
   });
   const canUseBudgetTools =
-    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "budget");
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "daily_pilotage");
   const canExportReports =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "reports");
   const showBudgetTools = !subscriptionHydrated || canUseBudgetTools;

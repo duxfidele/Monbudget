@@ -868,9 +868,9 @@ export default function SettingsPage() {
                           : !subscriptionHydrated
                           ? "Synchronisation de votre statut d'abonnement et d'essai 30 jours avec le serveur..."
                           : subscriptionCountdown.isTrialActive
-                          ? `Toutes les fonctionnalités sont débloquées gratuitement jusqu'au ${subscriptionCountdown.formattedTrialEndsAt || "terme de vos 30 jours"}. Ensuite, vous choisirez librement entre Gratuit limité (0 F), Particulier (${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} F) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} F).`
+                          ? `Toutes les fonctionnalités sont débloquées gratuitement jusqu'au ${subscriptionCountdown.formattedTrialEndsAt || "terme de vos 30 jours"}. Ensuite, vous choisirez librement entre Gratuit (0 F : Budget, Entrées & Dépenses), Particulier (${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} F) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} F).`
                           : subscriptionCountdown.needsPlanChoice
-                          ? `Votre essai complet de 30 jours est arrivé à terme${subscriptionCountdown.formattedTrialEndsAt ? ` le ${subscriptionCountdown.formattedTrialEndsAt}` : ""}. Choisissez ci-dessous le mode Gratuit limité (Entrées/Dépenses), Particulier (${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`
+                          ? `Votre essai complet de 30 jours est arrivé à terme${subscriptionCountdown.formattedTrialEndsAt ? ` le ${subscriptionCountdown.formattedTrialEndsAt}` : ""}. Choisissez ci-dessous le mode Gratuit (Budget, Entrées/Dépenses), Particulier (${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`
                           : subscriptionCountdown.isPaidActive
                           ? subscriptionCountdown.formattedExpiresAt
                             ? subscriptionCountdown.isExpiringSoon
@@ -879,7 +879,7 @@ export default function SettingsPage() {
                             : "Abonnement actif."
                           : subscriptionCountdown.isExpired
                           ? `Votre dernier abonnement est arrivé à échéance${subscriptionCountdown.formattedExpiresAt ? ` le ${subscriptionCountdown.formattedExpiresAt}` : ""}. Votre compte est repassé sur le Plan Gratuit ; toutes vos données restent conservées.`
-                          : `Accès aux Entrées et Dépenses uniquement. Passez au plan Particulier (${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois) pour tout débloquer, ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`}
+                          : `Accès à la page Budget (salaire, revenus & enveloppes) et aux Entrées & Dépenses. Passez au plan Particulier (${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois) pour tout débloquer, ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`}
                       </p>
                     </div>
 
@@ -897,16 +897,16 @@ export default function SettingsPage() {
                               const ok = await chooseFreePlan();
                               if (ok) {
                                 toast.info(
-                                  `Mode Gratuit limité activé (Entrées & Dépenses). Les outils payants sont cadenassés et déblocables à ${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois.`
+                                  `Mode Gratuit activé (Budget, Entrées & Dépenses). Les outils payants sont déblocables dès ${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois.`
                                 );
                               }
                             } finally {
                               setIsChoosingFree(false);
                             }
                           }}
-                          className="text-xs shrink-0 border-slate-300 dark:border-slate-600"
+                          className="cursor-pointer text-xs shrink-0 border-slate-300 dark:border-slate-600"
                         >
-                          {isChoosingFree ? "Activation..." : "Continuer en mode Gratuit limité"}
+                          {isChoosingFree ? "Activation..." : "Continuer en mode Gratuit"}
                         </Button>
                       )}
                   </div>

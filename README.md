@@ -41,7 +41,7 @@
 
 - 💳 **Abonnements Transparents, Essai 30 Jours & Paiement Moneriz** :
   - **30 jours d'essai complet** offerts dès l'inscription avec décompte visible et alertes J-3 / J0.
-  - Formule **Gratuit** (0 FCFA), **Particulier** (**500 FCFA/mois** ou **5 000 FCFA/an**) et **Entreprise & Pro** (**1 500 FCFA/mois** ou **15 000 FCFA/an**, 2 mois offerts en annuel).
+  - Formule **Gratuit** (0 FCFA : Page Budget/Revenus + Entrées & Dépenses), **Particulier** (**500 FCFA/mois** ou **5 000 FCFA/an**) et **Entreprise & Pro** (**1 500 FCFA/mois** ou **15 000 FCFA/an**, 2 mois offerts en annuel).
   - Paiement sécurisé par Mobile Money et carte bancaire via **Moneriz Liveframe** intégré.
 
 - 🧾 **Justificatifs de Dépenses & Scan de Reçus** :

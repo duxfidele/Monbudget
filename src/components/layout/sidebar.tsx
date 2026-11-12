@@ -50,7 +50,6 @@ const routes: Array<{
       icon: Wallet,
       href: "/budget",
       color: "text-emerald-400",
-      feature: "budget",
     },
     {
       label: "Transactions",

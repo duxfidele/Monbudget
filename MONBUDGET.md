@@ -364,8 +364,8 @@ MonBudget intègre un modèle freemium transparent piloté dans [`src/lib/moneri
 ### Grille Tarifaire Officielle (2 mois offerts sur la facturation annuelle)
 | Formule | Tarif Mensuel | Tarif Annuel (10 mois) | Fonctionnalités incluses |
 | :--- | :--- | :--- | :--- |
-| **Gratuit (`free`)** | **0 FCFA** | **0 FCFA** | Saisie illimitée des revenus & dépenses, historique/recherche/filtrage, ajout rapide mobile (`+`), synchronisation cloud & mode hors-ligne |
-| **Particulier (`personal`)** | **500 FCFA** | **5 000 FCFA** *(1 000 FCFA économisés)* | Tout du plan Gratuit + pilotage quotidien, enveloppes budgétaires & alertes 80%, épargne & cagnottes, dettes & créances (WhatsApp), rapports & exports PDF/CSV, reçus illimités, Conseiller IA |
+| **Gratuit (`free`)** | **0 FCFA** | **0 FCFA** | Page Budget complète (salaire, sources de revenus & enveloppes), saisie illimitée des revenus & dépenses, historique/recherche/filtrage, ajout rapide mobile (`+`), synchronisation cloud & mode hors-ligne |
+| **Particulier (`personal`)** | **500 FCFA** | **5 000 FCFA** *(1 000 FCFA économisés)* | Tout du plan Gratuit + pilotage quotidien du salaire & reste à vivre journalier, épargne & cagnottes, dettes & créances (WhatsApp), rapports & exports PDF/CSV, reçus illimités, Conseiller IA |
 | **Entreprise & Pro (`business`)** | **1 500 FCFA** *(configurable)* | **15 000 FCFA** *(3 000 FCFA économisés)* | Tout du plan Particulier + support prioritaire 7j/7 et accès anticipé aux futurs modules dédiés Entreprise (multi-caisses, bilans pro, équipe) |
 
 > *Note :* Le tarif mensuel du plan Entreprise & Pro peut être ajusté sans modification de code via la variable `NEXT_PUBLIC_BUSINESS_MONTHLY_PRICE_XOF` (`1 500 FCFA` par défaut).
