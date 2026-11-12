@@ -149,7 +149,7 @@ export function NetworkStatus() {
       {open && (
         <div
           data-testid="network-status-popover"
-          className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-[4.25rem] sm:top-full sm:mt-2 w-auto sm:w-72 rounded-xl border border-border bg-card text-card-foreground shadow-xl p-3.5 z-50 text-xs space-y-2.5"
+          className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-[6.25rem] sm:top-full sm:mt-2 w-auto sm:w-72 rounded-xl border border-border bg-card text-card-foreground shadow-xl p-3.5 z-50 text-xs space-y-2.5"
         >
           <div className="flex items-center justify-between border-b border-border pb-2">
             <div className="flex items-center gap-1.5 font-semibold">

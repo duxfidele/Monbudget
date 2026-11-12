@@ -39,66 +39,66 @@ const routes: Array<{
   color: string;
   feature?: ProtectedFeatureKey;
 }> = [
-  {
-    label: "Tableau de bord",
-    icon: LayoutDashboard,
-    href: "/dashboard",
-    color: "text-sky-400",
-  },
-  {
-    label: "Mon Budget",
-    icon: Wallet,
-    href: "/budget",
-    color: "text-emerald-400",
-    feature: "budget",
-  },
-  {
-    label: "Transactions",
-    icon: ArrowRightLeft,
-    href: "/transactions",
-    color: "text-violet-400",
-  },
-  {
-    label: "Épargne",
-    icon: PiggyBank,
-    href: "/savings",
-    color: "text-pink-400",
-    feature: "savings",
-  },
-  {
-    label: "Dettes & Créances",
-    icon: HandCoins,
-    href: "/debts",
-    color: "text-amber-400",
-    feature: "debts",
-  },
-  {
-    label: "Conseiller IA",
-    icon: Brain,
-    href: "/advisor",
-    color: "text-cyan-400",
-    feature: "advisor",
-  },
-  {
-    label: "Rapports",
-    icon: LineChart,
-    href: "/reports",
-    color: "text-orange-400",
-    feature: "reports",
-  },
-  {
-    label: "Paramètres",
-    icon: Settings,
-    href: "/settings",
-    color: "text-slate-300",
-  },
-  {
-    label: "Aide & Support",
-    icon: LifeBuoy,
-    href: "/support",
-    color: "text-emerald-400",
-  },
-];
+    {
+      label: "Tableau de bord",
+      icon: LayoutDashboard,
+      href: "/dashboard",
+      color: "text-sky-400",
+    },
+    {
+      label: "Mon Budget",
+      icon: Wallet,
+      href: "/budget",
+      color: "text-emerald-400",
+      feature: "budget",
+    },
+    {
+      label: "Transactions",
+      icon: ArrowRightLeft,
+      href: "/transactions",
+      color: "text-violet-400",
+    },
+    {
+      label: "Épargne",
+      icon: PiggyBank,
+      href: "/savings",
+      color: "text-pink-400",
+      feature: "savings",
+    },
+    {
+      label: "Dettes & Créances",
+      icon: HandCoins,
+      href: "/debts",
+      color: "text-amber-400",
+      feature: "debts",
+    },
+    {
+      label: "Conseiller IA",
+      icon: Brain,
+      href: "/advisor",
+      color: "text-cyan-400",
+      feature: "advisor",
+    },
+    {
+      label: "Rapports",
+      icon: LineChart,
+      href: "/reports",
+      color: "text-orange-400",
+      feature: "reports",
+    },
+    {
+      label: "Paramètres",
+      icon: Settings,
+      href: "/settings",
+      color: "text-slate-300",
+    },
+    {
+      label: "Aide & Support",
+      icon: LifeBuoy,
+      href: "/support",
+      color: "text-emerald-400",
+    },
+  ];
 
 export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
   const pathname = usePathname();
@@ -164,10 +164,10 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
   const planBadgeLabel = isAdminUser
     ? "Super-Admin"
     : !subscriptionHydrated
-    ? "Vérification..."
-    : countdown.isTrialActive
-    ? "Essai 30j Complet"
-    : `Plan ${catalog[countdown.effectivePlanId]?.name || "Gratuit"}`;
+      ? "Vérification..."
+      : countdown.isTrialActive
+        ? "Essai 30j Complet"
+        : `Plan ${catalog[countdown.effectivePlanId]?.name || "Gratuit"}`;
 
   return (
     <div className="flex flex-col h-full bg-[#1E3A5F] text-white select-none">
@@ -225,8 +225,8 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
                 isActive
                   ? "text-white bg-white/15 font-semibold shadow-xs"
                   : isLocked
-                  ? "text-slate-300/80 hover:text-white hover:bg-white/10"
-                  : "text-slate-300 hover:text-white hover:bg-white/10"
+                    ? "text-slate-300/80 hover:text-white hover:bg-white/10"
+                    : "text-slate-300 hover:text-white hover:bg-white/10"
               )}
             >
               <div className="flex items-center justify-between flex-1 gap-2 min-w-0">
@@ -284,8 +284,8 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
             {userName
               ? userName.charAt(0).toUpperCase()
               : userEmail
-              ? userEmail.charAt(0).toUpperCase()
-              : <User className="w-4 h-4" />}
+                ? userEmail.charAt(0).toUpperCase()
+                : <User className="w-4 h-4" />}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-white truncate">
@@ -294,50 +294,73 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
             {userName && userEmail && (
               <p className="text-[10px] text-slate-300 truncate">{userEmail}</p>
             )}
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
-                Connecté
-              </span>
-              <span className="text-slate-500 text-[10px]">•</span>
-              <Link
-                href={isAdminUser ? "/admin" : "/settings?tab=subscription"}
-                onClick={onNavigate}
-                suppressHydrationWarning
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 hover:underline truncate focus:outline-none"
-              >
-                <Crown className="w-2.5 h-2.5 shrink-0" />
-                <span>{planBadgeLabel}</span>
-                {!isAdminUser && countdown.isTrialActive && countdown.trialDaysRemaining !== null && (
-                  <span
-                    className={`ml-0.5 inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
-                      countdown.isTrialExpiringSoon
-                        ? "bg-amber-500/35 text-amber-200 border border-amber-400/50"
-                        : "bg-sky-500/25 text-sky-200 border border-sky-400/40"
-                    }`}
-                  >
-                    <Clock className="w-2 h-2 shrink-0" />
-                    {countdown.trialDaysRemaining}j
+            <div className="mt-1 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
+                  Connecté
+                </span>
+                <span className="text-slate-500 text-[10px]">•</span>
+                <Link
+                  href={isAdminUser ? "/admin" : "/settings?tab=subscription"}
+                  onClick={onNavigate}
+                  suppressHydrationWarning
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-300 hover:underline focus:outline-none"
+                >
+                  <Crown className="w-3 h-3 shrink-0" />
+                  <span>{planBadgeLabel}</span>
+                </Link>
+              </div>
+
+              {!isAdminUser && countdown.isTrialActive && countdown.trialDaysRemaining !== null && (
+                <Link
+                  href="/settings?tab=subscription"
+                  onClick={onNavigate}
+                  suppressHydrationWarning
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-extrabold shadow-xs transition-opacity hover:opacity-90 ${
+                    countdown.isTrialExpiringSoon
+                      ? "bg-amber-400 text-slate-950"
+                      : "bg-sky-400 text-slate-950"
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {countdown.trialDaysRemaining}{" "}
+                    {countdown.trialDaysRemaining > 1 ? "jours restants" : "jour restant"}
                   </span>
-                )}
-                {!isAdminUser && countdown.isPaidActive && countdown.daysRemaining !== null && (
-                  <span
-                    className={`ml-0.5 inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
-                      countdown.isExpiringSoon
-                        ? "bg-rose-500/30 text-rose-200 border border-rose-400/50"
-                        : "bg-emerald-500/25 text-emerald-200 border border-emerald-400/40"
-                    }`}
-                  >
-                    <Clock className="w-2 h-2 shrink-0" />
-                    {countdown.daysRemaining}j
+                </Link>
+              )}
+
+              {!isAdminUser && countdown.isPaidActive && countdown.daysRemaining !== null && (
+                <Link
+                  href="/settings?tab=subscription"
+                  onClick={onNavigate}
+                  suppressHydrationWarning
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-extrabold shadow-xs transition-opacity hover:opacity-90 ${
+                    countdown.isExpiringSoon
+                      ? "bg-rose-500 text-white"
+                      : "bg-emerald-400 text-slate-950"
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {countdown.daysRemaining}{" "}
+                    {countdown.daysRemaining > 1 ? "jours restants" : "jour restant"}
                   </span>
-                )}
-                {!isAdminUser && !countdown.isTrialActive && (countdown.isExpired || countdown.isTrialExpired) && (
-                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-rose-500/30 text-rose-200 border border-rose-400/40">
-                    {countdown.isTrialExpired ? "Choix requis" : "Expiré"}
-                  </span>
-                )}
-              </Link>
+                </Link>
+              )}
+
+              {!isAdminUser && !countdown.isTrialActive && (countdown.isExpired || countdown.isTrialExpired) && (
+                <Link
+                  href="/settings?tab=subscription"
+                  onClick={onNavigate}
+                  suppressHydrationWarning
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-rose-500 text-white shadow-xs transition-opacity hover:opacity-90"
+                >
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>{countdown.isTrialExpired ? "Essai terminé — Choisir un plan" : "Abonnement expiré"}</span>
+                </Link>
+              )}
             </div>
           </div>
         </div>

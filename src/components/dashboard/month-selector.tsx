@@ -48,7 +48,7 @@ export function MonthSelector() {
   };
 
   return (
-    <div className="inline-flex items-center gap-0.5 sm:gap-1.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl p-0.5 sm:p-1 shadow-xs transition-colors max-w-full">
+    <div className="inline-flex items-center gap-1 sm:gap-1.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl p-0.5 sm:p-1 shadow-xs transition-colors max-w-full">
       <Button
         variant="ghost"
         size="icon"
@@ -59,10 +59,10 @@ export function MonthSelector() {
         <ChevronLeft className="h-4 w-4" />
       </Button>
 
-      <div className="flex items-center gap-1 sm:gap-1.5 px-1 sm:px-2.5 py-1 text-[11px] sm:text-sm font-semibold text-slate-800 dark:text-slate-100 select-none whitespace-nowrap">
-        <Calendar className="hidden sm:block h-4 w-4 text-[#1E3A5F] dark:text-sky-400 shrink-0" />
-        <span className="sm:hidden">{capitalizedShortMonth}</span>
-        <span className="hidden sm:inline">{capitalizedMonth}</span>
+      <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 select-none whitespace-nowrap">
+        <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#1E3A5F] dark:text-sky-400 shrink-0" />
+        <span className="min-[360px]:hidden">{capitalizedShortMonth}</span>
+        <span className="hidden min-[360px]:inline">{capitalizedMonth}</span>
       </div>
 
       <Button
