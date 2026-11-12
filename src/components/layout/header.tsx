@@ -16,9 +16,9 @@ export const Header = () => {
   const { toggleSidebar } = useUIStore();
 
   return (
-    <header className="flex items-center justify-between px-2 sm:px-4 md:px-8 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md sticky top-0 z-30 h-16 transition-colors">
+    <header className="flex items-center justify-between gap-1.5 sm:gap-3 px-2 sm:px-4 md:px-8 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md sticky top-0 z-30 h-16 transition-colors min-w-0">
       {/* Mobile : Menu hamburger + Logo compact */}
-      <div className="flex items-center gap-1 sm:gap-1.5 md:hidden">
+      <div className="flex items-center gap-1 sm:gap-1.5 md:hidden shrink-0">
         <Button
           variant="ghost"
           size="icon"
@@ -30,8 +30,8 @@ export const Header = () => {
           <Menu className="h-5 w-5" />
         </Button>
 
-        <Link href="/dashboard" className="flex items-center gap-2 ml-0.5 group">
-          <div className="relative w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-xs">
+        <Link href="/dashboard" className="flex items-center gap-2 group">
+          <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-lg overflow-hidden shrink-0 shadow-xs">
             <Image
               src="/logo.png"
               alt="Logo MonBudget"
@@ -48,12 +48,12 @@ export const Header = () => {
       </div>
 
       {/* Global Month Selector */}
-      <div className="flex items-center">
+      <div className="flex items-center min-w-0">
         <MonthSelector />
       </div>
       
       {/* User Actions, PWA Install, Network Status, Notifications & Theme Toggle */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         <NetworkStatus />
         <InstallButton variant="header" />
         <NotificationsBell />

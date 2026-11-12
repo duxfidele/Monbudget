@@ -551,7 +551,7 @@ export default function SettingsPage() {
 
       <div className="grid gap-6 md:grid-cols-4">
         {/* Navigation des Onglets (Sidebar interne sur desktop, barre défilante sur mobile) */}
-        <div className="md:col-span-1 flex md:flex-col gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
+        <div className="md:col-span-1 min-w-0 flex md:flex-col items-center md:items-stretch gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
           <Button 
             variant={activeTab === "profile" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("profile")}
@@ -622,20 +622,20 @@ export default function SettingsPage() {
             )}
           </Button>
 
-          <div className="pt-2 md:pt-4 border-t border-slate-200 dark:border-slate-800 mt-2 md:mt-4">
+          <div className="pl-2 ml-1 border-l md:ml-0 md:pl-0 md:pt-4 md:border-l-0 md:border-t border-slate-200 dark:border-slate-800 md:mt-4 shrink-0">
             <Button 
               variant="ghost" 
               onClick={handleLogout} 
-              className="w-full justify-start text-red-600 dark:text-rose-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-rose-950/30 text-xs sm:text-sm font-semibold h-10"
+              className="whitespace-nowrap md:w-full justify-start text-red-600 dark:text-rose-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-rose-950/30 text-xs sm:text-sm font-semibold h-9 md:h-10"
             >
-              <LogOut className="mr-2 h-4 w-4" />
+              <LogOut className="mr-2 h-4 w-4 shrink-0" />
               <span>Déconnexion</span>
             </Button>
           </div>
         </div>
 
         {/* Contenu Principal selon l'onglet actif */}
-        <div className="md:col-span-3 space-y-6">
+        <div className="md:col-span-3 min-w-0 space-y-6">
           {/* ================= ONGLET 1 : PROFIL & PRÉFÉRENCES ================= */}
           {activeTab === "profile" && (
             <div className="space-y-6">
@@ -868,9 +868,9 @@ export default function SettingsPage() {
                           : !subscriptionHydrated
                           ? "Synchronisation de votre statut d'abonnement et d'essai 30 jours avec le serveur..."
                           : subscriptionCountdown.isTrialActive
-                          ? `Toutes les fonctionnalités sont débloquées gratuitement jusqu'au ${subscriptionCountdown.formattedTrialEndsAt || "terme de vos 30 jours"}. Ensuite, vous choisirez librement entre Gratuit limité (0 F), Particulier (1 000 F) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} F).`
+                          ? `Toutes les fonctionnalités sont débloquées gratuitement jusqu'au ${subscriptionCountdown.formattedTrialEndsAt || "terme de vos 30 jours"}. Ensuite, vous choisirez librement entre Gratuit limité (0 F), Particulier (${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} F) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} F).`
                           : subscriptionCountdown.needsPlanChoice
-                          ? `Votre essai complet de 30 jours est arrivé à terme${subscriptionCountdown.formattedTrialEndsAt ? ` le ${subscriptionCountdown.formattedTrialEndsAt}` : ""}. Choisissez ci-dessous le mode Gratuit limité (Entrées/Dépenses), Particulier (1 000 FCFA/mois) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`
+                          ? `Votre essai complet de 30 jours est arrivé à terme${subscriptionCountdown.formattedTrialEndsAt ? ` le ${subscriptionCountdown.formattedTrialEndsAt}` : ""}. Choisissez ci-dessous le mode Gratuit limité (Entrées/Dépenses), Particulier (${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois) ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`
                           : subscriptionCountdown.isPaidActive
                           ? subscriptionCountdown.formattedExpiresAt
                             ? subscriptionCountdown.isExpiringSoon
@@ -879,7 +879,7 @@ export default function SettingsPage() {
                             : "Abonnement actif."
                           : subscriptionCountdown.isExpired
                           ? `Votre dernier abonnement est arrivé à échéance${subscriptionCountdown.formattedExpiresAt ? ` le ${subscriptionCountdown.formattedExpiresAt}` : ""}. Votre compte est repassé sur le Plan Gratuit ; toutes vos données restent conservées.`
-                          : `Accès aux Entrées et Dépenses uniquement. Passez au plan Particulier (1 000 FCFA/mois) pour tout débloquer, ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`}
+                          : `Accès aux Entrées et Dépenses uniquement. Passez au plan Particulier (${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois) pour tout débloquer, ou Entreprise (${catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).`}
                       </p>
                     </div>
 
@@ -897,7 +897,7 @@ export default function SettingsPage() {
                               const ok = await chooseFreePlan();
                               if (ok) {
                                 toast.info(
-                                  "Mode Gratuit limité activé (Entrées & Dépenses). Les outils payants sont cadenassés et déblocables à 1 000 FCFA/mois."
+                                  `Mode Gratuit limité activé (Entrées & Dépenses). Les outils payants sont cadenassés et déblocables à ${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois.`
                                 );
                               }
                             } finally {
@@ -1274,17 +1274,17 @@ export default function SettingsPage() {
                   <CardDescription className="text-slate-500 dark:text-slate-400">Informations sur votre session connectée.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs">
                     <span className="text-slate-500 dark:text-slate-400">Compte connecté :</span>
-                    <strong className="text-slate-800 dark:text-slate-200">{email || "Utilisateur"}</strong>
+                    <strong className="text-slate-800 dark:text-slate-200 break-all">{email || "Utilisateur"}</strong>
                   </div>
                   {userId && (
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs">
                       <span className="text-slate-500 dark:text-slate-400">ID Unique :</span>
-                      <code className="text-slate-600 dark:text-slate-300 font-mono text-[11px]">{userId}</code>
+                      <code className="text-slate-600 dark:text-slate-300 font-mono text-[11px] break-all">{userId}</code>
                     </div>
                   )}
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-xs text-emerald-800 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40">
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-xs text-emerald-800 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40">
                     <span className="flex items-center gap-1.5 font-medium">
                       <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                       Sécurité par RLS active

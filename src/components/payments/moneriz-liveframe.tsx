@@ -545,10 +545,10 @@ export function MonerizLiveframe({
       )}
 
       {paymentState === "pending" && session && (
-        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 text-xs">
-            <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <div>
+        <div className="p-3.5 sm:p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-2.5 text-xs min-w-0">
+            <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="min-w-0">
               <p className="font-bold text-amber-950 dark:text-amber-200">
                 Paiement en attente de confirmation opérateur
               </p>
@@ -561,7 +561,7 @@ export function MonerizLiveframe({
             size="sm"
             variant="outline"
             onClick={() => verifyServerConfirmation(session.orderId, latestPaymentIdRef.current)}
-            className="shrink-0 text-xs"
+            className="shrink-0 w-full sm:w-auto text-xs"
           >
             Vérifier maintenant
           </Button>
@@ -575,7 +575,7 @@ export function MonerizLiveframe({
       )}
 
       {paymentState === "expired" && session && (
-        <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-3 text-xs">
+        <div className="p-3.5 sm:p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
           <span className="text-amber-900 dark:text-amber-200 font-medium">
             Cette tentative a expiré. Vérifiez le statut si vous avez déjà validé sur votre téléphone, ou ouvrez une nouvelle tentative.
           </span>
@@ -583,7 +583,7 @@ export function MonerizLiveframe({
             size="sm"
             variant="outline"
             onClick={() => startOrResumeCheckout()}
-            className="shrink-0 text-xs"
+            className="shrink-0 w-full sm:w-auto text-xs"
           >
             Nouvelle session
           </Button>

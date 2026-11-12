@@ -74,7 +74,7 @@ export function TrialChoiceModal() {
       const ok = await chooseFreePlan();
       if (ok) {
         toast.info(
-          "Mode Gratuit activé : vos Entrées & Dépenses restent illimitées. Les outils avancés sont cadenassés et déblocables à tout moment dès 1 000 FCFA/mois."
+          `Mode Gratuit activé : vos Entrées & Dépenses restent illimitées. Les outils avancés sont cadenassés et déblocables à tout moment dès ${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois.`
         );
       }
     } finally {
@@ -109,18 +109,21 @@ export function TrialChoiceModal() {
               <DialogDescription className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 Votre essai complet de 30 jours est terminé
                 {countdown.formattedTrialEndsAt ? ` (le ${countdown.formattedTrialEndsAt})` : ""}. Choisissez de continuer gratuitement avec les Entrées &amp; Dépenses (outils avancés cadenassés), ou débloquez tout avec{" "}
-                <strong>Particulier (1 000 FCFA/mois)</strong> ou{" "}
+                <strong>
+                  Particulier ({catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois)
+                </strong>{" "}
+                ou{" "}
                 <strong>Entreprise ({catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois)</strong>.
               </DialogDescription>
             </DialogHeader>
 
             {/* Bascule Mensuel / Annuel */}
             <div className="flex justify-center pt-2">
-              <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <div className="inline-flex max-w-full flex-wrap justify-center items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => setSelectedCycle("monthly")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     selectedCycle === "monthly"
                       ? "bg-[#1E3A5F] text-white shadow-xs"
                       : "text-slate-600 dark:text-slate-300"
@@ -131,14 +134,14 @@ export function TrialChoiceModal() {
                 <button
                   type="button"
                   onClick={() => setSelectedCycle("yearly")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                     selectedCycle === "yearly"
                       ? "bg-[#1E3A5F] text-white shadow-xs"
                       : "text-slate-600 dark:text-slate-300"
                   }`}
                 >
                   <span>Annuel</span>
-                  <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-emerald-500 text-white">
+                  <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded-full bg-emerald-500 text-white whitespace-nowrap">
                     2 mois offerts
                   </span>
                 </button>
@@ -187,7 +190,7 @@ export function TrialChoiceModal() {
                 </Button>
               </div>
 
-              {/* 2. Particulier 1 000 FCFA */}
+              {/* 2. Particulier */}
               <div className="rounded-2xl p-4 bg-gradient-to-b from-[#1E3A5F] to-[#0F233F] text-white border-2 border-sky-400 shadow-lg flex flex-col justify-between gap-4 relative">
                 <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 text-slate-950 text-[10px] font-extrabold uppercase tracking-wider whitespace-nowrap flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
@@ -221,7 +224,12 @@ export function TrialChoiceModal() {
                   onClick={() => setCheckoutTarget("personal")}
                   className="w-full rounded-xl text-xs font-bold h-10 bg-sky-400 hover:bg-sky-300 text-slate-950"
                 >
-                  Activer Particulier ({selectedCycle === "yearly" ? "10 000 FCFA" : "1 000 FCFA"})
+                  Activer Particulier (
+                  {(selectedCycle === "yearly"
+                    ? catalog.personal.yearlyPriceXof
+                    : catalog.personal.monthlyPriceXof
+                  ).toLocaleString("fr-FR")}{" "}
+                  FCFA)
                 </Button>
               </div>
 
@@ -269,7 +277,7 @@ export function TrialChoiceModal() {
           </>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Button
                 type="button"
                 variant="outline"

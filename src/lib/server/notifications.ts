@@ -292,6 +292,9 @@ export async function sendWelcomeNotificationsOnce(params: {
         ? { email: params.userEmail, fullName: params.fullName || null }
         : await resolveUserContact(adminSupabase, params.userId);
 
+      const personalPrice = getPlanCatalog().personal.monthlyPriceXof
+        .toLocaleString("fr-FR")
+        .replace(/[\u00a0\u202f]/g, " ");
       const formattedEnd = countdown.formattedTrialEndsAt;
       await createUserNotification({
         userId: params.userId,
@@ -299,7 +302,7 @@ export async function sendWelcomeNotificationsOnce(params: {
         title: "🎉 Bienvenue ! Essai complet de 30 jours activé",
         message: `Profitez de toutes les fonctionnalités MonBudget gratuitement pendant 30 jours${
           formattedEnd ? ` (jusqu'au ${formattedEnd})` : ""
-        }. Ensuite, choisissez entre Gratuit, Particulier (1 000 FCFA) ou Entreprise.`,
+        }. Ensuite, choisissez entre Gratuit, Particulier (${personalPrice} FCFA) ou Entreprise.`,
         ctaHref: "/dashboard",
       });
 
@@ -528,13 +531,16 @@ export async function evaluateAndSendUserSubscriptionAlerts(params: {
 
       if (claimed) {
         const d = countdown.trialDaysRemaining ?? 3;
+        const personalPrice = catalog.personal.monthlyPriceXof
+          .toLocaleString("fr-FR")
+          .replace(/[\u00a0\u202f]/g, " ");
         await createUserNotification({
           userId: params.userId,
           type: "trial_reminder_3d",
           title: `⏳ Plus que ${d} jour${d > 1 ? "s" : ""} d'essai gratuit complet`,
           message: `Choisissez votre formule avant le ${
             countdown.formattedTrialEndsAt || "terme"
-          } : Gratuit limité (0 FCFA), Particulier (1 000 FCFA/mois) ou Entreprise (${businessPrice} FCFA/mois).`,
+          } : Gratuit limité (0 FCFA), Particulier (${personalPrice} FCFA/mois) ou Entreprise (${businessPrice} FCFA/mois).`,
           ctaHref: "/settings?tab=subscription",
         });
 
@@ -562,11 +568,14 @@ export async function evaluateAndSendUserSubscriptionAlerts(params: {
         .maybeSingle();
 
       if (claimed) {
+        const personalPrice = catalog.personal.monthlyPriceXof
+          .toLocaleString("fr-FR")
+          .replace(/[\u00a0\u202f]/g, " ");
         await createUserNotification({
           userId: params.userId,
           type: "trial_expired",
           title: "🔒 Fin de vos 30 jours d'essai — Choisissez votre formule",
-          message: `Votre compte est en mode Gratuit limité. Choisissez Gratuit (fonctionnalités cadenassées), Particulier (1 000 FCFA/mois pour tout débloquer) ou Entreprise (${businessPrice} FCFA/mois).`,
+          message: `Votre compte est en mode Gratuit limité. Choisissez Gratuit (fonctionnalités cadenassées), Particulier (${personalPrice} FCFA/mois pour tout débloquer) ou Entreprise (${businessPrice} FCFA/mois).`,
           ctaHref: "/settings?tab=subscription",
         });
 
@@ -701,12 +710,15 @@ export async function runDailySubscriptionLifecycleCron(
 
         if (claimed) {
           const prevPlan = catalog[(row.plan_id as "personal" | "business") || "personal"];
+          const personalPrice = catalog.personal.monthlyPriceXof
+            .toLocaleString("fr-FR")
+            .replace(/[\u00a0\u202f]/g, " ");
           await createUserNotification({
             userId: row.user_id,
             type: "subscription_expired",
             title: `🔒 Abonnement ${prevPlan.name} expiré`,
             message:
-              "Votre abonnement a expiré et votre compte est passé en mode Gratuit (outils avancés cadenassés). Prenez un abonnement Particulier dès 1 000 FCFA/mois.",
+              `Votre abonnement a expiré et votre compte est passé en mode Gratuit (outils avancés cadenassés). Prenez un abonnement Particulier dès ${personalPrice} FCFA/mois.`,
             ctaHref: "/settings?tab=subscription&plan=personal",
           });
 
@@ -818,11 +830,14 @@ export async function runDailySubscriptionLifecycleCron(
         timeZone: "UTC",
       }).format(new Date(endMs));
 
+      const personalPrice = catalog.personal.monthlyPriceXof
+        .toLocaleString("fr-FR")
+        .replace(/[\u00a0\u202f]/g, " ");
       await createUserNotification({
         userId: row.user_id,
         type: "trial_reminder_3d",
         title: `⏳ Plus que ${daysLeft} jour${daysLeft > 1 ? "s" : ""} d'essai gratuit complet`,
-        message: `Choisissez avant le ${endFormatted} : Gratuit limité (0 FCFA), Particulier (1 000 FCFA/mois) ou Entreprise (${businessPrice} FCFA/mois).`,
+        message: `Choisissez avant le ${endFormatted} : Gratuit limité (0 FCFA), Particulier (${personalPrice} FCFA/mois) ou Entreprise (${businessPrice} FCFA/mois).`,
         ctaHref: "/settings?tab=subscription",
       });
 
@@ -865,11 +880,14 @@ export async function runDailySubscriptionLifecycleCron(
 
       if (!claimed) continue;
 
+      const personalPrice = catalog.personal.monthlyPriceXof
+        .toLocaleString("fr-FR")
+        .replace(/[\u00a0\u202f]/g, " ");
       await createUserNotification({
         userId: row.user_id,
         type: "trial_expired",
         title: "🔒 Fin de vos 30 jours d'essai — Choisissez votre formule",
-        message: `Votre essai complet de 30 jours est terminé. Passez en Particulier (1 000 FCFA/mois), Entreprise (${businessPrice} FCFA/mois) ou continuez en Gratuit limité.`,
+        message: `Votre essai complet de 30 jours est terminé. Passez en Particulier (${personalPrice} FCFA/mois), Entreprise (${businessPrice} FCFA/mois) ou continuez en Gratuit limité.`,
         ctaHref: "/settings?tab=subscription",
       });
 

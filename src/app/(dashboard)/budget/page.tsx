@@ -393,7 +393,7 @@ function CategoryRowInput({
               <button
                 type="button"
                 onClick={() => setIsEditingName(true)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-slate-600 rounded"
+                className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 text-slate-400 hover:text-slate-600 rounded shrink-0"
                 title="Renommer la catégorie"
               >
                 <Edit2 className="h-3.5 w-3.5" />
@@ -442,28 +442,28 @@ function CategoryRowInput({
           <button
             type="button"
             onClick={() => handleAddQuickAmount(5000)}
-            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
+            className="px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
           >
             +5 000
           </button>
           <button
             type="button"
             onClick={() => handleAddQuickAmount(10000)}
-            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
+            className="px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
           >
             +10 000
           </button>
           <button
             type="button"
             onClick={() => handleAddQuickAmount(25000)}
-            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
+            className="px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
           >
             +25 000
           </button>
           <button
             type="button"
             onClick={() => handleAddQuickAmount(50000)}
-            className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
+            className="px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-[#1E3A5F] dark:hover:border-sky-400 hover:bg-blue-50/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium transition"
           >
             +50 000
           </button>
@@ -471,7 +471,7 @@ function CategoryRowInput({
             <button
               type="button"
               onClick={handleAllocateRemainder}
-              className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 font-semibold transition flex items-center gap-1"
+              className="px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 font-semibold transition flex items-center gap-1"
             >
               <span>+ Reste ({formatThousands(remainingToAllocate)})</span>
             </button>
@@ -479,7 +479,7 @@ function CategoryRowInput({
           <button
             type="button"
             onClick={handleResetToZero}
-            className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-rose-950/40 hover:text-red-600 dark:hover:text-rose-400 text-slate-500 font-medium transition ml-auto flex items-center gap-1"
+            className="px-2.5 py-1 sm:px-2 sm:py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-rose-950/40 hover:text-red-600 dark:hover:text-rose-400 text-slate-500 font-medium transition ml-auto flex items-center gap-1"
             title="Remettre à 0"
           >
             <RotateCcw className="h-3 w-3" />
@@ -489,7 +489,7 @@ function CategoryRowInput({
       )}
       
       {/* Jauge et indicateur de dépenses */}
-      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-1 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
         <span>Dépensé : <strong className="text-slate-700 dark:text-slate-200">{formatMoney(spent, currency)}</strong></span>
         <span className={progress.isOverBudget ? "text-red-600 dark:text-rose-400 font-semibold" : "text-emerald-600 dark:text-emerald-400 font-semibold"}>
           {progress.isOverBudget 
@@ -853,7 +853,7 @@ export default function BudgetPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Résumé & Pilotage */}
-        <div className="lg:col-span-1 space-y-5">
+        <div className="lg:col-span-1 space-y-5 min-w-0">
           {/* Revenu Card avec multi-sources (Pilier B) */}
           <Card className="border-none shadow-md bg-gradient-to-br from-[#1E3A5F] to-[#2B4E7E] text-white">
             <CardHeader className="pb-3">
@@ -1218,7 +1218,7 @@ export default function BudgetPage() {
         </div>
 
         {/* Répartition par Catégorie (Pilier C) */}
-        <Card className="lg:col-span-2 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="lg:col-span-2 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
@@ -1364,13 +1364,13 @@ export default function BudgetPage() {
                     if (e.key === "Enter") handleAddCategory();
                   }}
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full sm:w-auto">
                   <BudgetAmountInput
                     value={newCatAmount}
                     onChange={(val) => setNewCatAmount(val)}
                     currency={currency}
                     placeholder="Montant alloué"
-                    className="w-36 sm:w-40"
+                    className="flex-1 min-w-0 sm:flex-none sm:w-40"
                     inputClassName="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 h-10 text-sm text-slate-900 dark:text-slate-100"
                   />
                   <Button 

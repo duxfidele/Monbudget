@@ -73,7 +73,7 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
 
     if (!canAttachReceipts) {
       toast.info(
-        "Fonctionnalité cadenassée — Prenez l'abonnement Particulier à 1 000 FCFA/mois pour joindre des reçus."
+        "Fonctionnalité cadenassée — Prenez l'abonnement Particulier à 500 FCFA/mois pour joindre des reçus."
       );
       return;
     }
@@ -195,7 +195,7 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
           <div className="flex items-center gap-2 min-w-0">
             <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <span className="text-[11px] font-medium text-amber-900 dark:text-amber-200 truncate">
-              Ajout de reçus cadenassé — Abonnement Particulier 1 000 FCFA/mois
+              Ajout de reçus cadenassé — Abonnement Particulier 500 FCFA/mois
             </span>
           </div>
           <Link href="/settings?tab=subscription&plan=personal" className="shrink-0">

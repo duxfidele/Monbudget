@@ -37,7 +37,8 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
     expect(html).toContain("Bienvenue sur MonBudget, Frère Fidèle !");
     expect(html).toContain("essai gratuit complet de 30 jours");
     expect(html).toContain("12/12/2026");
-    expect(html).toContain("Particulier (1 000 FCFA / mois)");
+    expect(html).toContain("Particulier (500 FCFA / mois)");
+    expect(html).toContain("Entreprise &amp; Pro (1 500 FCFA / mois)");
     expect(html).toContain("Définissez votre jour de paie");
     expect(html).toContain("Créez vos enveloppes de dépenses");
     expect(html).toContain("Installez l'application sur votre smartphone");
@@ -52,7 +53,7 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
     });
     expect(trialJ3).toContain("Plus que 3 jours d'essai gratuit complet");
     expect(trialJ3).toContain("10/12/2026");
-    expect(trialJ3).toContain("1 000 FCFA / mois");
+    expect(trialJ3).toContain("500 FCFA / mois");
 
     const trialExp = getTrialExpiredEmailHtml({ name: "Koffi" });
     expect(trialExp).toContain("Vos 30 jours d'essai complet sont terminés");
@@ -62,12 +63,12 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
       name: "Koffi",
       planName: "Particulier",
       billingCycle: "monthly",
-      amountXof: 1000,
+      amountXof: 500,
       reference: "MB-LIVE-PER-001",
       expiresAtFormatted: "12/01/2027",
     }).replace(/\u202F/g, " ");
     expect(paymentSuccess).toContain("Abonnement Particulier activé avec succès");
-    expect(paymentSuccess).toContain("1 000 FCFA");
+    expect(paymentSuccess).toContain("500 FCFA");
     expect(paymentSuccess).toContain("MB-LIVE-PER-001");
     expect(paymentSuccess).toContain("12/01/2027");
 
@@ -86,7 +87,7 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
       previousPlanName: "Particulier",
     });
     expect(expiredPaid).toContain("Abonnement Particulier expiré");
-    expect(expiredPaid).toContain("1 000 FCFA / mois");
+    expect(expiredPaid).toContain("500 FCFA / mois");
   });
 
   test("generates budget alert email with accurate warning colors and percentages", () => {
@@ -186,7 +187,7 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
         name: "Koffi",
         planName: "Particulier",
         billingCycle: "monthly",
-        amountXof: 1000,
+        amountXof: 500,
         reference: "MB-TEST-1",
       }),
       sendRenewalReminderEmail("koffi@monbudget.app", {
@@ -258,7 +259,7 @@ test.describe("Email Infrastructure & Templates — SaaS Communications", () => 
         name: xssPayload,
         planName: xssPayload,
         billingCycle: "monthly",
-        amountXof: 1000,
+        amountXof: 500,
         reference: xssPayload,
         expiresAtFormatted: xssPayload,
         dashboardUrl: "javascript:alert(1)",

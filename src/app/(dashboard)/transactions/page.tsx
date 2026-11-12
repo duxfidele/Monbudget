@@ -95,9 +95,9 @@ export default function TransactionsPage() {
   const promptUnlockPersonal = (featureLabel: string) => {
     toast.info(`« ${featureLabel} » est cadenassé en mode Gratuit.`, {
       description:
-        "Prenez un abonnement Particulier à 1 000 FCFA/mois pour débloquer toutes les fonctionnalités.",
+        "Prenez un abonnement Particulier à 500 FCFA/mois pour débloquer toutes les fonctionnalités.",
       action: {
-        label: "Abonnement 1 000 F",
+        label: "Abonnement 500 F",
         onClick: () => router.push("/settings?tab=subscription&plan=personal"),
       },
     });
@@ -257,9 +257,9 @@ export default function TransactionsPage() {
     if (!canExportReports) {
       toast.info("Export Excel / CSV cadenassé en mode Gratuit.", {
         description:
-          "Prenez un abonnement Particulier (1 000 FCFA/mois) pour exporter vos transactions en CSV.",
+          "Prenez un abonnement Particulier (500 FCFA/mois) pour exporter vos transactions en CSV.",
         action: {
-          label: "Prendre 1 000 F",
+          label: "Prendre 500 F",
           onClick: () => router.push("/settings?tab=subscription&plan=personal"),
         },
       });
@@ -418,7 +418,7 @@ export default function TransactionsPage() {
                         className="inline-flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-semibold hover:underline cursor-pointer"
                       >
                         <Lock className="h-3 w-3 shrink-0" />
-                        <span>Pilotage journalier cadenassé — Abonnement 1 000 FCFA/mois</span>
+                        <span>Pilotage journalier cadenassé — Abonnement 500 FCFA/mois</span>
                       </button>
                     )
                   ) : (
@@ -526,12 +526,12 @@ export default function TransactionsPage() {
                 </span>
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                Prenez un abonnement Particulier de <strong>1 000 FCFA/mois</strong> pour calculer votre budget quotidien et votre reste à vivre.
+                Prenez un abonnement Particulier de <strong>500 FCFA/mois</strong> pour calculer votre budget quotidien et votre reste à vivre.
               </p>
             </div>
           </div>
           <span className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#1E3A5F] text-white shrink-0">
-            Débloquer (1 000 F) &rarr;
+            Débloquer (500 F) &rarr;
           </span>
         </button>
       )}
@@ -618,7 +618,7 @@ export default function TransactionsPage() {
                 <span>Cadenassé</span>
               </div>
               <p className="text-xs text-amber-800 dark:text-amber-300 font-semibold mt-0.5 sm:mt-1 truncate">
-                Prendre un abonnement de 1 000 FCFA/mois &rarr;
+                Prendre un abonnement de 500 FCFA/mois &rarr;
               </p>
             </CardContent>
           </Card>
@@ -626,9 +626,9 @@ export default function TransactionsPage() {
       </div>
 
       {/* Liste des transactions (Historique, recherche et filtrage inclus dès le plan Gratuit) */}
-      <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <div className="space-y-0.5">
+      <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 min-w-0">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-3">
+          <div className="space-y-0.5 min-w-0 flex-1">
             <CardTitle className="text-lg text-slate-900 dark:text-slate-100">Historique des Transactions</CardTitle>
             <CardDescription className="text-slate-500 dark:text-slate-400">
               {filteredTransactions.length === transactions.length
@@ -645,7 +645,7 @@ export default function TransactionsPage() {
             title={
               showReportsUnlocked
                 ? "Exporter CSV"
-                : "Export CSV cadenassé — Abonnement Particulier (1 000 FCFA/mois)"
+                : "Export CSV cadenassé — Abonnement Particulier (500 FCFA/mois)"
             }
           >
             {showReportsUnlocked ? (
@@ -674,12 +674,12 @@ export default function TransactionsPage() {
               <div
                 role="group"
                 aria-label="Filtrer par type de transaction"
-                className="inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
+                className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
               >
                 <button
                   type="button"
                   onClick={() => setTxTypeFilter("all")}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                  className={`px-2.5 sm:px-3 py-1.5 sm:py-1 rounded-lg text-xs font-semibold transition ${
                     txTypeFilter === "all"
                       ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -690,7 +690,7 @@ export default function TransactionsPage() {
                 <button
                   type="button"
                   onClick={() => setTxTypeFilter("expense")}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                  className={`px-2.5 sm:px-3 py-1.5 sm:py-1 rounded-lg text-xs font-semibold transition ${
                     txTypeFilter === "expense"
                       ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -701,7 +701,7 @@ export default function TransactionsPage() {
                 <button
                   type="button"
                   onClick={() => setTxTypeFilter("income")}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                  className={`px-2.5 sm:px-3 py-1.5 sm:py-1 rounded-lg text-xs font-semibold transition ${
                     txTypeFilter === "income"
                       ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -747,15 +747,15 @@ export default function TransactionsPage() {
                 return (
                   <div 
                     key={tx.id} 
-                    className="flex items-center justify-between p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 rounded-xl transition-colors group border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700"
+                    className="flex items-center justify-between gap-2 sm:gap-3 p-2.5 sm:p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/60 rounded-xl transition-colors group border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700"
                   >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <div className={`p-2.5 rounded-xl shrink-0 ${isInc ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}>
-                        {isInc ? <ArrowUpRight className="h-5 w-5" /> : <ArrowDownRight className="h-5 w-5" />}
+                    <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+                      <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${isInc ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}>
+                        {isInc ? <ArrowUpRight className="h-4 w-4 sm:h-5 sm:w-5" /> : <ArrowDownRight className="h-4 w-4 sm:h-5 sm:w-5" />}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm md:text-base truncate">{tx.label}</p>
-                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-0.5">
                           <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">{tx.date}</span>
                           <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${isInc ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" : "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"}`}>
                             {isInc ? "Revenu" : (tx.category || "Autre (Hors Budget)")}
@@ -788,8 +788,8 @@ export default function TransactionsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className={`font-bold text-sm md:text-base text-right ${isInc ? "text-emerald-600 dark:text-emerald-400" : "text-slate-900 dark:text-slate-100"}`}>
+                    <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+                      <div className={`font-bold text-xs sm:text-sm md:text-base text-right whitespace-nowrap ${isInc ? "text-emerald-600 dark:text-emerald-400" : "text-slate-900 dark:text-slate-100"}`}>
                         {isInc ? "+" : "-"}{formatMoney(tx.amount, currency)}
                       </div>
                       <Button 

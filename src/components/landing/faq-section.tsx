@@ -7,6 +7,7 @@ import { getPlanCatalog } from "@/lib/moneriz-plans";
 export function LandingFAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
   const catalog = getPlanCatalog();
+  const personalMonthly = catalog.personal.monthlyPriceXof.toLocaleString("fr-FR");
   const businessMonthly = catalog.business.monthlyPriceXof.toLocaleString("fr-FR");
 
   const faqs = [
@@ -23,7 +24,7 @@ export function LandingFAQSection() {
     {
       question: "Comment créer un compte et comment fonctionne l'essai gratuit de 30 jours ?",
       answer:
-        "L'inscription prend moins de 30 secondes. Cliquez sur « Commencer gratuitement », créez votre compte par email ou via Google, sans carte bancaire. Vous bénéficiez immédiatement de 30 jours d'essai gratuit avec 100 % des fonctionnalités débloquées. 3 jours avant la fin puis à l'échéance des 30 jours, vous choisissez librement entre le plan Gratuit limité, Particulier (1 000 FCFA/mois) ou Entreprise.",
+        `L'inscription prend moins de 30 secondes. Cliquez sur « Commencer gratuitement », créez votre compte par email ou via Google, sans carte bancaire. Vous bénéficiez immédiatement de 30 jours d'essai gratuit avec 100 % des fonctionnalités débloquées. 3 jours avant la fin puis à l'échéance des 30 jours, vous choisissez librement entre le plan Gratuit limité, Particulier (${personalMonthly} FCFA/mois) ou Entreprise.`,
     },
     {
       question: "Puis-je utiliser Mon Budget sur mon téléphone portable ?",
@@ -41,9 +42,9 @@ export function LandingFAQSection() {
         "Oui. Toutes nos formules sont sans engagement de durée. Vous pouvez modifier ou arrêter votre abonnement payant à tout moment depuis vos paramètres. Vos données restent intégralement conservées et accessibles sur le plan Gratuit.",
     },
     {
-      question: "Quelle est la différence entre Gratuit, Particulier (1 000 F) et Entreprise ?",
+      question: `Quelle est la différence entre Gratuit, Particulier (${personalMonthly} F) et Entreprise ?`,
       answer:
-        `Après vos 30 jours d'essai complet : le plan Gratuit (0 FCFA) conserve le suivi illimité de vos Entrées et Dépenses avec historique et recherche, tandis que les outils avancés (Budget par enveloppes, Épargne, Dettes & Créances, Rapports PDF/CSV, Reçus et Conseiller IA) sont cadenassés. Le plan Particulier (1 000 FCFA/mois) débloque 100 % de ces fonctionnalités actuelles. Le plan Entreprise & Pro (${businessMonthly} FCFA/mois) y ajoute un support prioritaire 7j/7 et l'accès anticipé aux futurs modules dédiés aux entreprises.`,
+        `Après vos 30 jours d'essai complet : le plan Gratuit (0 FCFA) conserve le suivi illimité de vos Entrées et Dépenses avec historique et recherche, tandis que les outils avancés (Budget par enveloppes, Épargne, Dettes & Créances, Rapports PDF/CSV, Reçus et Conseiller IA) sont cadenassés. Le plan Particulier (${personalMonthly} FCFA/mois) débloque 100 % de ces fonctionnalités actuelles. Le plan Entreprise & Pro (${businessMonthly} FCFA/mois) y ajoute un support prioritaire 7j/7 et l'accès anticipé aux futurs modules dédiés aux entreprises.`,
     },
   ];
 

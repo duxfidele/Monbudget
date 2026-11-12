@@ -58,11 +58,14 @@ export function getEmailWrapper(content: string, options: BaseTemplateOptions = 
 }
 
 function formatXof(amount: number): string {
-  return new Intl.NumberFormat("fr-FR").format(Math.round(amount));
+  return new Intl.NumberFormat("fr-FR")
+    .format(Math.round(amount))
+    .replace(/[\u00a0\u202f]/g, " ");
 }
 
 function getPlanRecapHtml(): string {
   const catalog = getPlanCatalog();
+  const personalPrice = formatXof(catalog.personal.monthlyPriceXof);
   const businessPrice = formatXof(catalog.business.monthlyPriceXof);
 
   return `
@@ -72,7 +75,7 @@ function getPlanRecapHtml(): string {
       </strong>
       <ul style="margin: 0; padding-left: 18px; color: #CBD5E1; font-size: 14px; line-height: 1.7;">
         <li><strong>Gratuit (0 FCFA)</strong> : Entrées &amp; Dépenses du quotidien (les modules Budget, Épargne, Dettes, Rapports, Reçus et IA passent en mode cadenassé 🔒).</li>
-        <li><strong>Particulier (1 000 FCFA / mois)</strong> : débloque <strong>100 % des fonctionnalités actuelles</strong> (Budget, Reste à vivre, Épargne, Dettes, Exports PDF/CSV, Reçus et Conseiller IA).</li>
+        <li><strong>Particulier (${personalPrice} FCFA / mois)</strong> : débloque <strong>100 % des fonctionnalités actuelles</strong> (Budget, Reste à vivre, Épargne, Dettes, Exports PDF/CSV, Reçus et Conseiller IA).</li>
         <li><strong>Entreprise &amp; Pro (${businessPrice} FCFA / mois)</strong> : tout du plan Particulier + support prioritaire 7j/7 et futurs modules dédiés Entreprise.</li>
       </ul>
     </div>
@@ -174,6 +177,8 @@ export function getTrialExpiredEmailHtml(params: {
     sanitizeHttpUrl(params.subscriptionUrl, "https://monbudgetpro.com/settings?tab=subscription")
   );
 
+  const personalPrice = formatXof(getPlanCatalog().personal.monthlyPriceXof);
+
   const content = `
     <h1 class="title" style="color: #38BDF8;">🔒 Vos 30 jours d'essai complet sont terminés</h1>
     <p>${userName}, merci d'avoir testé MonBudget pendant 30 jours ! Vos données restent intactes dans votre compte.</p>
@@ -184,7 +189,7 @@ export function getTrialExpiredEmailHtml(params: {
     ${getPlanRecapHtml()}
 
     <div class="button-container">
-      <a href="${subscriptionUrl}" class="button">Activer Particulier (1 000 FCFA) ou Entreprise &rarr;</a>
+      <a href="${subscriptionUrl}" class="button">Activer Particulier (${personalPrice} FCFA) ou Entreprise &rarr;</a>
     </div>
 
     <p style="font-size: 13px; color: #94A3B8;">
@@ -308,15 +313,17 @@ export function getSubscriptionExpiredEmailHtml(params: {
     sanitizeHttpUrl(params.subscriptionUrl, "https://monbudgetpro.com/settings?tab=subscription")
   );
 
+  const personalPrice = formatXof(getPlanCatalog().personal.monthlyPriceXof);
+
   const content = `
     <h1 class="title" style="color: #EF4444;">🔒 Abonnement ${safePlanName} expiré</h1>
     <p>${userName}, votre abonnement <strong>${safePlanName}</strong> est arrivé à échéance.</p>
     <p>
-      Vos données sont conservées intactes, et votre compte est passé en <strong>mode Gratuit</strong> (Entrées &amp; Dépenses). Les outils avancés sont temporairement cadenassés jusqu'au renouvellement de votre formule (dès <strong>1 000 FCFA / mois</strong>).
+      Vos données sont conservées intactes, et votre compte est passé en <strong>mode Gratuit</strong> (Entrées &amp; Dépenses). Les outils avancés sont temporairement cadenassés jusqu'au renouvellement de votre formule (dès <strong>${personalPrice} FCFA / mois</strong>).
     </p>
 
     <div class="button-container">
-      <a href="${subscriptionUrl}" class="button">Réactiver mon abonnement (1 000 FCFA) &rarr;</a>
+      <a href="${subscriptionUrl}" class="button">Réactiver mon abonnement (${personalPrice} FCFA) &rarr;</a>
     </div>
   `;
 

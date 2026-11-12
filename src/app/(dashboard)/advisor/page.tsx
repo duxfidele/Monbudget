@@ -230,8 +230,8 @@ export default function AdvisorPage() {
         <CardContent className="p-4 sm:p-6">
           <div className="grid gap-6 lg:grid-cols-12 items-center">
             {/* Score & Synthèse */}
-            <div className="lg:col-span-7 space-y-4">
-              <div className="flex items-center gap-3">
+            <div className="lg:col-span-7 space-y-4 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <div
                   className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                     aiAnalysis.healthScore >= 80
@@ -302,18 +302,18 @@ export default function AdvisorPage() {
             </div>
 
             {/* 4 Chiffres Clés de Survie Jusqu'à la Paie */}
-            <div className="lg:col-span-5 grid grid-cols-2 gap-3">
-              <div className="p-3.5 rounded-xl bg-white/10 border border-white/10">
-                <span className="text-[11px] text-slate-300 block">Solde réel restant</span>
-                <div className="text-lg md:text-xl font-black text-emerald-300 mt-1">
+            <div className="lg:col-span-5 grid grid-cols-2 gap-2.5 sm:gap-3 min-w-0">
+              <div className="p-3 sm:p-3.5 rounded-xl bg-white/10 border border-white/10 min-w-0">
+                <span className="text-[11px] text-slate-300 block truncate">Solde réel restant</span>
+                <div className="text-base sm:text-lg md:text-xl font-black text-emerald-300 mt-1 truncate">
                   {formatMoney(remaining, currency)}
                 </div>
                 <span className="text-[10px] text-slate-400">En caisse aujourd&apos;hui</span>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-white/10 border border-white/10">
-                <span className="text-[11px] text-slate-300 block">Plafond / jour conseillé</span>
-                <div className="text-lg md:text-xl font-black text-amber-300 mt-1">
+              <div className="p-3 sm:p-3.5 rounded-xl bg-white/10 border border-white/10 min-w-0">
+                <span className="text-[11px] text-slate-300 block truncate">Plafond / jour conseillé</span>
+                <div className="text-base sm:text-lg md:text-xl font-black text-amber-300 mt-1 truncate">
                   {formatMoney(temporal.dailySurvivalQuota, currency)}/j
                 </div>
                 <span className="text-[10px] text-slate-400">
@@ -321,18 +321,18 @@ export default function AdvisorPage() {
                 </span>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-white/10 border border-white/10">
-                <span className="text-[11px] text-slate-300 block">Enveloppes à venir</span>
-                <div className="text-lg md:text-xl font-black text-white mt-1">
+              <div className="p-3 sm:p-3.5 rounded-xl bg-white/10 border border-white/10 min-w-0">
+                <span className="text-[11px] text-slate-300 block truncate">Enveloppes à venir</span>
+                <div className="text-base sm:text-lg md:text-xl font-black text-white mt-1 truncate">
                   {formatMoney(temporal.reservedInUnspentEnvelopes, currency)}
                 </div>
                 <span className="text-[10px] text-slate-400">Prévus non dépensés</span>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-white/10 border border-white/10">
-                <span className="text-[11px] text-slate-300 block">Écarts / Non prévus</span>
+              <div className="p-3 sm:p-3.5 rounded-xl bg-white/10 border border-white/10 min-w-0">
+                <span className="text-[11px] text-slate-300 block truncate">Écarts / Non prévus</span>
                 <div
-                  className={`text-lg md:text-xl font-black mt-1 ${
+                  className={`text-base sm:text-lg md:text-xl font-black mt-1 truncate ${
                     temporal.unplannedOrExceededTotal > 0 ? "text-rose-300" : "text-emerald-300"
                   }`}
                 >
@@ -526,7 +526,7 @@ export default function AdvisorPage() {
               <label className="text-xs font-semibold text-slate-700 block">
                 Si je dépense chaque jour ({currency}/jour) :
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <Input
                   type="number"
                   min={500}
@@ -540,7 +540,7 @@ export default function AdvisorPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setSimulatedDailySpend(temporal.dailySurvivalQuota)}
-                  className="text-xs shrink-0"
+                  className="text-xs shrink-0 w-full sm:w-auto h-9"
                 >
                   Quota idéal ({formatMoney(temporal.dailySurvivalQuota, currency)})
                 </Button>
@@ -548,7 +548,7 @@ export default function AdvisorPage() {
             </div>
 
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-1">
                 <span className="text-slate-600">Autonomie de votre caisse à ce rythme :</span>
                 <strong
                   className={`text-sm ${
@@ -561,7 +561,7 @@ export default function AdvisorPage() {
                 </strong>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-1 pt-2 border-t border-slate-200">
                 <span className="text-slate-600">Solde estimé au jour de paie (le {payDay || 28}) :</span>
                 <strong
                   className={`text-sm ${

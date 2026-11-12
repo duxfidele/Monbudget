@@ -139,9 +139,9 @@ export default function TermsPage() {
                 </div>
                 <div className="p-4 rounded-xl bg-[#0B1A2F] border border-sky-500/40 space-y-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-sky-400">Plan Particulier</span>
-                  <p className="text-xl font-extrabold text-white">1 000 FCFA <span className="text-xs font-normal text-slate-400">/mois</span></p>
+                  <p className="text-xl font-extrabold text-white">500 FCFA <span className="text-xs font-normal text-slate-400">/mois</span></p>
                   <p className="text-xs text-slate-400">
-                    Ou 10 000 FCFA/an (2 mois offerts). Débloque 100 % des fonctionnalités actuelles : Enveloppes budgétaires, Épargne, Dettes &amp; Créances, Rapports PDF/CSV, Reçus et Conseiller IA.
+                    Ou 5 000 FCFA/an (2 mois offerts). Débloque 100 % des fonctionnalités actuelles : Enveloppes budgétaires, Épargne, Dettes &amp; Créances, Rapports PDF/CSV, Reçus et Conseiller IA.
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-[#0B1A2F] border border-emerald-500/40 space-y-2">

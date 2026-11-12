@@ -312,7 +312,7 @@ function WelcomeContent() {
                 <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <span>
                   {countdown.isTrialActive && !effectiveIsAdmin
-                    ? `Votre essai complet de 30 jours est actif (${countdown.trialDaysRemaining ?? 30} jours restants avec toutes les fonctionnalités débloquées). À l'issue des 30 jours, vous choisirez librement entre Gratuit limité (Entrées/Dépenses), Particulier (1 000 F) ou Entreprise.`
+                    ? `Votre essai complet de 30 jours est actif (${countdown.trialDaysRemaining ?? 30} jours restants avec toutes les fonctionnalités débloquées). À l'issue des 30 jours, vous choisirez librement entre Gratuit limité (Entrées/Dépenses), Particulier (500 F) ou Entreprise.`
                     : "Ces réglages permettent d'adapter automatiquement vos graphiques, enveloppes et calculs journaliers. Modifiable à tout moment dans Paramètres."}
                 </span>
               </div>

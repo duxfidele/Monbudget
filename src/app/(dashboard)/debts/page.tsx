@@ -395,7 +395,7 @@ export default function DebtsPage() {
                 autoFocus
               />
               {currentSelectedDebt && currentSelectedDebt.remainingAmount > 0 && (
-                <div className="flex gap-2 pt-1">
+                <div className="flex flex-wrap gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() =>
@@ -734,13 +734,13 @@ export default function DebtsPage() {
           return (
             <Card
               key={debt.id}
-              className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between hover:shadow-md transition-shadow"
+              className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between hover:shadow-md transition-shadow"
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <div
-                      className={`p-2.5 rounded-xl ${
+                      className={`p-2.5 rounded-xl shrink-0 ${
                         debt.type === "payable"
                           ? "bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400"
                           : "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"
@@ -748,8 +748,8 @@ export default function DebtsPage() {
                     >
                       <User className="h-5 w-5" />
                     </div>
-                    <div>
-                      <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 truncate">
                         {debt.personName}
                       </CardTitle>
                       {debt.phone && (
@@ -786,7 +786,7 @@ export default function DebtsPage() {
 
               <CardContent className="space-y-4 pt-0">
                 <div>
-                  <div className="flex justify-between items-baseline mb-1.5">
+                  <div className="flex flex-wrap justify-between items-baseline gap-2 mb-1.5">
                     <div>
                       <span className="text-xs text-slate-500 block">
                         {debt.type === "payable" ? "Reste à payer" : "Reste à récupérer"}
@@ -834,23 +834,23 @@ export default function DebtsPage() {
                   <Button
                     disabled={isPaid}
                     onClick={() => handleOpenPaymentModal(debt)}
-                    className={`h-9 text-xs font-semibold text-white gap-1.5 ${
+                    className={`h-9 px-2 sm:px-3 text-[11px] sm:text-xs font-semibold text-white gap-1 sm:gap-1.5 ${
                       debt.type === "payable"
                         ? "bg-rose-600 hover:bg-rose-700"
                         : "bg-emerald-600 hover:bg-emerald-700"
                     }`}
                   >
-                    <PlusCircle className="h-3.5 w-3.5" />
-                    <span>{debt.type === "payable" ? "Rembourser" : "Encaisser"}</span>
+                    <PlusCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{debt.type === "payable" ? "Rembourser" : "Encaisser"}</span>
                   </Button>
 
                   <Button
                     variant="outline"
                     onClick={() => handleOpenHistoryModal(debt)}
-                    className="h-9 text-xs border-slate-200 text-slate-700 gap-1.5"
+                    className="h-9 px-2 sm:px-3 text-[11px] sm:text-xs border-slate-200 text-slate-700 gap-1 sm:gap-1.5"
                   >
-                    <History className="h-3.5 w-3.5 text-slate-500" />
-                    <span>Historique ({debt.payments?.length || 0})</span>
+                    <History className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                    <span className="truncate">Historique ({debt.payments?.length || 0})</span>
                   </Button>
                 </div>
               </CardContent>

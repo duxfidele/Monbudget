@@ -92,7 +92,7 @@ export const BottomNav = () => {
         onClick={() => {
           if (isLocked) {
             toast.info(
-              `« ${route.label} » est cadenassé — Prenez l'abonnement Particulier à 1 000 FCFA/mois pour le débloquer.`
+              `« ${route.label} » est cadenassé — Prenez l'abonnement Particulier à 500 FCFA/mois pour le débloquer.`
             );
           }
         }}
@@ -113,7 +113,7 @@ export const BottomNav = () => {
         </div>
         <span
           className={cn(
-            "text-[10px] leading-tight transition-colors",
+            "text-[10px] leading-tight transition-colors truncate max-w-full",
             isActive
               ? "text-slate-900 dark:text-white font-bold"
               : "text-slate-500 dark:text-slate-400"
@@ -126,8 +126,11 @@ export const BottomNav = () => {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 z-50 w-full h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 md:hidden pb-safe transition-colors">
-      <div className="grid h-full max-w-lg grid-cols-5 mx-auto font-medium items-center">
+    <nav
+      aria-label="Navigation rapide mobile"
+      className="fixed bottom-0 left-0 z-50 w-full min-h-[4rem] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 md:hidden pb-safe transition-colors"
+    >
+      <div className="grid h-16 max-w-lg grid-cols-5 mx-auto font-medium items-center">
         {/* Onglets Gauche */}
         {primaryLeftRoutes.map(renderTab)}
 
@@ -139,6 +142,6 @@ export const BottomNav = () => {
         {/* Onglets Droite */}
         {primaryRightRoutes.map(renderTab)}
       </div>
-    </div>
+    </nav>
   );
 };

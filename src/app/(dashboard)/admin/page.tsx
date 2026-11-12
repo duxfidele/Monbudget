@@ -503,9 +503,9 @@ export default function AdminPage() {
                       </div>
 
                       {/* Sélecteur d'attribution directe de plan */}
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
                         <Crown
-                          className={`h-4 w-4 ${
+                          className={`h-4 w-4 shrink-0 ${
                             currentPlan === "business"
                               ? "text-amber-500"
                               : currentPlan === "personal"
@@ -523,10 +523,12 @@ export default function AdminPage() {
                               e.target.value as SubscriptionPlanId
                             )
                           }
-                          className="h-8 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
+                          className="h-8 flex-1 sm:flex-initial rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]"
                         >
                           <option value="free">Plan Gratuit (0 FCFA)</option>
-                          <option value="personal">Particulier (1 000 FCFA)</option>
+                          <option value="personal">
+                            Particulier ({catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA)
+                          </option>
                           <option value="business">
                             Entreprise ({catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA)
                           </option>

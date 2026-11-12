@@ -418,7 +418,7 @@ export default function SavingsPage() {
 
       {/* KPI Cards (2x2 sur mobile) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Total Épargné</CardTitle>
             <div className="p-1.5 sm:p-2 bg-emerald-100 dark:bg-emerald-950/60 rounded-lg shrink-0">
@@ -433,7 +433,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Objectif Global</CardTitle>
             <div className="p-1.5 sm:p-2 bg-blue-100 dark:bg-blue-950/60 rounded-lg shrink-0">
@@ -448,7 +448,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Progression</CardTitle>
             <div className="p-1.5 sm:p-2 bg-purple-100 dark:bg-purple-950/60 rounded-lg shrink-0">
@@ -468,7 +468,7 @@ export default function SavingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Complétés</CardTitle>
             <div className="p-1.5 sm:p-2 bg-amber-100 dark:bg-amber-950/60 rounded-lg shrink-0">
@@ -488,17 +488,17 @@ export default function SavingsPage() {
 
       {/* Bandeau de liaison directe avec Mon Budget & Transactions */}
       <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50/80 via-white to-blue-50/60 border border-emerald-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-slate-700">
-          <div className="flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-[#1E3A5F]" />
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-slate-700 min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Wallet className="h-4 w-4 text-[#1E3A5F] shrink-0" />
             <span>Solde disponible (Mon Budget) :</span>
             <strong className={availableBalance < 0 ? "text-red-600" : "text-emerald-700"}>
               {formatMoney(availableBalance, currency)}
             </strong>
           </div>
           <span className="hidden sm:inline text-slate-300">|</span>
-          <div className="flex items-center gap-2">
-            <PiggyBank className="h-4 w-4 text-emerald-600" />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <PiggyBank className="h-4 w-4 text-emerald-600 shrink-0" />
             <span>Épargné ce mois-ci :</span>
             <strong className="text-emerald-700">{formatMoney(monthlySavings, currency)}</strong>
             {savingsEnvelope && (
@@ -508,7 +508,7 @@ export default function SavingsPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Link href="/budget">
             <Button
               variant="outline"
@@ -541,7 +541,7 @@ export default function SavingsPage() {
           const remainingAmount = Math.max(0, goal.target - goal.current);
 
           return (
-            <Card key={goal.id} className="border-none shadow-sm flex flex-col group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:shadow-md transition-shadow">
+            <Card key={goal.id} className="min-w-0 border-none shadow-sm flex flex-col group bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
                   <div className={`p-3 rounded-xl ${goal.color || "bg-blue-600"} text-white shadow-xs`}>
@@ -579,8 +579,8 @@ export default function SavingsPage() {
                 </div>
 
                 <div className="mt-3">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-100">{goal.name}</CardTitle>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-lg font-bold text-slate-800 dark:text-slate-100 truncate min-w-0">{goal.name}</CardTitle>
                     {isPaused && (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                         En pause
@@ -598,11 +598,11 @@ export default function SavingsPage() {
 
               <CardContent className="flex-1 flex flex-col justify-between pt-0 space-y-5">
                 <div>
-                  <div className="flex justify-between items-baseline mb-1.5">
-                    <span suppressHydrationWarning className="text-2xl font-extrabold text-slate-900">
+                  <div className="flex flex-wrap justify-between items-baseline gap-1 mb-1.5">
+                    <span suppressHydrationWarning className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-slate-100">
                       {formatMoney(goal.current, currency)}
                     </span>
-                    <span className="text-xs font-semibold text-slate-500">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                       Cible : {formatMoney(goal.target, currency)}
                     </span>
                   </div>
@@ -631,19 +631,19 @@ export default function SavingsPage() {
                     <Button 
                       onClick={() => handleOpenDeposit(goal)}
                       disabled={isPaused}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs h-9 gap-1.5"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] sm:text-xs h-9 px-2 sm:px-3 gap-1 sm:gap-1.5"
                     >
-                      <PlusCircle className="h-4 w-4" />
+                      <PlusCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                       <span>Verser</span>
                     </Button>
 
                     <Button 
                       variant="outline" 
                       onClick={() => handleOpenHistory(goal)}
-                      className="border-slate-200 text-slate-700 hover:bg-slate-50 text-xs h-9 gap-1.5"
+                      className="border-slate-200 text-slate-700 hover:bg-slate-50 text-[11px] sm:text-xs h-9 px-2 sm:px-3 gap-1 sm:gap-1.5"
                     >
-                      <History className="h-4 w-4 text-slate-500" />
-                      <span>Versements ({goal.contributions?.length || 0})</span>
+                      <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-500 shrink-0" />
+                      <span className="truncate">Versements ({goal.contributions?.length || 0})</span>
                     </Button>
                   </div>
                 </div>
@@ -653,7 +653,7 @@ export default function SavingsPage() {
         })}
 
         {savingsGoals.length === 0 && (
-          <div className="col-span-full p-12 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-center flex flex-col items-center">
+          <div className="col-span-full p-6 sm:p-12 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-center flex flex-col items-center">
             <div className="p-3 bg-blue-50 dark:bg-blue-950/60 text-[#1E3A5F] dark:text-sky-400 rounded-full mb-3">
               <PiggyBank className="h-8 w-8" />
             </div>

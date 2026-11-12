@@ -9,7 +9,7 @@ export function LandingCTASection() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-gradient-to-r from-blue-600/20 via-sky-500/20 to-cyan-400/15 blur-[120px] rounded-full pointer-events-none" />
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="rounded-3xl p-8 sm:p-12 md:p-16 bg-gradient-to-b from-[#112646] to-[#0D1C34] border border-sky-500/30 shadow-2xl text-center space-y-8 relative overflow-hidden">
+        <div className="rounded-3xl p-5 sm:p-12 md:p-16 bg-gradient-to-b from-[#112646] to-[#0D1C34] border border-sky-500/30 shadow-2xl text-center space-y-6 sm:space-y-8 relative overflow-hidden">
           {/* Subtle top light bar */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-1 bg-gradient-to-r from-transparent via-sky-400 to-transparent" />
 
@@ -29,13 +29,13 @@ export function LandingCTASection() {
           </p>
 
           <div className="pt-2">
-            <Link href="/register">
+            <Link href="/register" className="block sm:inline-block">
               <Button
                 size="lg"
-                className="bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 hover:from-blue-500 hover:to-cyan-300 text-slate-950 font-extrabold px-10 py-7 text-lg rounded-2xl shadow-xl shadow-sky-500/30 hover:shadow-sky-500/40 transition-all group"
+                className="w-full sm:w-auto bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-400 hover:from-blue-500 hover:to-cyan-300 text-slate-950 font-extrabold px-5 sm:px-10 py-5 sm:py-7 text-sm sm:text-lg rounded-2xl shadow-xl shadow-sky-500/30 hover:shadow-sky-500/40 transition-all group"
               >
                 <span>Démarrer mes 30 jours offerts</span>
-                <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-2 group-hover:translate-x-1 transition-transform shrink-0" />
               </Button>
             </Link>
           </div>

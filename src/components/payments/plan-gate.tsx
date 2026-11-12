@@ -76,10 +76,10 @@ export function PlanGate({
             <Lock className="w-3.5 h-3.5" />
             <span>
               {countdown.isTrialExpired
-                ? `Essai 30 jours terminé — Abonnement ${requiredPlan.name} (1 000 FCFA) Requis`
+                ? `Essai 30 jours terminé — Abonnement ${requiredPlan.name} (${requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA) Requis`
                 : countdown.isExpired
-                ? `Abonnement Expiré — Plan ${requiredPlan.name} (1 000 FCFA) Requis`
-                : `Fonctionnalité Cadenassée — Plan ${requiredPlan.name} (1 000 FCFA/mois)`}
+                ? `Abonnement Expiré — Plan ${requiredPlan.name} (${requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA) Requis`
+                : `Fonctionnalité Cadenassée — Plan ${requiredPlan.name} (${requiredPlan.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois)`}
             </span>
           </div>
 

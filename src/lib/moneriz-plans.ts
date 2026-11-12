@@ -4,7 +4,7 @@ export type BillingCycle = "monthly" | "yearly";
 export type SubscriptionStatus = "active" | "canceled" | "expired";
 
 export const TRIAL_DURATION_DAYS = 30;
-export const DEFAULT_BUSINESS_MONTHLY_PRICE_XOF = 2500;
+export const DEFAULT_BUSINESS_MONTHLY_PRICE_XOF = 1500;
 
 export interface SubscriptionCountdownInfo {
   effectivePlanId: SubscriptionPlanId;
@@ -42,7 +42,7 @@ export interface PlanPricingTier {
 
 /**
  * Lit le tarif mensuel officiel du plan Entreprise & Pro depuis les variables d'environnement
- * (par défaut 2 500 FCFA, rehaussable sans modifier le code ni altérer l'historique payé).
+ * (par défaut 1 500 FCFA, rehaussable sans modifier le code ni altérer l'historique payé).
  */
 export function getBusinessMonthlyPriceXof(): number {
   const raw =
@@ -93,9 +93,9 @@ export function getPlanCatalog(): Record<SubscriptionPlanId, PlanPricingTier> {
       badge: "Tout inclus (actuel)",
       description:
         "Débloque 100 % des fonctionnalités actuelles de MonBudget : budget, épargne, dettes, rapports, reçus et IA.",
-      monthlyPriceXof: 1000,
-      yearlyPriceXof: 10000, // 2 mois offerts (10 x 1 000 FCFA au lieu de 12 000 FCFA)
-      yearlySavingsXof: 2000,
+      monthlyPriceXof: 500,
+      yearlyPriceXof: 5000, // 2 mois offerts (10 x 500 FCFA au lieu de 6 000 FCFA)
+      yearlySavingsXof: 1000,
       popular: true,
       features: [
         "Tout ce qui est inclus dans le plan Gratuit",

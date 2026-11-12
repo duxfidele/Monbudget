@@ -27,7 +27,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Vérification stricte de l'abonnement actif (Essai 30j, Particulier 1 000 FCFA+ ou Super-Admin requis)
+    // Vérification stricte de l'abonnement actif (Essai 30j, Particulier ou Super-Admin requis)
     const { subscription, isAdmin: isSuperAdmin } =
       await getOrderAndSubscriptionStatus({
         userId: user.id,
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "Le stockage de reçus et justificatifs nécessite un abonnement Particulier (1 000 FCFA / mois).",
+            "Le stockage de reçus et justificatifs nécessite un abonnement Particulier (500 FCFA / mois).",
           code: "PLAN_REQUIRED",
           requiredPlan: "personal",
         },

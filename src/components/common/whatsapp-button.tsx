@@ -21,7 +21,7 @@ export function WhatsAppFloatButton({
   return (
     <aside
       aria-label="Assistance WhatsApp MonBudget"
-      className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-3 select-none"
+      className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:bottom-6 right-3 sm:right-6 z-40 flex items-center gap-3 select-none"
     >
       {/* Bulle d'information interactive */}
       {showTooltip && (
@@ -54,14 +54,14 @@ export function WhatsAppFloatButton({
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Contacter le support MonBudget sur WhatsApp (+228 98 37 61 01)"
-        className="group relative flex items-center justify-center w-14 h-14 rounded-full bg-[#25D366] text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/50 hover:scale-105 active:scale-95 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-emerald-400/40"
+        className="group relative flex items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-[#25D366] text-white shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/50 hover:scale-105 active:scale-95 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-emerald-400/40"
       >
         {/* Halo animé de pulsation */}
         <span className="absolute inset-0 rounded-full bg-[#25D366] opacity-30 animate-ping group-hover:opacity-0 transition-opacity"></span>
 
         {/* Icône officielle WhatsApp SVG */}
         <svg
-          className="w-7 h-7 fill-white transition-transform duration-300 group-hover:rotate-12"
+          className="w-5 h-5 sm:w-7 sm:h-7 fill-white transition-transform duration-300 group-hover:rotate-12"
           viewBox="0 0 24 24"
           xmlns="http://www.w3.org/2000/svg"
         >

@@ -32,30 +32,30 @@ import {
 } from "../src/lib/server/moneriz-checkout";
 
 test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d'États", () => {
-  test("1. Grille tarifaire officielle (Gratuit, Particulier 1 000 FCFA, Entreprise 2 500 FCFA + -2 mois annuel)", () => {
+  test("1. Grille tarifaire officielle (Gratuit, Particulier 500 FCFA, Entreprise 1 500 FCFA + -2 mois annuel)", () => {
     // Plan Gratuit
     expect(MONBUDGET_PLANS.free.monthlyPriceXof).toBe(0);
     expect(MONBUDGET_PLANS.free.yearlyPriceXof).toBe(0);
 
-    // Plan Particulier : 1 000 XOF/mois et 10 000 XOF/an (2 mois offerts)
+    // Plan Particulier : 500 XOF/mois et 5 000 XOF/an (2 mois offerts)
     const personalMonthly = getServerPlanAmountXof("personal", "monthly");
-    expect(personalMonthly.amount).toBe(1000);
+    expect(personalMonthly.amount).toBe(500);
     expect(personalMonthly.currency).toBe("XOF");
 
     const personalYearly = getServerPlanAmountXof("personal", "yearly");
-    expect(personalYearly.amount).toBe(10000);
+    expect(personalYearly.amount).toBe(5000);
     expect(personalYearly.currency).toBe("XOF");
-    expect(MONBUDGET_PLANS.personal.yearlySavingsXof).toBe(2000);
+    expect(MONBUDGET_PLANS.personal.yearlySavingsXof).toBe(1000);
 
-    // Plan Entreprise : 2 500 XOF/mois et 25 000 XOF/an (2 mois offerts) par défaut
+    // Plan Entreprise : 1 500 XOF/mois et 15 000 XOF/an (2 mois offerts) par défaut
     const businessMonthly = getServerPlanAmountXof("business", "monthly");
-    expect(businessMonthly.amount).toBe(2500);
+    expect(businessMonthly.amount).toBe(1500);
     expect(businessMonthly.currency).toBe("XOF");
 
     const businessYearly = getServerPlanAmountXof("business", "yearly");
-    expect(businessYearly.amount).toBe(25000);
+    expect(businessYearly.amount).toBe(15000);
     expect(businessYearly.currency).toBe("XOF");
-    expect(MONBUDGET_PLANS.business.yearlySavingsXof).toBe(5000);
+    expect(MONBUDGET_PLANS.business.yearlySavingsXof).toBe(3000);
 
     // Tarif Entreprise rehaussable dynamiquement via variable d'environnement sans casser le code
     const prevPublicBiz = process.env.NEXT_PUBLIC_BUSINESS_MONTHLY_PRICE_XOF;
@@ -76,7 +76,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     }
   });
 
-  test("2. Restrictions par plan : Gratuit cadenassé (Entrées/Dépenses), Particulier 1 000 F débloque tout l'existant, Entreprise Option B", () => {
+  test("2. Restrictions par plan : Gratuit cadenassé (Entrées/Dépenses), Particulier 500 F débloque tout l'existant, Entreprise Option B", () => {
     // Plan Gratuit : aucun accès à budget, savings, debts, reports, advisor, receipts
     expect(canAccessFeature("free", "budget")).toBe(false);
     expect(canAccessFeature("free", "savings")).toBe(false);
@@ -85,7 +85,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     expect(canAccessFeature("free", "advisor")).toBe(false);
     expect(canAccessFeature("free", "receipts")).toBe(false);
 
-    // Plan Particulier (1 000 FCFA/mois) : débloque 100 % des fonctionnalités actuelles
+    // Plan Particulier (500 FCFA/mois) : débloque 100 % des fonctionnalités actuelles
     expect(canAccessFeature("personal", "budget")).toBe(true);
     expect(canAccessFeature("personal", "savings")).toBe(true);
     expect(canAccessFeature("personal", "debts")).toBe(true);
@@ -121,7 +121,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
         id: "pay_01JTEST123456",
         mode: "test",
         status: "paid",
-        amount: 1000,
+        amount: 500,
         currency: "XOF",
         reference: "MB-TEST-PER-123456",
         paidAt: "2026-11-08T10:00:00.000Z",
@@ -147,7 +147,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
     const userA = "user-alpha-111";
     const userB = "user-bravo-222";
 
-    // User A prépare une commande Particulier Annuel (10 000 XOF)
+    // User A prépare une commande Particulier Annuel (5 000 XOF)
     const { order } = await prepareAuthorizedCheckout({
       userId: userA,
       planId: "personal",
@@ -155,7 +155,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
       requestOrigin: "https://monbudget-sable.vercel.app",
     });
 
-    expect(order.amount).toBe(10000);
+    expect(order.amount).toBe(5000);
     expect(order.currency).toBe("XOF");
     expect(order.status).toBe("pending");
     expect(order.idempotencyKey).toContain(`checkout-${order.id}`);
@@ -187,7 +187,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
         id: `pay_${order.id}`,
         mode: order.mode,
         status: "paid",
-        amount: 10000,
+        amount: 5000,
         currency: "XOF",
         reference: order.reference,
         paidAt: new Date().toISOString(),
@@ -232,7 +232,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
           id: `pay_old_${order.id}`,
           mode: order.mode,
           status: "failed",
-          amount: 10000,
+          amount: 5000,
           currency: "XOF",
           reference: order.reference,
           paidAt: null,
@@ -253,7 +253,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
           id: `pay_bad_${order.id}`,
           mode: order.mode,
           status: "paid",
-          amount: 500, // Ne correspond pas à 10 000 XOF
+          amount: 500, // Ne correspond pas à 5 000 XOF
           currency: "XOF",
           reference: order.reference,
           paidAt: new Date().toISOString(),
@@ -301,7 +301,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
             id: "pay_prod_guard_1",
             mode: "test",
             status: "paid",
-            amount: 1000,
+            amount: 500,
             currency: "XOF",
             reference: "MB-TEST-PER-PRODGUARD",
             paidAt: new Date().toISOString(),
@@ -598,7 +598,7 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
   test("9. Essai 30 jours complet, relance J-3, bascule Gratuit cadenassé à J0, décompte payant & exemption Super-Admin", async () => {
     const fixedNow = Date.parse("2026-12-01T12:00:00.000Z");
 
-    // Les reçus/justificatifs sont débloqués dès le plan Particulier (1 000 FCFA)
+    // Les reçus/justificatifs sont débloqués dès le plan Particulier (500 FCFA)
     expect(canAccessFeature("free", "receipts")).toBe(false);
     expect(canAccessFeature("personal", "receipts")).toBe(true);
     expect(canAccessFeature("business", "receipts")).toBe(true);

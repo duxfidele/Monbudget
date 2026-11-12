@@ -304,7 +304,7 @@ export default function ReportsPage() {
 
       {/* Cartes KPI Ratios Financiers (2x2 sur mobile) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Taux Dépense</CardTitle>
             <div className="p-1.5 sm:p-2 bg-red-100 dark:bg-red-950/50 rounded-lg shrink-0">
@@ -327,7 +327,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Disponible</CardTitle>
             <div className="p-1.5 sm:p-2 bg-sky-100 dark:bg-sky-950/50 rounded-lg shrink-0">
@@ -344,7 +344,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Taux Épargne</CardTitle>
             <div className="p-1.5 sm:p-2 bg-emerald-100 dark:bg-emerald-950/50 rounded-lg shrink-0">
@@ -367,7 +367,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">Postes Actifs</CardTitle>
             <div className="p-1.5 sm:p-2 bg-indigo-100 dark:bg-indigo-950/50 rounded-lg shrink-0">
@@ -388,7 +388,7 @@ export default function ReportsPage() {
       {/* Graphiques Principaux */}
       <div className="grid gap-6 lg:grid-cols-7">
         {/* Graphique 1 : Évolution Revenus vs Dépenses (4 colonnes) */}
-        <Card className="lg:col-span-4 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="lg:col-span-4 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -401,11 +401,12 @@ export default function ReportsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="h-[320px] w-full pt-4">
+            <div className="h-[250px] sm:h-[320px] w-full pt-2 sm:pt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={historyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <XAxis dataKey="month" stroke="#94A3B8" fontSize={12} tickLine={false} />
+                <BarChart data={historyData} margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
+                  <XAxis dataKey="month" stroke="#94A3B8" fontSize={11} tickLine={false} />
                   <YAxis 
+                    width={36}
                     stroke="#94A3B8" 
                     fontSize={11} 
                     tickLine={false} 
@@ -419,7 +420,7 @@ export default function ReportsPage() {
                     verticalAlign="top" 
                     align="right" 
                     iconType="circle"
-                    wrapperStyle={{ paddingBottom: "16px", fontSize: "12px" }}
+                    wrapperStyle={{ paddingBottom: "12px", fontSize: "11px" }}
                   />
                   <Bar dataKey="revenus" name="Revenus" fill="#1E3A5F" radius={[6, 6, 0, 0]} maxBarSize={40} />
                   <Bar dataKey="depenses" name="Dépenses" fill="#EF4444" radius={[6, 6, 0, 0]} maxBarSize={40} />
@@ -430,7 +431,7 @@ export default function ReportsPage() {
         </Card>
 
         {/* Graphique 2 : Répartition des Dépenses (3 colonnes) */}
-        <Card className="lg:col-span-3 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
+        <Card className="lg:col-span-3 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
               <PieIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
@@ -440,7 +441,7 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-center">
             {categoryStats.length > 0 ? (
-              <div className="h-[260px] w-full">
+              <div className="h-[220px] sm:h-[260px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -449,8 +450,8 @@ export default function ReportsPage() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      innerRadius={65}
-                      outerRadius={95}
+                      innerRadius={52}
+                      outerRadius={80}
                       paddingAngle={3}
                     >
                       {categoryStats.map((entry, index) => (
@@ -486,7 +487,7 @@ export default function ReportsPage() {
       {/* Section Insights & Top Postes de Dépenses */}
       <div className="grid gap-6 md:grid-cols-7">
         {/* Top 3 Postes */}
-        <Card className="md:col-span-4 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="md:col-span-4 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-slate-100">
               <Award className="h-5 w-5 text-amber-500" />
@@ -494,23 +495,23 @@ export default function ReportsPage() {
             </CardTitle>
             <CardDescription className="text-slate-500 dark:text-slate-400">Les postes qui consomment le plus votre salaire</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 sm:space-y-4">
             {top3Categories.map((cat, index) => (
-              <div key={cat.name} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/70">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#1E3A5F] text-white flex items-center justify-center font-bold text-sm">
+              <div key={cat.name} className="flex items-center justify-between gap-2.5 p-2.5 sm:p-3 rounded-xl border border-slate-100 bg-slate-50/70">
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                  <div className="w-8 h-8 rounded-lg bg-[#1E3A5F] text-white flex items-center justify-center font-bold text-sm shrink-0">
                     #{index + 1}
                   </div>
-                  <div>
-                    <p className="font-semibold text-slate-800 text-sm">{cat.name}</p>
-                    <p className="text-xs text-slate-500">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-800 text-sm truncate">{cat.name}</p>
+                    <p className="text-xs text-slate-500 truncate">
                       Plafond alloué : {formatMoney(cat.allocated, currency)}
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-sm text-slate-900">{formatMoney(cat.value, currency)}</p>
-                  <p className="text-xs text-amber-600 font-medium">{Math.round(cat.percent)}% des sorties</p>
+                <div className="text-right shrink-0">
+                  <p className="font-bold text-xs sm:text-sm text-slate-900 whitespace-nowrap">{formatMoney(cat.value, currency)}</p>
+                  <p className="text-[11px] sm:text-xs text-amber-600 font-medium">{Math.round(cat.percent)}% des sorties</p>
                 </div>
               </div>
             ))}
@@ -524,14 +525,14 @@ export default function ReportsPage() {
         </Card>
 
         {/* Carte de Synthèse & Analyse des Habitudes Financières */}
-        <Card className="md:col-span-3 border-none shadow-sm bg-gradient-to-br from-[#1E3A5F] to-[#254673] text-white">
+        <Card className="md:col-span-3 min-w-0 border-none shadow-sm bg-gradient-to-br from-[#1E3A5F] to-[#254673] text-white">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2 text-lg text-white">
-                <Sparkles className="h-5 w-5 text-amber-300" />
+                <Sparkles className="h-5 w-5 text-amber-300 shrink-0" />
                 Diagnostic Habitudes (IA)
               </CardTitle>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-300/30">
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-300/30 shrink-0">
                 Score : {aiAnalysis.healthScore}/100 ({aiAnalysis.healthLabel})
               </span>
             </div>

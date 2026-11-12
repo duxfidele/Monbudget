@@ -39,7 +39,7 @@ export function LandingPricingSection() {
             Des formules accessibles, payables par Mobile Money & Carte
           </h2>
           <p className="text-base sm:text-lg text-slate-300 leading-relaxed">
-            30 jours d&apos;essai gratuit complet à l&apos;inscription — puis choisissez Gratuit (0 FCFA), Particulier (1 000 FCFA/mois) ou Entreprise ({catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).
+            30 jours d&apos;essai gratuit complet à l&apos;inscription — puis choisissez Gratuit (0 FCFA), Particulier ({catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois) ou Entreprise ({catalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois).
           </p>
         </div>
 
@@ -48,12 +48,12 @@ export function LandingPricingSection() {
           <div
             role="group"
             aria-label="Choisir la périodicité"
-            className="inline-flex items-center p-1.5 rounded-2xl bg-[#0E1E36] border border-slate-800"
+            className="inline-flex max-w-full flex-wrap justify-center items-center p-1 sm:p-1.5 rounded-2xl bg-[#0E1E36] border border-slate-800"
           >
             <button
               type="button"
               onClick={() => setBillingCycle("monthly")}
-              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              className={`px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 billingCycle === "monthly"
                   ? "bg-sky-500 text-slate-950 shadow-md"
                   : "text-slate-300 hover:text-white"
@@ -64,19 +64,19 @@ export function LandingPricingSection() {
             <button
               type="button"
               onClick={() => setBillingCycle("yearly")}
-              className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 ${
                 billingCycle === "yearly"
                   ? "bg-sky-500 text-slate-950 shadow-md"
                   : "text-slate-300 hover:text-white"
               }`}
             >
               <span>Annuel</span>
-              <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-emerald-400 text-slate-950">
+              <span className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold uppercase rounded-full bg-emerald-400 text-slate-950 whitespace-nowrap">
                 2 mois offerts
               </span>
             </button>
           </div>
-          <p className="text-xs text-sky-300 font-medium">
+          <p className="text-xs text-sky-300 font-medium text-center">
             {billingCycle === "yearly"
               ? "🎉 Vous ne payez que 10 mois sur 12 avec l'abonnement annuel !"
               : "Astuce : Économisez 2 mois complets en choisissant la facturation annuelle."}
@@ -92,7 +92,7 @@ export function LandingPricingSection() {
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-3xl p-7 sm:p-8 flex flex-col justify-between transition-all duration-300 ${
+                className={`relative rounded-3xl p-5 sm:p-8 flex flex-col justify-between transition-all duration-300 ${
                   plan.popular
                     ? "bg-gradient-to-b from-[#122A4E] via-[#0E203B] to-[#0B1A30] border-2 border-sky-400 shadow-2xl shadow-sky-500/20 lg:-translate-y-2"
                     : "bg-[#0E1E36] border border-slate-800 shadow-lg hover:border-slate-700"
@@ -119,8 +119,8 @@ export function LandingPricingSection() {
                   </div>
 
                   <div className="mb-4">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-4xl font-extrabold text-white tracking-tight">
+                    <div className="flex flex-wrap items-baseline gap-1.5">
+                      <span className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
                         {priceXof.toLocaleString("fr-FR")} FCFA
                       </span>
                       {plan.id !== "free" && (

@@ -211,7 +211,7 @@ function RegisterForm() {
               <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
               <span>
                 Vous démarrez d&apos;abord par <strong>30 jours d&apos;essai gratuit complet</strong> (toutes fonctionnalités débloquées) avant de confirmer votre formule{" "}
-                <strong>{selectedLandingPlan === "business" ? "Entreprise" : "Particulier (1 000 F)"}</strong> ou Gratuit.
+                <strong>{selectedLandingPlan === "business" ? "Entreprise" : "Particulier (500 F)"}</strong> ou Gratuit.
               </span>
             </div>
           )}

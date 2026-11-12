@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getPlanCatalog } from "@/lib/moneriz-plans";
 import { chooseFreePlanForUser } from "@/lib/server/moneriz-app";
 import { createUserNotification } from "@/lib/server/notifications";
 
@@ -23,12 +24,16 @@ export async function POST() {
       userEmail: user.email,
     });
 
+    const personalMonthly = getPlanCatalog().personal.monthlyPriceXof
+      .toLocaleString("fr-FR")
+      .replace(/[\u00a0\u202f]/g, " ");
+
     await createUserNotification({
       userId: user.id,
       type: "system",
       title: "🔒 Mode Gratuit limité activé",
       message:
-        "Vous continuez gratuitement pour vos Entrées & Dépenses. Les outils avancés restent cadenassés et peuvent être débloqués à tout moment dès 1 000 FCFA / mois.",
+        `Vous continuez gratuitement pour vos Entrées & Dépenses. Les outils avancés restent cadenassés et peuvent être débloqués à tout moment dès ${personalMonthly} FCFA / mois.`,
       ctaHref: "/settings?tab=subscription&plan=personal",
     });
 

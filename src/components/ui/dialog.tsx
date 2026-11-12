@@ -53,7 +53,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed z-50 grid w-full gap-4 bg-popover p-5 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-200 outline-none shadow-2xl",
+          "fixed z-50 grid w-full gap-4 bg-popover p-4 sm:p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-200 outline-none shadow-2xl",
           // Mobile Bottom Sheet
           "max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:max-w-none max-sm:rounded-t-3xl max-sm:rounded-b-none max-sm:border-t max-sm:border-slate-200 dark:max-sm:border-slate-800 max-sm:max-h-[92vh] max-sm:overflow-y-auto max-sm:pb-safe",
           // Desktop Centered Modal
@@ -71,7 +71,7 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-2 right-2"
+                className="absolute top-3 right-3 h-8 w-8"
                 size="icon-sm"
               />
             }

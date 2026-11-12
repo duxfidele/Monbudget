@@ -22,30 +22,32 @@ export function LandingPreviewSection() {
 
           {/* Switcher Tab */}
           <div className="flex items-center justify-center pt-4">
-            <div className="p-1 rounded-2xl bg-[#0E203B] border border-slate-800 inline-flex gap-2">
+            <div className="p-1 rounded-2xl bg-[#0E203B] border border-slate-800 inline-flex max-w-full flex-wrap justify-center gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={() => setActiveTab("mobile")}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === "mobile"
                     ? "bg-sky-500 text-slate-950 shadow-md shadow-sky-500/30"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <Smartphone className="w-4 h-4" />
-                <span>Expérience Mobile (Smartphone)</span>
+                <Smartphone className="w-4 h-4 shrink-0" />
+                <span className="sm:hidden">Mobile</span>
+                <span className="hidden sm:inline">Expérience Mobile (Smartphone)</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("desktop")}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === "desktop"
                     ? "bg-sky-500 text-slate-950 shadow-md shadow-sky-500/30"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                <Monitor className="w-4 h-4" />
-                <span>Vue Bureau (Desktop)</span>
+                <Monitor className="w-4 h-4 shrink-0" />
+                <span className="sm:hidden">Bureau</span>
+                <span className="hidden sm:inline">Vue Bureau (Desktop)</span>
               </button>
             </div>
           </div>

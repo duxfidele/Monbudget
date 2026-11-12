@@ -118,7 +118,7 @@ export function UserMenu() {
           role="menu"
           aria-orientation="vertical"
           aria-labelledby="user-menu-trigger"
-          className="absolute right-0 top-full mt-2 w-72 sm:w-80 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/15 dark:shadow-slate-950/60 p-2 z-50 animate-in fade-in-0 zoom-in-95 duration-150"
+          className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-[4.25rem] sm:top-full sm:mt-2 w-auto sm:w-80 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/15 dark:shadow-slate-950/60 p-2 z-50 animate-in fade-in-0 zoom-in-95 duration-150"
         >
           {/* En-tête : Informations du profil */}
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-700/50 mb-1.5">

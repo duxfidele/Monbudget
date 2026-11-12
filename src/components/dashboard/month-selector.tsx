@@ -48,19 +48,19 @@ export function MonthSelector() {
   };
 
   return (
-    <div className="inline-flex items-center gap-0.5 sm:gap-1.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl p-1 shadow-xs transition-colors">
+    <div className="inline-flex items-center gap-0.5 sm:gap-1.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl p-0.5 sm:p-1 shadow-xs transition-colors max-w-full">
       <Button
         variant="ghost"
         size="icon"
         onClick={handlePrev}
-        className="h-7 w-7 sm:h-8 sm:w-8 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+        className="h-7 w-7 sm:h-8 sm:w-8 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg shrink-0"
         title="Mois précédent"
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
 
-      <div className="flex items-center gap-1 sm:gap-1.5 px-1 sm:px-2.5 py-1 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 select-none">
-        <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#1E3A5F] dark:text-sky-400 shrink-0" />
+      <div className="flex items-center gap-1 sm:gap-1.5 px-1 sm:px-2.5 py-1 text-[11px] sm:text-sm font-semibold text-slate-800 dark:text-slate-100 select-none whitespace-nowrap">
+        <Calendar className="hidden sm:block h-4 w-4 text-[#1E3A5F] dark:text-sky-400 shrink-0" />
         <span className="sm:hidden">{capitalizedShortMonth}</span>
         <span className="hidden sm:inline">{capitalizedMonth}</span>
       </div>
@@ -69,7 +69,7 @@ export function MonthSelector() {
         variant="ghost"
         size="icon"
         onClick={handleNext}
-        className="h-7 w-7 sm:h-8 sm:w-8 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+        className="h-7 w-7 sm:h-8 sm:w-8 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg shrink-0"
         title="Mois suivant"
       >
         <ChevronRight className="h-4 w-4" />
@@ -80,7 +80,7 @@ export function MonthSelector() {
           variant="outline"
           size="sm"
           onClick={handleResetToCurrent}
-          className="h-7 text-[11px] sm:text-xs text-blue-600 dark:text-sky-400 border-blue-200 dark:border-sky-500/30 hover:bg-blue-50 dark:hover:bg-sky-500/10 px-1.5 sm:px-2 ml-0.5 sm:ml-1 rounded-lg"
+          className="h-7 text-[10px] sm:text-xs text-blue-600 dark:text-sky-400 border-blue-200 dark:border-sky-500/30 hover:bg-blue-50 dark:hover:bg-sky-500/10 px-1.5 sm:px-2 ml-0.5 sm:ml-1 rounded-lg shrink-0"
         >
           Ce mois
         </Button>

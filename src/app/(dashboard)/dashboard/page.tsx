@@ -103,9 +103,9 @@ export default function DashboardPage() {
   const promptUnlockPersonal = (featureLabel: string) => {
     toast.info(`« ${featureLabel} » est cadenassé en mode Gratuit.`, {
       description:
-        "Prenez un abonnement Particulier à 1 000 FCFA/mois pour débloquer toutes les fonctionnalités.",
+        "Prenez un abonnement Particulier à 500 FCFA/mois pour débloquer toutes les fonctionnalités.",
       action: {
-        label: "Abonnement 1 000 F",
+        label: "Abonnement 500 F",
         onClick: () => router.push("/settings?tab=subscription&plan=personal"),
       },
     });
@@ -179,9 +179,9 @@ export default function DashboardPage() {
     if (!canExportReports) {
       toast.info("Export PDF cadenassé en mode Gratuit.", {
         description:
-          "Prenez un abonnement Particulier (1 000 FCFA/mois) pour générer vos bilans PDF officiels.",
+          "Prenez un abonnement Particulier (500 FCFA/mois) pour générer vos bilans PDF officiels.",
         action: {
-          label: "Prendre 1 000 F",
+          label: "Prendre 500 F",
           onClick: () => router.push("/settings?tab=subscription&plan=personal"),
         },
       });
@@ -211,9 +211,9 @@ export default function DashboardPage() {
     if (!canExportReports) {
       toast.info("Export Excel / CSV cadenassé en mode Gratuit.", {
         description:
-          "Prenez un abonnement Particulier (1 000 FCFA/mois) pour télécharger vos rapports CSV.",
+          "Prenez un abonnement Particulier (500 FCFA/mois) pour télécharger vos rapports CSV.",
         action: {
-          label: "Prendre 1 000 F",
+          label: "Prendre 500 F",
           onClick: () => router.push("/settings?tab=subscription&plan=personal"),
         },
       });
@@ -289,7 +289,7 @@ export default function DashboardPage() {
                     }`
                   : subscriptionCountdown.isExpired
                   ? "Abonnement expiré • Mode Gratuit"
-                  : "Plan Gratuit • Débloquer (1 000 F)"}
+                  : "Plan Gratuit • Débloquer (500 F)"}
               </span>
             </Link>
           </div>
@@ -318,7 +318,7 @@ export default function DashboardPage() {
             title={
               showReportsUnlocked
                 ? "Télécharger le rapport PDF"
-                : "Prendre un abonnement Particulier (1 000 FCFA/mois)"
+                : "Prendre un abonnement Particulier (500 FCFA/mois)"
             }
           >
             {showReportsUnlocked ? (
@@ -338,7 +338,7 @@ export default function DashboardPage() {
             title={
               showReportsUnlocked
                 ? "Télécharger le rapport Excel"
-                : "Prendre un abonnement Particulier (1 000 FCFA/mois)"
+                : "Prendre un abonnement Particulier (500 FCFA/mois)"
             }
           >
             {showReportsUnlocked ? (
@@ -371,7 +371,10 @@ export default function DashboardPage() {
                   ? ` le ${subscriptionCountdown.formattedTrialEndsAt}`
                   : " bientôt"}
                 . Choisissez votre formule : <strong>Gratuit limité (0 FCFA)</strong>,{" "}
-                <strong>Particulier (1 000 FCFA/mois)</strong> ou{" "}
+                <strong>
+                  Particulier ({planCatalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois)
+                </strong>{" "}
+                ou{" "}
                 <strong>
                   Entreprise ({planCatalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois)
                 </strong>
@@ -400,7 +403,10 @@ export default function DashboardPage() {
               </span>
               Vos données sont intactes. Les modules avancés sont cadenassés jusqu&apos;à votre choix :{" "}
               <strong>Gratuit (Entrées &amp; Dépenses)</strong>,{" "}
-              <strong>Particulier (1 000 FCFA/mois)</strong> ou{" "}
+              <strong>
+                Particulier ({planCatalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois)
+              </strong>{" "}
+              ou{" "}
               <strong>
                 Entreprise ({planCatalog.business.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois)
               </strong>
@@ -460,12 +466,12 @@ export default function DashboardPage() {
               {subscriptionCountdown.formattedExpiresAt
                 ? ` le ${subscriptionCountdown.formattedExpiresAt}`
                 : ""}
-              . Votre compte utilise le <strong>Mode Gratuit limité</strong> (vos données restent sauvegardées). Prenez un abonnement <strong>Particulier (1 000 FCFA/mois)</strong> pour tout débloquer.
+              . Votre compte utilise le <strong>Mode Gratuit limité</strong> (vos données restent sauvegardées). Prenez un abonnement <strong>Particulier (500 FCFA/mois)</strong> pour tout débloquer.
             </div>
           </div>
           <Link href="/settings?tab=subscription&plan=personal" className="shrink-0">
             <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold">
-              Réactiver (1 000 FCFA)
+              Réactiver (500 FCFA)
             </Button>
           </Link>
         </div>
@@ -491,7 +497,7 @@ export default function DashboardPage() {
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A5F] via-[#24436E] to-[#152B47] text-white p-4 sm:p-6 md:p-8 shadow-xl">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
-          <div className="space-y-3 sm:space-y-4 flex-1">
+          <div className="space-y-3 sm:space-y-4 flex-1 min-w-0">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-semibold bg-white/10 backdrop-blur-md border border-white/15 text-blue-200">
               <Sparkles className="h-3.5 w-3.5 text-amber-300" />
               <span>PILOTAGE QUOTIDIEN DU SALAIRE</span>
@@ -514,8 +520,8 @@ export default function DashboardPage() {
 
             {/* Jauge de déduction du jour */}
             <div className="space-y-1.5 max-w-lg">
-              <div className="flex items-center justify-between text-xs text-slate-200">
-                <span className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs text-slate-200">
+                <span className="flex flex-wrap items-center gap-1.5">
                   <span>Dépensé aujourd'hui :</span>
                   <strong className="text-white">
                     {dailyInfo.todaySpent > 0 ? `-${formatMoney(dailyInfo.todaySpent, currency)}` : "0 " + currency}
@@ -563,7 +569,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 md:min-w-[280px] max-w-sm bg-white/5 border border-white/10 backdrop-blur-sm p-4 rounded-xl self-start md:self-center">
+          <div className="flex flex-col gap-3 w-full md:w-auto md:min-w-[280px] max-w-sm bg-white/5 border border-white/10 backdrop-blur-sm p-3.5 sm:p-4 rounded-xl self-stretch md:self-center min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Diagnostic du jour</span>
               {dailyInfo.status === "healthy" && (
@@ -620,7 +626,7 @@ export default function DashboardPage() {
               </h3>
               <p className="text-xs sm:text-sm text-slate-200 max-w-2xl leading-relaxed">
                 En mode Gratuit limité, vous profitez des Entrées et Dépenses illimitées. Prenez un abonnement{" "}
-                <strong className="text-amber-300">Particulier (1 000 FCFA / mois)</strong> pour débloquer votre budget journalier conseillé et le diagnostic du jour.
+                <strong className="text-amber-300">Particulier (500 FCFA / mois)</strong> pour débloquer votre budget journalier conseillé et le diagnostic du jour.
               </p>
             </div>
             <Button
@@ -632,7 +638,7 @@ export default function DashboardPage() {
               className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl gap-1.5 shrink-0 h-10 px-4"
             >
               <Lock className="h-3.5 w-3.5" />
-              <span>Prendre 1 000 FCFA/mois</span>
+              <span>Prendre 500 FCFA/mois</span>
             </Button>
           </div>
         </div>
@@ -746,7 +752,7 @@ export default function DashboardPage() {
               Cadenassé
             </div>
             <p className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-400 font-semibold mt-0.5 sm:mt-1 truncate">
-              Abonnement 1 000 FCFA/mois &rarr;
+              Abonnement 500 FCFA/mois &rarr;
             </p>
           </CardContent>
         </Card>
@@ -788,7 +794,7 @@ export default function DashboardPage() {
               Cadenassé
             </div>
             <p className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-400 font-semibold mt-0.5 sm:mt-1 truncate">
-              Abonnement 1 000 FCFA/mois &rarr;
+              Abonnement 500 FCFA/mois &rarr;
             </p>
           </CardContent>
         </Card>
@@ -830,7 +836,7 @@ export default function DashboardPage() {
               Cadenassé
             </div>
             <p className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-400 font-semibold mt-0.5 sm:mt-1 truncate">
-              Abonnement 1 000 FCFA/mois &rarr;
+              Abonnement 500 FCFA/mois &rarr;
             </p>
           </CardContent>
         </Card>
@@ -840,10 +846,10 @@ export default function DashboardPage() {
       {/* 7. Progression des Objectifs Financiers & Intelligence Artificielle Financière (Piliers A, D, F) */}
       <div className="grid gap-6 lg:grid-cols-7">
         {/* Progression des objectifs financiers */}
-        <Card className="lg:col-span-3 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+        <Card className="lg:col-span-3 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
                 <CardTitle className="flex items-center gap-2 text-base md:text-lg text-slate-900 dark:text-slate-100">
                   <Target className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                   Progression des Objectifs
@@ -862,7 +868,7 @@ export default function DashboardPage() {
                 </Link>
               ) : (
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                  <Lock className="h-3 w-3" /> 1 000 F
+                  <Lock className="h-3 w-3" /> 500 F
                 </span>
               )}
             </div>
@@ -874,9 +880,9 @@ export default function DashboardPage() {
                   const pct = goal.target > 0 ? Math.min(100, Math.round((goal.current / goal.target) * 100)) : 0;
                   return (
                     <div key={goal.id} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs sm:text-sm">
-                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">{goal.name}</span>
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                      <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0">{goal.name}</span>
+                        <span className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0 text-right">
                           {formatMoney(goal.current, currency)}{" "}
                           <span className="text-slate-400 font-normal">/ {formatMoney(goal.target, currency)} ({pct}%)</span>
                         </span>
@@ -919,10 +925,10 @@ export default function DashboardPage() {
                   Cagnottes &amp; Objectifs d&apos;Épargne cadenassés
                 </p>
                 <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                  Prenez un abonnement Particulier à <strong>1 000 FCFA / mois</strong> pour débloquer vos objectifs d&apos;épargne.
+                  Prenez un abonnement Particulier à <strong>500 FCFA / mois</strong> pour débloquer vos objectifs d&apos;épargne.
                 </p>
                 <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold rounded-xl">
-                  Prendre l&apos;abonnement 1 000 F
+                  Prendre l&apos;abonnement 500 F
                 </Button>
               </div>
             )}
@@ -930,7 +936,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Intelligence Artificielle Financière */}
-        <Card className="lg:col-span-4 border-none shadow-sm bg-gradient-to-br from-slate-900 via-[#1E3A5F] to-slate-900 text-white">
+        <Card className="lg:col-span-4 min-w-0 border-none shadow-sm bg-gradient-to-br from-slate-900 via-[#1E3A5F] to-slate-900 text-white">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -964,7 +970,7 @@ export default function DashboardPage() {
               ) : (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-bold">
                   <Lock className="h-3.5 w-3.5" />
-                  <span>Plan Particulier (1 000 F)</span>
+                  <span>Plan Particulier (500 F)</span>
                 </div>
               )}
             </div>
@@ -1037,7 +1043,7 @@ export default function DashboardPage() {
                     <span>Débloquez votre Conseiller Financier IA personnalisé</span>
                   </p>
                   <p className="text-xs text-slate-300 leading-relaxed max-w-lg">
-                    Obtenez votre score de santé financière /100, un simulateur de fin de mois et des plans d&apos;action en 1 clic dès le <strong>Plan Particulier</strong> (1 000 FCFA/mois).
+                    Obtenez votre score de santé financière /100, un simulateur de fin de mois et des plans d&apos;action en 1 clic dès le <strong>Plan Particulier</strong> (500 FCFA/mois).
                   </p>
                 </div>
                 <Button
@@ -1050,7 +1056,7 @@ export default function DashboardPage() {
                   className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs rounded-xl gap-1.5 shrink-0"
                 >
                   <Crown className="h-3.5 w-3.5" />
-                  <span>Prendre Particulier (1 000 F)</span>
+                  <span>Prendre Particulier (500 F)</span>
                 </Button>
               </div>
             )}
@@ -1061,14 +1067,14 @@ export default function DashboardPage() {
       {/* Grid 2 colonnes : Dernières Transactions & Progression des Budgets */}
       <div className="grid gap-6 md:grid-cols-7 mt-2">
         {/* Recent Transactions */}
-        <Card className="md:col-span-4 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+        <Card className="md:col-span-4 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
                 <CardTitle className="text-slate-900 dark:text-slate-100">Transactions Récentes</CardTitle>
                 <CardDescription className="text-slate-500 dark:text-slate-400">Vos dernières opérations enregistrées</CardDescription>
               </div>
-              <Link href="/transactions">
+              <Link href="/transactions" className="shrink-0">
                 <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium">
                   Voir tout <ArrowRight className="ml-1.5 h-4 w-4" />
                 </Button>
@@ -1076,25 +1082,25 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-2.5 sm:space-y-4">
               {transactions.slice(0, 5).map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
-                  <div className="flex items-center gap-3.5">
-                    <div className={`p-2.5 rounded-xl ${isIncomeTransaction(tx) ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
+                <div key={tx.id} className="flex items-center justify-between gap-2.5 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                  <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+                    <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${isIncomeTransaction(tx) ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
                       {isIncomeTransaction(tx) ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{tx.label}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{tx.label}</p>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                         <span className="text-xs text-slate-500 dark:text-slate-400">{tx.date}</span>
                         <span className="text-xs text-slate-300 dark:text-slate-600">•</span>
-                        <span className={`text-xs ${isIncomeTransaction(tx) ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-slate-500 dark:text-slate-400"}`}>
+                        <span className={`text-xs truncate max-w-[140px] sm:max-w-none ${isIncomeTransaction(tx) ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-slate-500 dark:text-slate-400"}`}>
                           {isIncomeTransaction(tx) ? "Revenu" : (tx.category || "Autre (Hors Budget)")}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div suppressHydrationWarning className={`font-semibold text-sm ${isIncomeTransaction(tx) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'}`}>
+                  <div suppressHydrationWarning className={`font-semibold text-xs sm:text-sm whitespace-nowrap shrink-0 text-right ${isIncomeTransaction(tx) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'}`}>
                     {isIncomeTransaction(tx) ? '+' : '-'}{formatMoney(tx.amount, currency)}
                   </div>
                 </div>
@@ -1109,10 +1115,10 @@ export default function DashboardPage() {
         </Card>
 
         {/* Budgets Progress */}
-        <Card className="md:col-span-3 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+        <Card className="md:col-span-3 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
                 <CardTitle className="text-slate-900 dark:text-slate-100">Enveloppes par Catégorie</CardTitle>
                 <CardDescription className="text-slate-500 dark:text-slate-400">
                   {showBudgetSection
@@ -1128,7 +1134,7 @@ export default function DashboardPage() {
                 </Link>
               ) : (
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                  <Lock className="h-3 w-3" /> 1 000 F
+                  <Lock className="h-3 w-3" /> 500 F
                 </span>
               )}
             </div>
@@ -1139,9 +1145,9 @@ export default function DashboardPage() {
                 {categoryStats.map((cat, idx) => {
                   return (
                     <div key={idx} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-slate-700 dark:text-slate-300">{cat.name}</span>
-                        <span suppressHydrationWarning className="font-medium text-slate-900 dark:text-slate-100 text-xs">
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-medium text-slate-700 dark:text-slate-300 truncate min-w-0">{cat.name}</span>
+                        <span suppressHydrationWarning className="font-medium text-slate-900 dark:text-slate-100 text-xs shrink-0 text-right">
                           {formatMoney(cat.spent, currency)} <span className="text-slate-400 dark:text-slate-500 font-normal">/ {formatMoney(cat.amount, currency)}</span>
                         </span>
                       </div>
@@ -1183,10 +1189,10 @@ export default function DashboardPage() {
                   Enveloppes budgétaires cadenassées
                 </p>
                 <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Prenez un abonnement Particulier à <strong>1 000 FCFA / mois</strong> pour fixer vos plafonds par catégorie et recevoir les alertes de seuil.
+                  Prenez un abonnement Particulier à <strong>500 FCFA / mois</strong> pour fixer vos plafonds par catégorie et recevoir les alertes de seuil.
                 </p>
                 <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold rounded-xl">
-                  Prendre l&apos;abonnement 1 000 F
+                  Prendre l&apos;abonnement 500 F
                 </Button>
               </div>
             )}

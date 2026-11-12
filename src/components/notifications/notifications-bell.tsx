@@ -146,7 +146,7 @@ export function NotificationsBell() {
         <div
           role="dialog"
           aria-label="Centre de notifications"
-          className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/15 dark:shadow-slate-950/60 z-50 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
+          className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-[4.25rem] sm:top-full sm:mt-2 w-auto sm:w-96 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/15 dark:shadow-slate-950/60 z-50 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150"
         >
           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40">
             <div className="flex items-center gap-2">
@@ -172,7 +172,7 @@ export function NotificationsBell() {
             )}
           </div>
 
-          <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80">
+          <div className="max-h-[70vh] sm:max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80">
             {inAppNotifications.length === 0 ? (
               <div className="py-10 px-4 text-center space-y-2">
                 <Bell className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />

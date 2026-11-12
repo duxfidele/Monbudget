@@ -215,7 +215,7 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
               onClick={() => {
                 if (isLocked) {
                   toast.info(
-                    `« ${route.label} » est cadenassé — Prenez l'abonnement Particulier à 1 000 FCFA/mois pour le débloquer.`
+                    `« ${route.label} » est cadenassé — Prenez l'abonnement Particulier à ${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois pour le débloquer.`
                   );
                 }
                 onNavigate?.();
