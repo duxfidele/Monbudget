@@ -42,7 +42,7 @@ export const Header = () => {
                 priority
               />
             </div>
-            <span className="text-sm sm:text-base font-bold text-[#1E3A5F] dark:text-white tracking-tight hidden min-[375px]:inline">
+            <span className="text-sm sm:text-base font-bold text-[#1E3A5F] dark:text-white tracking-tight hidden min-[410px]:inline">
               Mon<span className="text-emerald-500">Budget</span>
             </span>
           </Link>
@@ -54,7 +54,7 @@ export const Header = () => {
         </div>
 
         {/* User Actions, PWA Install, Network Status, Notifications & Theme Toggle */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <NetworkStatus />
           <InstallButton variant="header" />
           <NotificationsBell />

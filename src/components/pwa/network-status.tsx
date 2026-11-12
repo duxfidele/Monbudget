@@ -130,7 +130,7 @@ export function NetworkStatus() {
             ? "error"
             : "online"
         }
-        className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${pillClasses}`}
+        className={`inline-flex items-center justify-center gap-1.5 h-9 sm:h-8 px-2.5 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${pillClasses}`}
         title={`État de connexion : ${label}`}
         aria-label={`État de connexion : ${label}${pendingSyncCount > 0 ? ` (${pendingSyncCount} en attente)` : ""}`}
       >

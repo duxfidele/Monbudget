@@ -125,10 +125,10 @@ export function InstallButton({ variant = "header", className = "" }: InstallBut
         onClick={handleInstallClick}
         variant="outline"
         size="sm"
-        className={`border-indigo-300 dark:border-indigo-700 bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-semibold gap-1.5 h-8 text-xs transition-all shadow-xs ${className}`}
+        className={`border-indigo-300 dark:border-indigo-700 bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 font-semibold gap-1.5 h-9 w-9 p-0 sm:w-auto sm:h-8 sm:px-3 text-xs rounded-xl sm:rounded-lg transition-all shadow-xs ${className}`}
         title="Installer MonBudget sur votre ordinateur ou smartphone"
       >
-        <Download className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+        <Download className="h-4 w-4 sm:h-3.5 sm:w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
         <span className="hidden sm:inline">Installer l&apos;app</span>
       </Button>
 
