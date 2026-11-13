@@ -231,14 +231,14 @@ export function TrialChoiceModal() {
                   variant="outline"
                   disabled={isChoosingFree}
                   onClick={handleChooseFree}
-                  className="cursor-pointer w-full rounded-xl text-xs font-bold h-10 gap-1.5 transition-all active:scale-[0.98]"
+                  className="cursor-pointer w-full rounded-xl text-xs font-bold min-h-[42px] h-auto py-2 px-3 gap-1.5 transition-all active:scale-[0.98] flex items-center justify-center"
                 >
                   {isChoosingFree ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                   ) : (
                     <>
-                      <span>Continuer en Gratuit</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <span className="truncate">Continuer en Gratuit</span>
+                      <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                     </>
                   )}
                 </Button>
@@ -286,10 +286,10 @@ export function TrialChoiceModal() {
                 <Button
                   type="button"
                   onClick={() => setCheckoutTarget("personal")}
-                  className="cursor-pointer w-full rounded-xl text-xs font-bold h-10 bg-gradient-to-r from-sky-400 to-emerald-400 hover:from-sky-300 hover:to-emerald-300 text-slate-950 gap-1.5 shadow-md transition-all active:scale-[0.98]"
+                  className="cursor-pointer w-full rounded-xl text-xs font-bold min-h-[42px] h-auto py-2 px-3 bg-gradient-to-r from-sky-400 to-emerald-400 hover:from-sky-300 hover:to-emerald-300 text-slate-950 gap-1.5 shadow-md transition-all active:scale-[0.98] flex items-center justify-center"
                 >
                   <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                  <span>
+                  <span className="truncate">
                     Particulier • {personalPrice.toLocaleString("fr-FR")} F/
                     {selectedCycle === "yearly" ? "an" : "mois"}
                   </span>
@@ -340,10 +340,10 @@ export function TrialChoiceModal() {
                 <Button
                   type="button"
                   onClick={() => setCheckoutTarget("business")}
-                  className="cursor-pointer w-full rounded-xl text-xs font-bold h-10 bg-[#1E3A5F] hover:bg-[#162C49] text-white dark:bg-sky-600 dark:hover:bg-sky-500 gap-1.5 transition-all active:scale-[0.98]"
+                  className="cursor-pointer w-full rounded-xl text-xs font-bold min-h-[42px] h-auto py-2 px-3 bg-[#1E3A5F] hover:bg-[#162C49] text-white dark:bg-sky-600 dark:hover:bg-sky-500 gap-1.5 transition-all active:scale-[0.98] flex items-center justify-center"
                 >
                   <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                  <span>
+                  <span className="truncate">
                     Entreprise • {businessPrice.toLocaleString("fr-FR")} F/
                     {selectedCycle === "yearly" ? "an" : "mois"}
                   </span>

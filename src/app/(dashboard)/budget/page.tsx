@@ -742,9 +742,9 @@ export default function BudgetPage() {
       toast.success("Budget dupliqué avec succès !", {
         description: `${res.allocationsCount} enveloppes et ${formatMoney(res.income, currency)} importés depuis ${res.prevMonthName}.`,
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error("Impossible de dupliquer le budget", {
-        description: e.message || "Une erreur est survenue lors de la duplication.",
+        description: e instanceof Error ? e.message : "Une erreur est survenue lors de la duplication.",
       });
     } finally {
       setIsDuplicating(false);
@@ -1007,7 +1007,7 @@ export default function BudgetPage() {
                       </>
                     ) : (
                       <Link
-                        href="/settings?tab=subscription&plan=personal"
+                        href="/settings?tab=subscription&plan=personal#plan-card-personal"
                         className="flex items-center justify-between gap-2 text-[11px] text-amber-300 hover:underline font-semibold"
                       >
                         <span className="inline-flex items-center gap-1">

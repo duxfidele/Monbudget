@@ -188,6 +188,20 @@ export default function SettingsPage() {
       const planParam = params.get("plan");
       if (planParam === "personal" || planParam === "business") {
         setHighlightedPlan(planParam);
+        setActiveTab("subscription");
+        setTimeout(() => {
+          const el = document.getElementById(`plan-card-${planParam}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 150);
+      }
+      if (window.location.hash.startsWith("#plan-card-")) {
+        setActiveTab("subscription");
+        const targetId = window.location.hash.slice(1);
+        setTimeout(() => {
+          document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 150);
       }
       if (window.location.hash === "#conflicts-review") {
         setActiveTab("security");

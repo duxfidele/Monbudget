@@ -98,10 +98,10 @@ export default function TransactionsPage() {
         "Prenez un abonnement Particulier à 500 FCFA/mois pour débloquer toutes les fonctionnalités.",
       action: {
         label: "Abonnement 500 F",
-        onClick: () => router.push("/settings?tab=subscription&plan=personal"),
+        onClick: () => router.push("/settings?tab=subscription&plan=personal#plan-card-personal"),
       },
     });
-    router.push("/settings?tab=subscription&plan=personal");
+    router.push("/settings?tab=subscription&plan=personal#plan-card-personal");
   };
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -244,8 +244,9 @@ export default function TransactionsPage() {
       setNewDate(new Date().toISOString().split("T")[0]);
       if (categories.length > 0) setNewCategory(categories[0].name);
       else setNewCategory("Autre (Hors Budget)");
-    } catch (error: any) {
-      toast.error("Erreur: " + (error.message || "Impossible d ajouter la transaction"));
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Impossible d'ajouter la transaction";
+      toast.error("Erreur: " + msg);
     }
   };
 
@@ -260,10 +261,10 @@ export default function TransactionsPage() {
           "Prenez un abonnement Particulier (500 FCFA/mois) pour exporter vos transactions en CSV.",
         action: {
           label: "Prendre 500 F",
-          onClick: () => router.push("/settings?tab=subscription&plan=personal"),
+          onClick: () => router.push("/settings?tab=subscription&plan=personal#plan-card-personal"),
         },
       });
-      router.push("/settings?tab=subscription&plan=personal");
+      router.push("/settings?tab=subscription&plan=personal#plan-card-personal");
       return;
     }
     if (transactions.length === 0) {

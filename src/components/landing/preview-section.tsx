@@ -26,11 +26,10 @@ export function LandingPreviewSection() {
               <button
                 type="button"
                 onClick={() => setActiveTab("mobile")}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                  activeTab === "mobile"
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${activeTab === "mobile"
                     ? "bg-sky-500 text-slate-950 shadow-md shadow-sky-500/30"
                     : "text-slate-400 hover:text-white"
-                }`}
+                  }`}
               >
                 <Smartphone className="w-4 h-4 shrink-0" />
                 <span className="sm:hidden">Mobile</span>
@@ -39,11 +38,10 @@ export function LandingPreviewSection() {
               <button
                 type="button"
                 onClick={() => setActiveTab("desktop")}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                  activeTab === "desktop"
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${activeTab === "desktop"
                     ? "bg-sky-500 text-slate-950 shadow-md shadow-sky-500/30"
                     : "text-slate-400 hover:text-white"
-                }`}
+                  }`}
               >
                 <Monitor className="w-4 h-4 shrink-0" />
                 <span className="sm:hidden">Bureau</span>

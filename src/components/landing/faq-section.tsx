@@ -82,9 +82,8 @@ export function LandingFAQSection() {
                     {faq.question}
                   </span>
                   <div
-                    className={`w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center shrink-0 transition-transform duration-300 ${
-                      isOpen ? "rotate-180 bg-sky-500 text-slate-950" : "text-slate-400"
-                    }`}
+                    className={`w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180 bg-sky-500 text-slate-950" : "text-slate-400"
+                      }`}
                   >
                     <ChevronDown className="w-4 h-4" />
                   </div>

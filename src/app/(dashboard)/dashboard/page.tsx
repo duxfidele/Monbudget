@@ -106,10 +106,10 @@ export default function DashboardPage() {
         "Prenez un abonnement Particulier à 500 FCFA/mois pour débloquer toutes les fonctionnalités.",
       action: {
         label: "Abonnement 500 F",
-        onClick: () => router.push("/settings?tab=subscription&plan=personal"),
+        onClick: () => router.push("/settings?tab=subscription&plan=personal#plan-card-personal"),
       },
     });
-    router.push("/settings?tab=subscription&plan=personal");
+    router.push("/settings?tab=subscription&plan=personal#plan-card-personal");
   };
 
   // 1. Calculs financiers purs et précis via budget-calc
@@ -245,7 +245,13 @@ export default function DashboardPage() {
               Tableau de bord
             </h2>
             <Link
-              href={isAdminUser ? "/admin" : "/settings?tab=subscription"}
+              href={
+                isAdminUser
+                  ? "/admin"
+                  : subscriptionCountdown.effectivePlanId === "free"
+                  ? "/settings?tab=subscription&plan=personal#plan-card-personal"
+                  : "/settings?tab=subscription"
+              }
               suppressHydrationWarning
               className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-opacity hover:opacity-90 ${
                 isAdminUser
@@ -413,7 +419,7 @@ export default function DashboardPage() {
               .
             </div>
           </div>
-          <Link href="/settings?tab=subscription&plan=personal" className="shrink-0">
+          <Link href="/settings?tab=subscription&plan=personal#plan-card-personal" className="shrink-0">
             <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold">
               Choisir mon abonnement
             </Button>
@@ -469,7 +475,7 @@ export default function DashboardPage() {
               . Votre compte utilise le <strong>Mode Gratuit limité</strong> (vos données restent sauvegardées). Prenez un abonnement <strong>Particulier (500 FCFA/mois)</strong> pour tout débloquer.
             </div>
           </div>
-          <Link href="/settings?tab=subscription&plan=personal" className="shrink-0">
+          <Link href="/settings?tab=subscription&plan=personal#plan-card-personal" className="shrink-0">
             <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold">
               Réactiver (500 FCFA)
             </Button>
@@ -522,7 +528,7 @@ export default function DashboardPage() {
             <div className="space-y-1.5 max-w-lg">
               <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs text-slate-200">
                 <span className="flex flex-wrap items-center gap-1.5">
-                  <span>Dépensé aujourd'hui :</span>
+                  <span>Dépensé aujourd&apos;hui :</span>
                   <strong className="text-white">
                     {dailyInfo.todaySpent > 0 ? `-${formatMoney(dailyInfo.todaySpent, currency)}` : "0 " + currency}
                   </strong>
@@ -556,7 +562,7 @@ export default function DashboardPage() {
               <span className="flex items-center gap-1.5 bg-black/20 px-3 py-1 rounded-lg">
                 <Calendar className="h-4 w-4 text-sky-300" />
                 {dailyInfo.isPayDayToday ? (
-                  <strong className="text-emerald-300">🎉 Jour de paie aujourd'hui !</strong>
+                  <strong className="text-emerald-300">🎉 Jour de paie aujourd&apos;hui !</strong>
                 ) : (
                   <span>
                     <strong>{dailyInfo.daysRemaining}</strong> {dailyInfo.daysRemaining > 1 ? "jours restants" : "jour restant"} avant la paie ({dailyInfo.nextPayDate.getDate()} {dailyInfo.nextPayDate.toLocaleDateString("fr-FR", { month: "short" })})

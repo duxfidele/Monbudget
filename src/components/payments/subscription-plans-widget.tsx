@@ -70,6 +70,19 @@ export function SubscriptionPlansWidget({
   const [focusedPlan, setFocusedPlan] = useState<SubscriptionPlanId>(
     highlightPlan ?? (effectivePlanId === "free" ? "personal" : effectivePlanId)
   );
+
+  useEffect(() => {
+    if (highlightPlan) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`plan-card-${highlightPlan}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightPlan]);
+
   const [selectedGatewayId, setSelectedGatewayId] =
     useState<MonerizPaymentGateway["id"]>("wave");
   const [checkoutTarget, setCheckoutTarget] = useState<PaidSubscriptionPlanId | null>(null);
@@ -232,12 +245,13 @@ export function SubscriptionPlansWidget({
           return (
             <div
               key={plan.id}
+              id={`plan-card-${plan.id}`}
               data-testid={`plan-card-${plan.id}`}
               onClick={() => setFocusedPlan(plan.id)}
-              className={`group relative rounded-2xl p-5 sm:p-6 flex flex-col justify-between transition-all duration-200 cursor-pointer ${
+              className={`group relative rounded-3xl p-5 sm:p-7 flex flex-col justify-between transition-all duration-300 ease-out cursor-pointer scroll-mt-28 sm:scroll-mt-32 ${
                 isHighlighted
-                  ? "bg-gradient-to-b from-[#1E3A5F] via-[#173052] to-[#0F233F] text-white border-2 border-sky-400 shadow-xl ring-2 ring-sky-400/20 hover:-translate-y-0.5"
-                  : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-xs hover:border-sky-300 dark:hover:border-sky-700 hover:shadow-md hover:-translate-y-0.5"
+                  ? "bg-gradient-to-b from-[#1E3A5F] via-[#162D4A] to-[#0D1E33] text-white border-2 border-sky-400 shadow-xl shadow-sky-950/30 ring-4 ring-sky-400/30 -translate-y-1 hover:-translate-y-2 hover:shadow-2xl hover:shadow-sky-500/25 hover:border-sky-300"
+                  : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-sky-400 dark:hover:border-sky-500 hover:shadow-xl hover:shadow-slate-500/10 dark:hover:shadow-sky-500/10 hover:-translate-y-2"
               }`}
             >
               {/* Badge supérieur */}
@@ -357,8 +371,18 @@ export function SubscriptionPlansWidget({
                 </ul>
               </div>
 
-              {/* Boutons d'action dynamiques */}
-              <div onClick={(e) => e.stopPropagation()}>
+              {/* Boutons d'action dynamiques & non-débordants */}
+              <div onClick={(e) => e.stopPropagation()} className="pt-2">
+                <p
+                  className={`text-[11px] text-center mb-2 font-medium truncate ${
+                    isHighlighted ? "text-slate-300" : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  {plan.id === "free"
+                    ? "Sans carte bancaire • Accès immédiat"
+                    : `Payable par ${selectedGateway.label} & Mobile Money`}
+                </p>
+
                 {plan.id === "free" ? (
                   !isAdminUser && (countdown.needsPlanChoice || countdown.isTrialActive) ? (
                     <Button
@@ -366,17 +390,17 @@ export function SubscriptionPlansWidget({
                       variant="outline"
                       disabled={isChoosingFree}
                       onClick={handleChooseFree}
-                      className="cursor-pointer w-full rounded-xl text-xs font-bold h-11 gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-[0.98]"
+                      className="cursor-pointer w-full rounded-2xl text-xs sm:text-sm font-extrabold min-h-[46px] h-auto py-2.5 px-3.5 gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-[0.98] shadow-xs flex items-center justify-center border-slate-300 dark:border-slate-700"
                     >
                       {isChoosingFree ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Activation en cours...</span>
+                          <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                          <span className="truncate">Activation en cours...</span>
                         </>
                       ) : (
                         <>
-                          <span>Choisir Gratuit (Budget, Entrées &amp; Dépenses)</span>
-                          <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">Choisir le Plan Gratuit</span>
+                          <ArrowRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-1" />
                         </>
                       )}
                     </Button>
@@ -384,45 +408,45 @@ export function SubscriptionPlansWidget({
                     <Button
                       disabled
                       variant="outline"
-                      className="w-full rounded-xl text-xs font-bold h-11 gap-1.5"
+                      className="w-full rounded-2xl text-xs sm:text-sm font-extrabold min-h-[46px] h-auto py-2.5 px-3.5 gap-1.5 flex items-center justify-center opacity-85"
                     >
                       {effectivePlanId === "free" ? (
                         <>
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                          <span>Formule Actuelle (Gratuit)</span>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <span className="truncate">Formule Actuelle (Gratuit)</span>
                         </>
                       ) : (
-                        <span>Inclus de base</span>
+                        <span className="truncate">Inclus de base</span>
                       )}
                     </Button>
                   )
                 ) : isCurrentPlan ? (
                   <Button
                     disabled
-                    className="w-full rounded-xl text-xs font-bold h-11 bg-emerald-600 text-white gap-1.5"
+                    className="w-full rounded-2xl text-xs sm:text-sm font-extrabold min-h-[46px] h-auto py-2.5 px-3.5 bg-emerald-600 text-white gap-1.5 flex items-center justify-center"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Abonnement Actif</span>
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Abonnement Actif</span>
                   </Button>
                 ) : (
                   <Button
                     type="button"
                     onClick={() => openCheckout(plan.id as PaidSubscriptionPlanId)}
-                    className={`cursor-pointer w-full rounded-xl text-xs sm:text-sm font-bold h-11 gap-2 transition-all active:scale-[0.98] ${
+                    className={`cursor-pointer w-full rounded-2xl text-xs sm:text-sm font-extrabold min-h-[46px] h-auto py-2.5 px-3.5 gap-2 transition-all duration-300 active:scale-[0.98] flex items-center justify-center shadow-md ${
                       isHighlighted
-                        ? "bg-gradient-to-r from-sky-400 to-emerald-400 hover:from-sky-300 hover:to-emerald-300 text-slate-950 shadow-md shadow-sky-500/25"
-                        : "bg-[#1E3A5F] hover:bg-[#162C49] text-white dark:bg-sky-600 dark:hover:bg-sky-500 shadow-sm"
+                        ? "bg-gradient-to-r from-sky-400 via-emerald-400 to-teal-300 hover:from-sky-300 hover:via-emerald-300 hover:to-teal-200 text-slate-950 shadow-sky-500/25 hover:shadow-lg hover:shadow-sky-400/30"
+                        : "bg-[#1E3A5F] hover:bg-[#162C49] text-white dark:bg-sky-600 dark:hover:bg-sky-500 hover:shadow-lg hover:shadow-slate-500/20"
                     }`}
                   >
                     <CreditCard className="w-4 h-4 shrink-0" />
-                    <span>
+                    <span className="truncate">
                       {isPaidSamePlanOtherCycle
                         ? `Passer en ${selectedCycle === "yearly" ? "Annuel" : "Mensuel"} • ${priceXof.toLocaleString("fr-FR")} F`
                         : isUpgradeToBusiness
-                        ? `Passer à Entreprise • ${priceXof.toLocaleString("fr-FR")} F/${selectedCycle === "yearly" ? "an" : "mois"}`
-                        : `Souscrire via ${selectedGateway.shortLabel} • ${priceXof.toLocaleString("fr-FR")} F/${selectedCycle === "yearly" ? "an" : "mois"}`}
+                        ? `Passer à Entreprise • ${priceXof.toLocaleString("fr-FR")} F`
+                        : `Souscrire • ${priceXof.toLocaleString("fr-FR")} F/${selectedCycle === "yearly" ? "an" : "mois"}`}
                     </span>
-                    <ArrowRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                    <ArrowRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-1" />
                   </Button>
                 )}
               </div>
