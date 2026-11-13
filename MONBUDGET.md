@@ -27,7 +27,7 @@
 13. [Sauvegarde & Portabilité des Données (Export Intégral JSON)](#-13-sauvegarde--portabilité-des-données-export-intégral-json)
 14. [Assistance & Support Client Multi-Canal](#-14-assistance--support-client-multi-canal)
 15. [Guide d'Installation & Commandes Développeur](#-15-guide-dinstallation--commandes-développeur)
-16. [Architecture & Expérience Mobile-First](#-16-architecture--expérience-mobile-first)
+16. [Architecture & Expérience Multi-Device (Mobile & Tablette Portrait)](#-16-architecture--expérience-multi-device-mobile--tablette-portrait)
 17. [Identité Visuelle & Nouveau Branding Officiel](#-17-identité-visuelle--nouveau-branding-officiel)
 18. [Abonnements, Essai 30 Jours & Paiements Moneriz](#-18-abonnements-essai-30-jours--paiements-moneriz)
 
@@ -300,9 +300,9 @@ npm run build
 
 ---
 
-## 📱 16. Architecture & Expérience Mobile-First
+## 📱 16. Architecture & Expérience Multi-Device (Mobile & Tablette Portrait)
 
-MonBudget a été pensé et restructuré comme une application native pour smartphone, utilisable d'une seule main :
+MonBudget a été pensé et restructuré comme une application fluide et native sur smartphone et tablette tactile :
 
 ### Ergonomie de la Zone du Pouce (*Thumb Zone*)
 - **Barre de Navigation Basse Réorganisée ([`src/components/layout/bottom-nav.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/layout/bottom-nav.tsx))** :
@@ -327,6 +327,12 @@ MonBudget a été pensé et restructuré comme une application native pour smart
   - **Ligne 2** : barre secondaire dédiée centrant [`MonthSelector`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/dashboard/month-selector.tsx) (`Nov. 2026` sur mobile / `Novembre 2026` sur écran large).
 - Les menus déroulants et popovers de l'en-tête (`NetworkStatus`, notifications, sélecteur de mois, menu utilisateur) se positionnent à `top-[6.25rem]` sur mobile afin d'apparaître sous l'en-tête sans masquer la barre de mois.
 - L'ensemble des pages du tableau de bord, tableaux, cartes, onglets et formulaires est conçu *mobile-first* sans débordement horizontal sur `360px+`.
+
+### Ergonomie & Responsivité Tablette en Mode Portrait (768px – 1023px)
+- **Pleine Largeur Préservée (`lg:flex lg:w-72` / `lg:pl-72`)** : Le point de bascule vers la barre latérale fixe de bureau est calé à `1 024px` (`lg`). Sur tablette en portrait (iPad, Galaxy Tab 768px–834px), l'application ne subit plus l'amputation de 288 px de la colonne desktop : la surface de travail exploite **100 % de la largeur d'écran**.
+- **Menu Tiroir Coulissant Fluide (`MobileSidebar`)** : L'accès aux modules s'effectue via le bouton hamburger dans l'en-tête, déployant un volet coulissant haute fluidité avec flou d'arrière-plan et verrouillage du défilement.
+- **Barre Inférieure Centrée (`BottomNav`)** : La barre d'actions rapides du bas est limitée à `max-w-xl` et centrée automatiquement pour une manipulation tactile confortable.
+- **Onglets Paramètres Défilants (`settings/page.tsx`)** : Les onglets de réglages (Profil, Abonnement, Sécurité...) s'affichent sous forme de pilules défilantes horizontales pour ne pas contraindre le contenu d'abonnement dans une colonne étriquée.
 
 ### Prise en Compte des Spécificités Matérielles Mobiles
 - **Safe Area Insets** : Déclaration de `viewportFit: "cover"` dans [`src/app/layout.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/app/layout.tsx) et des utilitaires CSS `@utility pb-safe` / `pt-safe` pour respecter les barres de geste et encoches matérielles (iPhone Dynamic Island, caméras poinçons Android).
@@ -378,6 +384,15 @@ MonBudget intègre un modèle freemium transparent piloté dans [`src/lib/moneri
 ### Paiement Intégré Moneriz (Liveframe In-App & Webhooks)
 - **Liveframe In-App** : le règlement par Mobile Money ou carte bancaire s'ouvre directement dans l'application (routes `/api/checkout` et `/api/checkout/status`), puis redirige vers `/dashboard` avec notification de confirmation dès validation.
 - **Sécurité Webhook** : la route `/api/webhooks/moneriz` vérifie la signature cryptographique Moneriz (`src/lib/server/moneriz-signature.ts`) avant d'activer ou renouveler l'abonnement côté Supabase.
+
+### Redirection Directe & Défilement Centré vers Particulier (500 F/mois)
+- **Pointage Direct depuis le Dashboard** : En mode Gratuit, les boutons d'appel à l'action (*« Prendre 500 FCFA/mois »* sur la bannière cadenassée du budget journalier conseillé, le badge de formule en en-tête ou le bandeau de relance) ciblent directement `/settings?tab=subscription&plan=personal#plan-card-personal`.
+- **Défilement Fluide Automatique** : La vue active instantanément l'onglet **Mon Abonnement**, déclenche un défilement centré fluide (`scrollIntoView({ behavior: 'smooth', block: 'center' })`) et applique un halo lumineux d'attention (`ring-4 ring-sky-400/30`) sur la carte Particulier.
+
+### Ergonomie des Passerelles d'Abonnement & Boutons Anti-Débordement
+- **Design Dynamique au Survol ([`src/components/payments/subscription-plans-widget.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/payments/subscription-plans-widget.tsx))** : Cartes aux angles adoucis (`rounded-3xl`), élévation réactive au survol du curseur (`hover:-translate-y-2`), illumination cyan des bordures et halos d'ombres lumineuses (`hover:shadow-2xl hover:shadow-sky-500/25`).
+- **Boutons Robustes Sans Débordement** : Libellés optimisés et calibrés (`Choisir le Plan Gratuit`, `Souscrire • 500 F/mois`, `Souscrire • 1 500 F/mois`), accompagnés de la mention discrète du mode de règlement (*« Payable par Wave & Mobile Money »*), avec protection CSS par troncature (`truncate`), padding `px-3.5` et hauteur tactile `min-h-[46px]`.
+- **Adaptation Tablette Portrait & Écran Mobile ([`src/components/payments/trial-choice-modal.tsx`](file:///home/fideleatchade/.gemini/antigravity-ide/brain/e0d28ad8-ac41-492c-a977-6f3fe6e34690/MonBudget/src/components/payments/trial-choice-modal.tsx))** : Les sélecteurs de périodicité et de passerelle basculent proprement en multi-lignes (`flex-wrap`) et la grille de la modale évite d'écraser les 3 offres en colonnes de 200px sur tablette portrait.
 
 ---
 
