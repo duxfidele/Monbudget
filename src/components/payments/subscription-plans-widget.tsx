@@ -126,9 +126,9 @@ export function SubscriptionPlansWidget({
     <div className="space-y-6">
       {/* Barre de contrôles dynamiques : Périodicité + Passerelle Moneriz */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/70 p-4 sm:p-5 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Sélecteur Mensuel / Annuel */}
-          <div className="flex flex-col items-center md:items-start gap-1.5">
+          <div className="flex flex-col items-center lg:items-start gap-1.5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               1. Choisissez votre rythme de facturation
             </span>
@@ -166,12 +166,12 @@ export function SubscriptionPlansWidget({
           </div>
 
           {/* Sélecteur interactif de passerelle Moneriz */}
-          <div className="flex flex-col items-center md:items-end gap-1.5">
+          <div className="flex flex-col items-center lg:items-end gap-1.5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
               <Zap className="w-3 h-3 text-emerald-500" />
               2. Moyen de paiement préféré (Moneriz)
             </span>
-            <div className="flex flex-wrap items-center justify-center md:justify-end gap-1.5">
+            <div className="flex flex-wrap items-center justify-center lg:justify-end gap-1.5">
               {MONERIZ_PAYMENT_GATEWAYS.map((gw) => {
                 const isSelected = selectedGatewayId === gw.id;
                 return (
@@ -195,7 +195,7 @@ export function SubscriptionPlansWidget({
           </div>
         </div>
 
-        <p className="text-xs text-slate-600 dark:text-slate-300 text-center md:text-left">
+        <p className="text-xs text-slate-600 dark:text-slate-300 text-center lg:text-left">
           {selectedCycle === "yearly" ? (
             <>
               🎉 Facturation annuelle active : payez{" "}

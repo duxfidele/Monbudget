@@ -199,7 +199,7 @@ export function TrialChoiceModal() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-1">
               {/* 1. Gratuit */}
               <div className="rounded-2xl p-4 border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 flex flex-col justify-between gap-4 hover:border-slate-300 dark:hover:border-slate-700 transition-all">
                 <div className="space-y-2.5">

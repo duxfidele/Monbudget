@@ -17,9 +17,9 @@ export const Header = () => {
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md transition-colors">
-      <div className="flex items-center justify-between gap-2 px-2.5 sm:px-4 md:px-8 h-14 sm:h-16 min-w-0">
-        {/* Mobile : Menu hamburger + Logo compact */}
-        <div className="flex items-center gap-1.5 md:hidden shrink-0">
+      <div className="flex items-center justify-between gap-2 px-2.5 sm:px-4 lg:px-8 h-14 sm:h-16 min-w-0">
+        {/* Mobile & Tablette Portrait : Menu hamburger + Logo compact */}
+        <div className="flex items-center gap-1.5 lg:hidden shrink-0">
           <Button
             variant="ghost"
             size="icon"

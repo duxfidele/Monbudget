@@ -30,7 +30,7 @@ export const MobileSidebar = () => {
   if (!isSidebarOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] md:hidden">
+    <div className="fixed inset-0 z-[100] lg:hidden">
       {/* Arrière-plan semi-transparent cliquable */}
       <div 
         className="fixed inset-0 bg-slate-950/65 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"

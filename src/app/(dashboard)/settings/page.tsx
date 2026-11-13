@@ -563,13 +563,13 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
-        {/* Navigation des Onglets (Sidebar interne sur desktop, barre défilante sur mobile) */}
-        <div className="md:col-span-1 min-w-0 flex md:flex-col items-center md:items-stretch gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
+      <div className="grid gap-6 lg:grid-cols-4">
+        {/* Navigation des Onglets (Sidebar interne sur desktop large, barre défilante sur mobile & tablette portrait) */}
+        <div className="lg:col-span-1 min-w-0 flex lg:flex-col items-center lg:items-stretch gap-1.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
           <Button 
             variant={activeTab === "profile" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("profile")}
-            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
+            className={`whitespace-nowrap shrink-0 lg:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
               activeTab === "profile" 
                 ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -582,7 +582,7 @@ export default function SettingsPage() {
           <Button 
             variant={activeTab === "subscription" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("subscription")}
-            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
+            className={`whitespace-nowrap shrink-0 lg:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
               activeTab === "subscription" 
                 ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -595,7 +595,7 @@ export default function SettingsPage() {
           <Button 
             variant={activeTab === "appearance" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("appearance")}
-            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
+            className={`whitespace-nowrap shrink-0 lg:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
               activeTab === "appearance" 
                 ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -608,7 +608,7 @@ export default function SettingsPage() {
           <Button 
             variant={activeTab === "notifications" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("notifications")}
-            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
+            className={`whitespace-nowrap shrink-0 lg:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
               activeTab === "notifications" 
                 ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -621,7 +621,7 @@ export default function SettingsPage() {
           <Button 
             variant={activeTab === "security" ? "secondary" : "ghost"} 
             onClick={() => setActiveTab("security")}
-            className={`whitespace-nowrap shrink-0 md:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
+            className={`whitespace-nowrap shrink-0 lg:w-full justify-start font-medium text-xs sm:text-sm transition-all ${
               activeTab === "security" 
                 ? "bg-[#1E3A5F] dark:bg-sky-600 text-white hover:bg-[#1E3A5F]/95 shadow-xs" 
                 : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -636,11 +636,11 @@ export default function SettingsPage() {
             )}
           </Button>
 
-          <div className="pl-2 ml-1 border-l md:ml-0 md:pl-0 md:pt-4 md:border-l-0 md:border-t border-slate-200 dark:border-slate-800 md:mt-4 shrink-0">
+          <div className="pl-2 ml-1 border-l lg:ml-0 lg:pl-0 lg:pt-4 lg:border-l-0 lg:border-t border-slate-200 dark:border-slate-800 lg:mt-4 shrink-0">
             <Button 
               variant="ghost" 
               onClick={handleLogout} 
-              className="whitespace-nowrap md:w-full justify-start text-red-600 dark:text-rose-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-rose-950/30 text-xs sm:text-sm font-semibold h-9 md:h-10"
+              className="whitespace-nowrap lg:w-full justify-start text-red-600 dark:text-rose-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-rose-950/30 text-xs sm:text-sm font-semibold h-9 lg:h-10"
             >
               <LogOut className="mr-2 h-4 w-4 shrink-0" />
               <span>Déconnexion</span>
@@ -649,7 +649,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Contenu Principal selon l'onglet actif */}
-        <div className="md:col-span-3 min-w-0 space-y-6">
+        <div className="lg:col-span-3 min-w-0 space-y-6">
           {/* ================= ONGLET 1 : PROFIL & PRÉFÉRENCES ================= */}
           {activeTab === "profile" && (
             <div className="space-y-6">

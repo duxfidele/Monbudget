@@ -878,5 +878,52 @@ test.describe("Intégration Moneriz SaaS — Tarifs, Sécurité HMAC & Machine d
       expect(uiSrc).toContain("subscriptionHydrated");
     }
   });
+
+  test("12. Responsivité tablette portrait (768px - 1023px) : pleine largeur disponible, sidebar tiroir et passerelles d'abonnement fluides", () => {
+    const layoutSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/app/(dashboard)/layout.tsx"),
+      "utf8"
+    );
+    expect(layoutSrc).toContain("lg:flex lg:w-72");
+    expect(layoutSrc).toContain("lg:pl-72");
+
+    const headerSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/layout/header.tsx"),
+      "utf8"
+    );
+    expect(headerSrc).toContain("lg:hidden");
+
+    const mobileSidebarSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/layout/mobile-sidebar.tsx"),
+      "utf8"
+    );
+    expect(mobileSidebarSrc).toContain("lg:hidden");
+
+    const bottomNavSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/layout/bottom-nav.tsx"),
+      "utf8"
+    );
+    expect(bottomNavSrc).toContain("lg:hidden");
+
+    const settingsSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/app/(dashboard)/settings/page.tsx"),
+      "utf8"
+    );
+    expect(settingsSrc).toContain("lg:grid-cols-4");
+    expect(settingsSrc).toContain("lg:col-span-1");
+    expect(settingsSrc).toContain("lg:col-span-3");
+
+    const widgetSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/payments/subscription-plans-widget.tsx"),
+      "utf8"
+    );
+    expect(widgetSrc).toContain("lg:flex-row");
+
+    const modalSrc = fs.readFileSync(
+      path.join(process.cwd(), "src/components/payments/trial-choice-modal.tsx"),
+      "utf8"
+    );
+    expect(modalSrc).toContain("lg:grid-cols-3");
+  });
 });
 

@@ -41,19 +41,19 @@ export const BottomNav = () => {
     color: string;
     feature?: ProtectedFeatureKey;
   }> = [
-    {
-      label: "Accueil",
-      icon: LayoutDashboard,
-      href: "/dashboard",
-      color: "text-sky-500",
-    },
-    {
-      label: "Budget",
-      icon: Wallet,
-      href: "/budget",
-      color: "text-emerald-500",
-    },
-  ];
+      {
+        label: "Accueil",
+        icon: LayoutDashboard,
+        href: "/dashboard",
+        color: "text-sky-500",
+      },
+      {
+        label: "Budget",
+        icon: Wallet,
+        href: "/budget",
+        color: "text-emerald-500",
+      },
+    ];
 
   const primaryRightRoutes: Array<{
     label: string;
@@ -62,20 +62,20 @@ export const BottomNav = () => {
     color: string;
     feature?: ProtectedFeatureKey;
   }> = [
-    {
-      label: "Mouvements",
-      icon: ArrowRightLeft,
-      href: "/transactions",
-      color: "text-violet-500",
-    },
-    {
-      label: "Épargne",
-      icon: PiggyBank,
-      href: "/savings",
-      color: "text-pink-600",
-      feature: "savings",
-    },
-  ];
+      {
+        label: "Mouvements",
+        icon: ArrowRightLeft,
+        href: "/transactions",
+        color: "text-violet-500",
+      },
+      {
+        label: "Épargne",
+        icon: PiggyBank,
+        href: "/savings",
+        color: "text-pink-600",
+        feature: "savings",
+      },
+    ];
 
   const renderTab = (route: (typeof primaryLeftRoutes)[number]) => {
     const isActive = pathname === route.href;
@@ -127,9 +127,9 @@ export const BottomNav = () => {
   return (
     <nav
       aria-label="Navigation rapide mobile"
-      className="fixed bottom-0 left-0 z-50 w-full min-h-[4rem] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 md:hidden pb-safe transition-colors"
+      className="fixed bottom-0 left-0 z-50 w-full min-h-[4rem] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 lg:hidden pb-safe transition-colors"
     >
-      <div className="grid h-16 max-w-lg grid-cols-5 mx-auto font-medium items-center">
+      <div className="grid h-16 max-w-xl grid-cols-5 mx-auto font-medium items-center">
         {/* Onglets Gauche */}
         {primaryLeftRoutes.map(renderTab)}
 
