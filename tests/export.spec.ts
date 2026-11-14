@@ -4,6 +4,7 @@ import {
   downloadJsonFile,
   FullAccountExport,
 } from "../src/lib/utils/account-export";
+import { buildUnifiedIncomeBreakdown } from "../src/lib/utils/report-export";
 
 test.describe("Full Account Export & Data Portability — SaaS Standards", () => {
   test("generates complete account export with accurate metadata and counts", () => {
@@ -131,6 +132,48 @@ test.describe("Full Account Export & Data Portability — SaaS Standards", () =>
   test("downloadJsonFile safely returns false in non-browser environment without crashing", () => {
     const result = downloadJsonFile({ test: true });
     expect(result).toBe(false);
+  });
+
+  test("buildUnifiedIncomeBreakdown combines base salary entries and supplementary income transactions", () => {
+    const breakdown = buildUnifiedIncomeBreakdown(
+      425000,
+      [
+        {
+          id: "inc-1",
+          label: "Salaire principal",
+          sourceType: "Salaire",
+          amount: 400000,
+          date: "2026-11-13",
+        },
+      ],
+      [
+        {
+          id: "tx-inc-1",
+          label: "Prime freelance",
+          amount: 25000,
+          category: "Revenu",
+          date: "2026-11-14",
+          type: "income",
+        },
+        {
+          id: "tx-exp-1",
+          label: "Courses marché",
+          amount: 35000,
+          category: "Alimentation",
+          date: "2026-11-14",
+          type: "expense",
+        },
+      ]
+    );
+
+    expect(breakdown.baseSalaryTotal).toBe(400000);
+    expect(breakdown.additionalIncomeTotal).toBe(25000);
+    expect(breakdown.totalRealIncome).toBe(425000);
+    expect(breakdown.declaredItems.length).toBe(1);
+    expect(breakdown.transactionItems.length).toBe(1);
+    expect(breakdown.allItems.length).toBe(2);
+    expect(breakdown.allItems[0].origin).toBe("declared");
+    expect(breakdown.allItems[1].origin).toBe("transaction");
   });
 });
 

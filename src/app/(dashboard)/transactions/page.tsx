@@ -282,8 +282,8 @@ export default function TransactionsPage() {
     const csvContent =
       "\uFEFF" +
       [
-        headers.map(escapeCsvCell).join(";"),
-        ...rows.map((e) => e.map((item) => escapeCsvCell(item)).join(";")),
+        headers.map(escapeCsvCell).join(","),
+        ...rows.map((e) => e.map((item) => escapeCsvCell(item)).join(",")),
       ].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
