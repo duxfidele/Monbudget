@@ -4,7 +4,10 @@ import {
   downloadJsonFile,
   FullAccountExport,
 } from "../src/lib/utils/account-export";
-import { buildUnifiedIncomeBreakdown } from "../src/lib/utils/report-export";
+import {
+  buildUnifiedIncomeBreakdown,
+  generateMonthlyReportPdfBytes,
+} from "../src/lib/utils/report-export";
 
 test.describe("Full Account Export & Data Portability — SaaS Standards", () => {
   test("generates complete account export with accurate metadata and counts", () => {
@@ -174,6 +177,80 @@ test.describe("Full Account Export & Data Portability — SaaS Standards", () =>
     expect(breakdown.allItems.length).toBe(2);
     expect(breakdown.allItems[0].origin).toBe("declared");
     expect(breakdown.allItems[1].origin).toBe("transaction");
+  });
+
+  test("generateMonthlyReportPdfBytes builds a valid binary PDF 1.4 document with full financial breakdown", () => {
+    const pdfBytes = generateMonthlyReportPdfBytes({
+      monthLabel: "Novembre 2026",
+      year: 2026,
+      month: 11,
+      currency: "FCFA",
+      income: 425000,
+      incomeEntries: [
+        {
+          id: "inc-1",
+          label: "Salaire principal",
+          sourceType: "Salaire",
+          amount: 400000,
+          date: "2026-11-13",
+        },
+      ],
+      categories: [
+        { id: "c1", name: "Alimentation", amount: 50000, color: "bg-blue-500" },
+        { id: "c2", name: "Transport", amount: 15000, color: "bg-emerald-500" },
+        { id: "c3", name: "Épargne", amount: 50000, color: "bg-amber-500" },
+      ],
+      transactions: [
+        {
+          id: "tx-1",
+          label: "Prime freelance",
+          amount: 25000,
+          category: "Revenu",
+          date: "2026-11-14",
+          type: "income",
+        },
+        {
+          id: "tx-2",
+          label: "Courses marché",
+          amount: 35000,
+          category: "Alimentation",
+          date: "2026-11-14",
+          type: "expense",
+        },
+        {
+          id: "tx-3",
+          label: "Taxi",
+          amount: 10000,
+          category: "Transport",
+          date: "2026-11-14",
+          type: "expense",
+        },
+      ],
+      savingsGoals: [
+        {
+          id: "sg-1",
+          name: "Achat de véhicule",
+          target: 3000000,
+          current: 50000,
+          color: "bg-emerald-500",
+          status: "active",
+          contributions: [{ id: "sc-1", amount: 50000, date: "2026-11-13" }],
+        },
+      ],
+      debts: [],
+    });
+
+    expect(pdfBytes.byteLength).toBeGreaterThan(2500);
+    const pdfText = new TextDecoder().decode(pdfBytes);
+    expect(pdfText.startsWith("%PDF-1.4\n")).toBe(true);
+    expect(pdfText.trimEnd().endsWith("%%EOF")).toBe(true);
+    expect(pdfText).toContain("/Type /Catalog");
+    expect(pdfText).toContain("/Encoding /WinAnsiEncoding");
+    expect(pdfText).toContain("425 000 FCFA");
+    expect(pdfText).toContain("400 000 FCFA");
+    expect(pdfText).toContain("+25 000 FCFA");
+    expect(pdfText).toContain("330 000 FCFA");
+    expect(pdfText).toContain("Alimentation");
   });
 });
 

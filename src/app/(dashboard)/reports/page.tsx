@@ -304,7 +304,7 @@ export default function ReportsPage() {
       savingsGoals,
       debts,
     });
-    toast.success(`Rapport PDF (${capitalizedMonth}) généré avec succès !`);
+    toast.success(`Rapport PDF (${capitalizedMonth}) téléchargé dans votre dossier Téléchargements !`);
   };
 
   const handleDownloadCSV = () => {
