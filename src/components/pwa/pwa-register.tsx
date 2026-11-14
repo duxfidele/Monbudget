@@ -40,9 +40,6 @@ export function PWARegister() {
         void refreshOfflineDiagnostics();
         const count = Number(data.syncedCount) || 0;
         if (count > 0) {
-          toast.success(
-            `Synchronisation en arrière-plan terminée : ${count} opération(s) enregistrée(s).`
-          );
           void initStore();
         }
       } else if (data.type === "BACKGROUND_SYNC_AUTH_EXPIRED") {

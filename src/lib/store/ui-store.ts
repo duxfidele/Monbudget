@@ -1318,7 +1318,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     })();
   },
 
-  syncPendingQueue: async (force = false, quietIfSingle = false) => {
+  syncPendingQueue: async (force = false, _quietIfSingle = false) => {
     let uid = get().userId || activeUserId;
     if (!uid) {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1346,14 +1346,11 @@ export const useUIStore = create<UIState>((set, get) => ({
         lastSyncError: null,
         syncStatus: get().isOnline ? "idle" : "offline",
       });
+      if (force) {
+        toast.info("Toutes vos données sont déjà synchronisées.");
+      }
       return 0;
     }
-
-    const hadOfflineBacklog =
-      force ||
-      !quietIfSingle ||
-      beforeQueue.length > 1 ||
-      beforeQueue.some((item) => item.retryCount > 0 || item.status === "failed");
 
     set({ syncStatus: "syncing", lastSyncError: null });
 
@@ -1400,10 +1397,13 @@ export const useUIStore = create<UIState>((set, get) => ({
       return 0;
     }
 
-    if (result.synced > 0 && hadOfflineBacklog) {
-      toast.success(
-        `Synchronisation terminée : ${result.synced} opération(s) enregistrée(s) sur le serveur !`
-      );
+    if (result.synced > 0) {
+      // Notification affichée UNIQUEMENT en cas de synchronisation manuelle volontaire (force === true)
+      if (force) {
+        toast.success(
+          `Synchronisation terminée : ${result.synced} opération(s) enregistrée(s) sur le serveur !`
+        );
+      }
       await get().initStore();
     }
     return result.synced;
