@@ -503,7 +503,7 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
 }
 
 // ============================================================================
-// MOTEUR VECTORIEL PDF 1.4 NATIF (A4 PORTRAIT — 100% HORS-LIGNE & TÉLÉCHARGEMENT DIRECT)
+// MOTEUR VECTORIEL PDF 1.4 NATIF (A4 PORTRAIT — MISE EN PAGE AÉRÉE SUR 2+ PAGES)
 // ============================================================================
 
 type RgbColor = [number, number, number]; // Valeurs 0..255
@@ -511,9 +511,9 @@ type PdfFontKey = "F1" | "F2" | "F3"; // F1 = Helvetica, F2 = Helvetica-Bold, F3
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
-const MARGIN_X = 32;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2; // 531.28 pt
-const MARGIN_BOTTOM = 44;
+const MARGIN_X = 34;
+const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2; // 527.28 pt
+const MARGIN_BOTTOM = 52;
 
 const COLORS = {
   navy: [30, 58, 95] as RgbColor, // #1E3A5F
@@ -529,6 +529,7 @@ const COLORS = {
   sky600: [2, 132, 199] as RgbColor, // #0284C7
   emerald600: [5, 150, 105] as RgbColor, // #059669
   emerald500: [16, 185, 129] as RgbColor, // #10B981
+  emerald300: [110, 231, 183] as RgbColor, // #6EE7B7
   emerald50: [236, 253, 245] as RgbColor, // #ECFDF5
   red600: [220, 38, 38] as RgbColor, // #DC2626
   rose600: [225, 29, 72] as RgbColor, // #E11D48
@@ -581,7 +582,6 @@ function normalizePdfText(input: unknown): string {
 
 /**
  * Convertit une chaîne Unicode en littéral PDF (...) encodé en WinAnsi avec séquences octales \ddd
- * Garantit que le flux PDF est 100% ASCII pur tout en affichant parfaitement les accents français.
  */
 function encodePdfWinAnsiLiteral(text: string): string {
   const clean = normalizePdfText(text);
@@ -601,8 +601,6 @@ function encodePdfWinAnsiLiteral(text: string): string {
       out += "\\" + byte.toString(8).padStart(3, "0");
     } else if (code >= 0xa0 && code <= 0xff) {
       out += "\\" + code.toString(8).padStart(3, "0");
-    } else {
-      // Ignore les emojis hors WinAnsi
     }
   }
   out += ")";
@@ -611,6 +609,7 @@ function encodePdfWinAnsiLiteral(text: string): string {
 
 /**
  * Estime la largeur en points d'un texte en police Helvetica / Helvetica-Bold
+ * avec une marge de sécurité pour éviter tout débordement à droite.
  */
 function measurePdfTextWidth(text: string, fontSize: number, bold = false): number {
   const clean = normalizePdfText(text);
@@ -618,17 +617,17 @@ function measurePdfTextWidth(text: string, fontSize: number, bold = false): numb
   for (let i = 0; i < clean.length; i++) {
     const ch = clean[i];
     if ("ilI.,:;|!1' ".includes(ch)) {
-      units += bold ? 0.31 : 0.28;
+      units += bold ? 0.33 : 0.30;
     } else if ("ftrj()-[]/".includes(ch)) {
-      units += bold ? 0.38 : 0.34;
-    } else if ("mwMW@%".includes(ch)) {
-      units += bold ? 0.86 : 0.82;
+      units += bold ? 0.41 : 0.37;
+    } else if ("mwMW@%—".includes(ch)) {
+      units += bold ? 0.90 : 0.86;
     } else if (ch >= "A" && ch <= "Z") {
-      units += bold ? 0.70 : 0.66;
+      units += bold ? 0.74 : 0.70;
     } else if (ch >= "0" && ch <= "9") {
-      units += 0.56;
+      units += bold ? 0.60 : 0.58;
     } else {
-      units += bold ? 0.57 : 0.53;
+      units += bold ? 0.60 : 0.56;
     }
   }
   return units * fontSize;
@@ -652,7 +651,7 @@ function fitPdfText(text: string, maxWidth: number, fontSize: number, bold = fal
 }
 
 /**
- * Découpe un paragraphe en plusieurs lignes respectant maxWidth
+ * Découpe un paragraphe en plusieurs lignes respectant maxWidth avec marge de respiration
  */
 function wrapPdfText(text: string, maxWidth: number, fontSize: number, bold = false): string[] {
   const clean = normalizePdfText(text);
@@ -705,8 +704,17 @@ interface TableCellSpec {
   bold?: boolean;
 }
 
+interface TableSpanFooterRow {
+  leftLabel: string;
+  leftSubLabel?: string;
+  rightValue: string;
+  leftColor?: RgbColor;
+  rightColor?: RgbColor;
+  bg?: RgbColor;
+}
+
 /**
- * Génère les octets binaires (%PDF-1.4) du Rapport Financier Mensuel MonBudget.
+ * Génère les octets binaires (%PDF-1.4) du Rapport Financier Mensuel MonBudget (mise en page aérée).
  */
 export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uint8Array {
   const {
@@ -749,7 +757,7 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
 
   const pages: string[][] = [[]];
   let currentPageIdx = 0;
-  let cursorY = 26;
+  let cursorY = 30;
 
   const emit = (cmd: string) => {
     pages[currentPageIdx].push(cmd);
@@ -766,7 +774,7 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
   ) => {
     const pdfY = PAGE_HEIGHT - topY - h;
     if (fill && stroke) {
-      emit(`${ lineWidth } w ${rgbFillCmd(fill)} ${rgbStrokeCmd(stroke)} ${fmtNum(x)} ${fmtNum(pdfY)} ${fmtNum(w)} ${fmtNum(h)} re B`);
+      emit(`${lineWidth} w ${rgbFillCmd(fill)} ${rgbStrokeCmd(stroke)} ${fmtNum(x)} ${fmtNum(pdfY)} ${fmtNum(w)} ${fmtNum(h)} re B`);
     } else if (fill) {
       emit(`${rgbFillCmd(fill)} ${fmtNum(x)} ${fmtNum(pdfY)} ${fmtNum(w)} ${fmtNum(h)} re f`);
     } else if (stroke) {
@@ -824,22 +832,22 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
   const startNewPage = () => {
     pages.push([]);
     currentPageIdx = pages.length - 1;
-    cursorY = 26;
-    // Bandeau d'en-tête compact sur les pages suivantes
-    drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, 26, COLORS.navy);
-    drawRect(MARGIN_X, cursorY + 26, CONTENT_WIDTH, 2.5, COLORS.emerald500);
-    drawText("MONBUDGET — RAPPORT FINANCIER MENSUEL (SUITE)", MARGIN_X + 10, cursorY + 17, {
+    cursorY = 30;
+    // Bandeau d'en-tête aéré sur les pages suivantes
+    drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, 32, COLORS.navy);
+    drawRect(MARGIN_X, cursorY + 32, CONTENT_WIDTH, 3, COLORS.emerald500);
+    drawText("MONBUDGET  —  RAPPORT FINANCIER MENSUEL", MARGIN_X + 14, cursorY + 20, {
       font: "F2",
-      size: 10,
+      size: 10.5,
       color: COLORS.white,
     });
-    drawText(`Période : ${monthLabel}`, MARGIN_X + CONTENT_WIDTH - 10, cursorY + 17, {
+    drawText(`Période : ${monthLabel}`, MARGIN_X + CONTENT_WIDTH - 14, cursorY + 20, {
       font: "F2",
-      size: 9.5,
+      size: 10,
       color: COLORS.sky200,
       align: "right",
     });
-    cursorY += 40;
+    cursorY += 52;
   };
 
   const ensureSpace = (neededHeight: number) => {
@@ -849,32 +857,37 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
   };
 
   const drawSectionHeading = (title: string, subtitle?: string) => {
-    ensureSpace(subtitle ? 38 : 28);
-    drawRect(MARGIN_X, cursorY, 4, subtitle ? 24 : 16, COLORS.navy);
-    drawText(title.toUpperCase(), MARGIN_X + 10, cursorY + 12, {
+    // Exige au moins 115pt pour que le titre ET le début de son tableau ne soient jamais coupés en bas de page
+    ensureSpace(115);
+    drawRect(MARGIN_X, cursorY, 4.5, subtitle ? 28 : 18, COLORS.navy);
+    drawText(title.toUpperCase(), MARGIN_X + 12, cursorY + 13, {
       font: "F2",
-      size: 10.5,
+      size: 11,
       color: COLORS.navy,
     });
     if (subtitle) {
-      drawText(subtitle, MARGIN_X + 10, cursorY + 23, {
+      drawText(subtitle, MARGIN_X + 12, cursorY + 25, {
         font: "F1",
-        size: 8.2,
+        size: 8.5,
         color: COLORS.slate500,
       });
-      cursorY += 30;
+      cursorY += 36;
     } else {
-      cursorY += 21;
+      cursorY += 26;
     }
   };
 
   const drawTable = (
     columns: TableColumnSpec[],
     bodyRows: TableCellSpec[][],
-    footerRows?: { cells: TableCellSpec[]; bg?: RgbColor }[]
+    options?: {
+      footerRows?: { cells: TableCellSpec[]; bg?: RgbColor }[];
+      spanFooterRows?: TableSpanFooterRow[];
+    }
   ) => {
-    const headerH = 21;
-    const rowH = 18.5;
+    const headerH = 26;
+    const rowH = 24;
+    const footerH = 25;
 
     const renderTableHeader = () => {
       drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, headerH, COLORS.navy, COLORS.navy, 0.5);
@@ -883,23 +896,23 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
         const align = col.align || "left";
         const textX =
           align === "right"
-            ? colX + col.width - 6
+            ? colX + col.width - 8
             : align === "center"
               ? colX + col.width / 2
-              : colX + 6;
-        drawText(col.header, textX, cursorY + 14, {
+              : colX + 8;
+        drawText(col.header, textX, cursorY + 17, {
           font: "F2",
-          size: 8.3,
+          size: 8.6,
           color: COLORS.white,
           align,
-          maxWidth: col.width - 12,
+          maxWidth: col.width - 16,
         });
         colX += col.width;
       }
       cursorY += headerH;
     };
 
-    ensureSpace(headerH + rowH * Math.min(2, Math.max(1, bodyRows.length)));
+    ensureSpace(headerH + rowH * Math.min(2, Math.max(1, bodyRows.length)) + 16);
     renderTableHeader();
 
     bodyRows.forEach((row, rIdx) => {
@@ -908,7 +921,7 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
         renderTableHeader();
       }
       const bg = rIdx % 2 === 1 ? COLORS.slate50 : COLORS.white;
-      drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, rowH, bg, COLORS.slate200, 0.4);
+      drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, rowH, bg, COLORS.slate200, 0.45);
 
       let colX = MARGIN_X;
       row.forEach((cell, cIdx) => {
@@ -917,30 +930,65 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
         const align = col.align || "left";
         const textX =
           align === "right"
-            ? colX + col.width - 6
+            ? colX + col.width - 8
             : align === "center"
               ? colX + col.width / 2
-              : colX + 6;
-        drawText(cell.text, textX, cursorY + 12.5, {
+              : colX + 8;
+        drawText(cell.text, textX, cursorY + 15.5, {
           font: cell.bold ? "F2" : "F1",
-          size: 8.3,
+          size: 8.6,
           color: cell.color || COLORS.navyDark,
           align,
-          maxWidth: col.width - 12,
+          maxWidth: col.width - 16,
         });
         colX += col.width;
       });
       cursorY += rowH;
     });
 
-    if (footerRows && footerRows.length > 0) {
-      for (const fRow of footerRows) {
-        if (cursorY + rowH + 2 > PAGE_HEIGHT - MARGIN_BOTTOM) {
+    // Lignes de totaux fusionnées (sans aucune troncature "...")
+    if (options?.spanFooterRows && options.spanFooterRows.length > 0) {
+      for (const sRow of options.spanFooterRows) {
+        if (cursorY + footerH > PAGE_HEIGHT - MARGIN_BOTTOM) {
+          startNewPage();
+          renderTableHeader();
+        }
+        const fBg = sRow.bg || COLORS.slate100;
+        drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, footerH, fBg, COLORS.slate300, 0.6);
+
+        const combinedLeft = sRow.leftSubLabel
+          ? `${sRow.leftLabel}  —  ${sRow.leftSubLabel}`
+          : sRow.leftLabel;
+
+        drawText(combinedLeft, MARGIN_X + 10, cursorY + 16, {
+          font: "F2",
+          size: 8.8,
+          color: sRow.leftColor || COLORS.navy,
+          align: "left",
+          maxWidth: CONTENT_WIDTH - 145,
+        });
+
+        drawText(sRow.rightValue, MARGIN_X + CONTENT_WIDTH - 8, cursorY + 16, {
+          font: "F2",
+          size: 9.4,
+          color: sRow.rightColor || COLORS.navy,
+          align: "right",
+          maxWidth: 130,
+        });
+
+        cursorY += footerH;
+      }
+    }
+
+    // Lignes de totaux multi-colonnes classiques
+    if (options?.footerRows && options.footerRows.length > 0) {
+      for (const fRow of options.footerRows) {
+        if (cursorY + footerH > PAGE_HEIGHT - MARGIN_BOTTOM) {
           startNewPage();
           renderTableHeader();
         }
         const fBg = fRow.bg || COLORS.slate100;
-        drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, rowH + 1.5, fBg, COLORS.slate300, 0.6);
+        drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, footerH, fBg, COLORS.slate300, 0.6);
         let colX = MARGIN_X;
         fRow.cells.forEach((cell, cIdx) => {
           const col = columns[cIdx];
@@ -948,98 +996,105 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
           const align = col.align || "left";
           const textX =
             align === "right"
-              ? colX + col.width - 6
+              ? colX + col.width - 8
               : align === "center"
                 ? colX + col.width / 2
-                : colX + 6;
-          drawText(cell.text, textX, cursorY + 13, {
+                : colX + 8;
+          drawText(cell.text, textX, cursorY + 16, {
             font: cell.bold !== false ? "F2" : "F1",
-            size: 8.6,
+            size: 8.8,
             color: cell.color || COLORS.navy,
             align,
-            maxWidth: col.width - 12,
+            maxWidth: col.width - 16,
           });
           colX += col.width;
         });
-        cursorY += rowH + 1.5;
+        cursorY += footerH;
       }
     }
 
-    cursorY += 12;
+    cursorY += 24;
   };
 
   // ==========================================================================
-  // 1. BANDEAU D'EN-TÊTE OFFICIEL MONBUDGET (PAGE 1)
+  // 1. BANDEAU D'EN-TÊTE OFFICIEL MONBUDGET (PAGE 1 — SPACIEUX ET SANS CHEVAUCHEMENT)
   // ==========================================================================
-  const headerBannerH = 62;
+  const headerBannerH = 78;
   drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, headerBannerH, COLORS.navy);
-  drawRect(MARGIN_X, cursorY + headerBannerH, CONTENT_WIDTH, 3.5, COLORS.emerald500);
+  drawRect(MARGIN_X, cursorY + headerBannerH, CONTENT_WIDTH, 4, COLORS.emerald500);
 
-  drawText("MONBUDGET — RAPPORT FINANCIER MENSUEL", MARGIN_X + 14, cursorY + 22, {
+  // Colonne gauche du bandeau
+  drawText("MONBUDGET", MARGIN_X + 18, cursorY + 25, {
     font: "F2",
-    size: 14.5,
+    size: 17,
     color: COLORS.white,
   });
-  drawText(`Période officielle : ${monthLabel}`, MARGIN_X + 14, cursorY + 38, {
-    font: "F2",
-    size: 10,
-    color: COLORS.sky200,
-  });
   drawText(
-    "Bilan complet : Salaire, Revenus supplémentaires, Enveloppes budgétaires, Épargne & Transactions",
-    MARGIN_X + 14,
-    cursorY + 52,
+    `Rapport Financier Mensuel  •  ${monthLabel}`,
+    MARGIN_X + 18,
+    cursorY + 45,
+    {
+      font: "F2",
+      size: 11,
+      color: COLORS.sky200,
+    }
+  );
+  drawText(
+    "Bilan complet : Salaire, Revenus supplémentaires, Enveloppes, Épargne & Transactions",
+    MARGIN_X + 18,
+    cursorY + 63,
     {
       font: "F1",
-      size: 8,
+      size: 8.3,
       color: COLORS.slate200,
     }
   );
 
-  // Badge Score Santé IA & métadonnées à droite
-  const rightEdge = MARGIN_X + CONTENT_WIDTH - 14;
+  // Colonne droite du bandeau (bien séparée de la gauche)
+  const rightEdge = MARGIN_X + CONTENT_WIDTH - 18;
   drawText(
     `Score Santé IA : ${aiAnalysis.healthScore}/100 (${aiAnalysis.healthLabel})`,
     rightEdge,
-    cursorY + 22,
+    cursorY + 25,
     {
       font: "F2",
-      size: 9.5,
-      color: COLORS.emerald500,
+      size: 10,
+      color: COLORS.emerald300,
       align: "right",
     }
   );
   drawText(
     `Édité le ${new Date().toLocaleDateString("fr-FR")}`,
     rightEdge,
-    cursorY + 38,
+    cursorY + 45,
     {
       font: "F1",
-      size: 8.5,
+      size: 8.8,
       color: COLORS.slate200,
       align: "right",
     }
   );
-  drawText(`Devise : ${currency}`, rightEdge, cursorY + 52, {
+  drawText(`Devise officielle : ${currency}`, rightEdge, cursorY + 63, {
     font: "F2",
-    size: 8.5,
+    size: 8.8,
     color: COLORS.white,
     align: "right",
   });
 
-  cursorY += headerBannerH + 16;
+  cursorY += headerBannerH + 26;
 
   // ==========================================================================
-  // 2. SECTION A : GRILLE DES 6 CARTES KPI (2 LIGNES x 3 COLONNES)
+  // 2. SECTION A : GRILLE DES 6 CARTES KPI (2 LIGNES x 3 COLONNES — BIEN AÉRÉE)
   // ==========================================================================
   drawSectionHeading(
     "A. Synthèse Financière & Revenu Réel du Mois",
     "Vue d'ensemble de votre revenu réel (salaire + suppléments), de vos dépenses et de votre solde en caisse"
   );
 
-  const cardGap = 9;
-  const cardW = (CONTENT_WIDTH - cardGap * 2) / 3; // ~171.09 pt
-  const cardH = 56;
+  const cardGapX = 12;
+  const cardGapY = 12;
+  const cardW = (CONTENT_WIDTH - cardGapX * 2) / 3; // ~167.76 pt
+  const cardH = 68;
 
   const kpiCards: {
     label: string;
@@ -1106,90 +1161,96 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
     const rowTop = cursorY;
     for (let col = 0; col < 3; col++) {
       const card = kpiCards[row * 3 + col];
-      const cx = MARGIN_X + col * (cardW + cardGap);
-      drawRect(cx, rowTop, cardW, cardH, COLORS.slate50, COLORS.slate300, 0.6);
-      drawRect(cx, rowTop, cardW, 3.2, card.accentColor);
+      const cx = MARGIN_X + col * (cardW + cardGapX);
+      drawRect(cx, rowTop, cardW, cardH, COLORS.slate50, COLORS.slate300, 0.65);
+      drawRect(cx, rowTop, cardW, 3.8, card.accentColor);
 
-      drawText(card.label, cx + 8, rowTop + 14, {
+      drawText(card.label, cx + 11, rowTop + 17, {
         font: "F2",
-        size: 7.5,
+        size: 7.8,
         color: COLORS.slate500,
-        maxWidth: cardW - 16,
+        maxWidth: cardW - 22,
       });
-      drawText(card.value, cx + 8, rowTop + 29, {
+      drawText(card.value, cx + 11, rowTop + 35, {
         font: "F2",
-        size: 11.2,
+        size: 11.8,
         color: card.valueColor,
-        maxWidth: cardW - 16,
+        maxWidth: cardW - 22,
       });
-      drawText(card.line1, cx + 8, rowTop + 41, {
+      drawText(card.line1, cx + 11, rowTop + 50, {
         font: "F1",
-        size: 7.5,
+        size: 7.9,
         color: COLORS.slate700,
-        maxWidth: cardW - 16,
+        maxWidth: cardW - 22,
       });
-      drawText(card.line2, cx + 8, rowTop + 51, {
+      drawText(card.line2, cx + 11, rowTop + 61, {
         font: "F1",
-        size: 7.3,
+        size: 7.6,
         color: COLORS.slate500,
-        maxWidth: cardW - 16,
+        maxWidth: cardW - 22,
       });
     }
-    cursorY += cardH + 8;
+    cursorY += cardH + cardGapY;
   }
 
-  cursorY += 4;
+  cursorY += 12;
 
   // ==========================================================================
-  // 3. ENCADRÉ DIAGNOSTIC DU CONSEILLER FINANCIER IA
+  // 3. ENCADRÉ DIAGNOSTIC DU CONSEILLER FINANCIER IA (MARGES LARGES & RESPIRATION)
   // ==========================================================================
-  const textMaxW = CONTENT_WIDTH - 24;
-  const summaryLines = wrapPdfText(aiAnalysis.summary, textMaxW, 8.3, false);
+  const aiInnerMaxW = CONTENT_WIDTH - 48; // 20pt à gauche + 28pt de marge de sécurité à droite
+  const summaryLines = wrapPdfText(aiAnalysis.summary, aiInnerMaxW, 8.6, false);
   const recBlocks = aiAnalysis.recommendations.slice(0, 3).map((rec) => {
     const fullRec = `• ${rec.title} : ${rec.description}`;
-    return wrapPdfText(fullRec, textMaxW - 6, 8, false);
+    return wrapPdfText(fullRec, aiInnerMaxW - 8, 8.3, false);
   });
   const totalRecLines = recBlocks.reduce((s, b) => s + b.length, 0);
-  const aiBoxH = 24 + summaryLines.length * 11 + totalRecLines * 10.5 + 8;
+  const aiBoxH =
+    32 +
+    summaryLines.length * 13.5 +
+    totalRecLines * 13 +
+    recBlocks.length * 5 +
+    12;
 
-  ensureSpace(aiBoxH + 10);
-  drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, aiBoxH, COLORS.indigo50, COLORS.indigo200, 0.7);
-  drawRect(MARGIN_X, cursorY, 4, aiBoxH, COLORS.indigo600);
+  ensureSpace(aiBoxH + 18);
+  drawRect(MARGIN_X, cursorY, CONTENT_WIDTH, aiBoxH, COLORS.indigo50, COLORS.indigo200, 0.75);
+  drawRect(MARGIN_X, cursorY, 4.5, aiBoxH, COLORS.indigo600);
 
   drawText(
     `DIAGNOSTIC DU CONSEILLER FINANCIER IA (${aiAnalysis.healthScore}/100 — ${aiAnalysis.healthLabel})`,
-    MARGIN_X + 12,
-    cursorY + 14,
+    MARGIN_X + 18,
+    cursorY + 19,
     {
       font: "F2",
-      size: 9,
+      size: 9.5,
       color: COLORS.indigo900,
     }
   );
 
-  let aiLineY = cursorY + 26;
+  let aiLineY = cursorY + 36;
   for (const line of summaryLines) {
-    drawText(line, MARGIN_X + 12, aiLineY, {
+    drawText(line, MARGIN_X + 18, aiLineY, {
       font: "F1",
-      size: 8.3,
+      size: 8.6,
       color: COLORS.navyDark,
     });
-    aiLineY += 11;
+    aiLineY += 13.5;
   }
 
-  aiLineY += 2;
+  aiLineY += 4;
   for (const block of recBlocks) {
     block.forEach((line, idx) => {
-      drawText(line, MARGIN_X + (idx === 0 ? 14 : 20), aiLineY, {
+      drawText(line, MARGIN_X + (idx === 0 ? 20 : 28), aiLineY, {
         font: idx === 0 ? "F2" : "F1",
-        size: 7.9,
+        size: 8.3,
         color: COLORS.slate700,
       });
-      aiLineY += 10.5;
+      aiLineY += 13;
     });
+    aiLineY += 5;
   }
 
-  cursorY += aiBoxH + 14;
+  cursorY += aiBoxH + 26;
 
   // ==========================================================================
   // 4. SECTION B : DÉTAIL COMPLET DES SOURCES DE REVENUS
@@ -1201,8 +1262,8 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
 
   const incomeCols: TableColumnSpec[] = [
     { header: "Origine", width: 120, align: "left" },
-    { header: "Catégorie / Source", width: 100, align: "left" },
-    { header: "Libellé", width: 141.28, align: "left" },
+    { header: "Catégorie / Source", width: 112, align: "left" },
+    { header: "Libellé", width: 125.28, align: "left" },
     { header: "Date", width: 65, align: "center" },
     { header: `Montant (${currency})`, width: 105, align: "right" },
   ];
@@ -1234,42 +1295,42 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
           ],
         ];
 
-  drawTable(incomeCols, incomeRows, [
-    {
-      cells: [
-        { text: "SOUS-TOTAL 1", color: COLORS.slate700 },
-        { text: "Salaire & Sources fixes", color: COLORS.slate700 },
-        { text: `${incomeBreakdown.declaredItems.length} source(s) déclarée(s)`, color: COLORS.slate500 },
-        { text: "-" },
-        { text: formatMoney(incomeBreakdown.baseSalaryTotal, currency), color: COLORS.navyDark },
-      ],
-      bg: COLORS.slate50,
-    },
-    {
-      cells: [
-        { text: "SOUS-TOTAL 2", color: COLORS.emerald600 },
-        { text: "Revenus supplémentaires", color: COLORS.emerald600 },
-        { text: `${incomeBreakdown.transactionItems.length} entrée(s) additionnelle(s)`, color: COLORS.slate500 },
-        { text: "-" },
-        { text: `+${formatMoney(incomeBreakdown.additionalIncomeTotal, currency)}`, color: COLORS.emerald600 },
-      ],
-      bg: COLORS.slate50,
-    },
-    {
-      cells: [
-        { text: "TOTAL REVENU RÉEL", color: COLORS.navy },
-        { text: "Salaire + Suppléments", color: COLORS.navy },
-        { text: "Revenu total disponible pour le mois", color: COLORS.slate700 },
-        { text: monthLabel, color: COLORS.slate700 },
-        { text: formatMoney(realIncome, currency), color: COLORS.emerald600 },
-      ],
-      bg: COLORS.emerald50,
-    },
-  ]);
+  drawTable(incomeCols, incomeRows, {
+    spanFooterRows: [
+      {
+        leftLabel: "SOUS-TOTAL 1",
+        leftSubLabel: `Salaire & Sources fixes déclarées (${incomeBreakdown.declaredItems.length} source(s))`,
+        rightValue: formatMoney(incomeBreakdown.baseSalaryTotal, currency),
+        leftColor: COLORS.slate700,
+        rightColor: COLORS.navyDark,
+        bg: COLORS.slate50,
+      },
+      {
+        leftLabel: "SOUS-TOTAL 2",
+        leftSubLabel: `Revenus supplémentaires saisis en transactions (${incomeBreakdown.transactionItems.length} entrée(s))`,
+        rightValue: `+${formatMoney(incomeBreakdown.additionalIncomeTotal, currency)}`,
+        leftColor: COLORS.emerald600,
+        rightColor: COLORS.emerald600,
+        bg: COLORS.slate50,
+      },
+      {
+        leftLabel: `TOTAL REVENU RÉEL DU MOIS (${monthLabel})`,
+        leftSubLabel: "Salaire + Revenus supplémentaires",
+        rightValue: formatMoney(realIncome, currency),
+        leftColor: COLORS.navy,
+        rightColor: COLORS.emerald600,
+        bg: COLORS.emerald50,
+      },
+    ],
+  });
 
   // ==========================================================================
-  // 5. SECTION C : PERFORMANCE DES ENVELOPPES BUDGÉTAIRES
+  // 5. SECTION C : PERFORMANCE DES ENVELOPPES BUDGÉTAIRES (NOUVELLE PAGE SI PAGE 1)
   // ==========================================================================
+  if (currentPageIdx === 0) {
+    startNewPage();
+  }
+
   drawSectionHeading(
     "C. Suivi & Performance des Enveloppes Budgétaires",
     "Comparaison par catégorie entre le budget alloué, les dépenses réelles et le solde disponible"
@@ -1277,10 +1338,10 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
 
   const catCols: TableColumnSpec[] = [
     { header: "Catégorie / Enveloppe", width: 150, align: "left" },
-    { header: "Budget Alloué", width: 95, align: "right" },
-    { header: "Dépensé Réel", width: 95, align: "right" },
-    { header: "Reste Disponible", width: 95, align: "right" },
-    { header: "Consommation", width: 96.28, align: "right" },
+    { header: "Budget Alloué", width: 94, align: "right" },
+    { header: "Dépensé Réel", width: 94, align: "right" },
+    { header: "Reste Disponible", width: 94, align: "right" },
+    { header: "Consommation", width: 95.28, align: "right" },
   ];
 
   let totalAllocatedSum = 0;
@@ -1317,20 +1378,22 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
   const totalCatPct =
     totalAllocatedSum > 0 ? Math.round((totalCatSpentSum / totalAllocatedSum) * 100) : 0;
 
-  drawTable(catCols, catRows, [
-    {
-      cells: [
-        { text: "TOTAL DES ENVELOPPES", color: COLORS.navy },
-        { text: formatMoney(totalAllocatedSum, currency), color: COLORS.navy },
-        { text: formatMoney(totalCatSpentSum, currency), color: COLORS.navyDark },
-        {
-          text: formatMoney(totalCatDiff, currency),
-          color: totalCatDiff < 0 ? COLORS.red600 : COLORS.emerald600,
-        },
-        { text: `${totalCatPct}% consommé`, color: COLORS.navy },
-      ],
-    },
-  ]);
+  drawTable(catCols, catRows, {
+    footerRows: [
+      {
+        cells: [
+          { text: "TOTAL DES ENVELOPPES", color: COLORS.navy },
+          { text: formatMoney(totalAllocatedSum, currency), color: COLORS.navy },
+          { text: formatMoney(totalCatSpentSum, currency), color: COLORS.navyDark },
+          {
+            text: formatMoney(totalCatDiff, currency),
+            color: totalCatDiff < 0 ? COLORS.red600 : COLORS.emerald600,
+          },
+          { text: `${totalCatPct}% consommé`, color: COLORS.navy },
+        ],
+      },
+    ],
+  });
 
   // ==========================================================================
   // 6. SECTION D : OBJECTIFS D'ÉPARGNE
@@ -1342,10 +1405,10 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
 
   const savCols: TableColumnSpec[] = [
     { header: "Objectif d'Épargne", width: 165, align: "left" },
-    { header: "Montant Cible", width: 95, align: "right" },
-    { header: "Épargne Constituée", width: 95, align: "right" },
-    { header: "Reste à Épargner", width: 95, align: "right" },
-    { header: "Progression", width: 81.28, align: "right" },
+    { header: "Montant Cible", width: 94, align: "right" },
+    { header: "Épargne Constituée", width: 94, align: "right" },
+    { header: "Reste à Épargner", width: 94, align: "right" },
+    { header: "Progression", width: 80.28, align: "right" },
   ];
 
   const savRows: TableCellSpec[][] =
@@ -1385,11 +1448,11 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
 
   const debtCols: TableColumnSpec[] = [
     { header: "Nature", width: 105, align: "left" },
-    { header: "Personne / Tiers", width: 125, align: "left" },
+    { header: "Personne / Tiers", width: 122, align: "left" },
     { header: "Montant Initial", width: 90, align: "right" },
     { header: "Reste Actuel", width: 90, align: "right" },
     { header: "Échéance", width: 65, align: "center" },
-    { header: "Statut", width: 56.28, align: "right" },
+    { header: "Statut", width: 55.28, align: "right" },
   ];
 
   const debtRows: TableCellSpec[][] =
@@ -1439,7 +1502,7 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
     { header: "Date", width: 68, align: "center" },
     { header: "Type", width: 98, align: "left" },
     { header: "Catégorie", width: 105, align: "left" },
-    { header: "Libellé de l'opération", width: 155, align: "left" },
+    { header: "Libellé de l'opération", width: 151, align: "left" },
     { header: `Montant (${currency})`, width: 105.28, align: "right" },
   ];
 
@@ -1484,25 +1547,25 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
   const totalPages = pages.length;
   for (let p = 0; p < totalPages; p++) {
     currentPageIdx = p;
-    const footerLineY = PAGE_HEIGHT - 28;
+    const footerLineY = PAGE_HEIGHT - 32;
     drawLine(MARGIN_X, footerLineY, MARGIN_X + CONTENT_WIDTH, footerLineY, COLORS.slate300, 0.5);
     drawText(
       "MonBudget — Application de Gestion Budgétaire & Épargne",
       MARGIN_X,
-      footerLineY + 12,
+      footerLineY + 14,
       {
         font: "F3",
-        size: 7.8,
+        size: 8,
         color: COLORS.slate500,
       }
     );
     drawText(
       `Rapport Financier Officiel • ${monthLabel}`,
       MARGIN_X + CONTENT_WIDTH / 2,
-      footerLineY + 12,
+      footerLineY + 14,
       {
         font: "F1",
-        size: 7.8,
+        size: 8,
         color: COLORS.slate500,
         align: "center",
       }
@@ -1510,10 +1573,10 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
     drawText(
       `Page ${p + 1} / ${totalPages}`,
       MARGIN_X + CONTENT_WIDTH,
-      footerLineY + 12,
+      footerLineY + 14,
       {
         font: "F2",
-        size: 8,
+        size: 8.5,
         color: COLORS.navy,
         align: "right",
       }
@@ -1523,14 +1586,6 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
   // ==========================================================================
   // 10. ASSEMBLAGE DU FICHIER BINAIRE PDF 1.4 (CATALOG, PAGES, FONTS, XREF)
   // ==========================================================================
-  // Objet 1 : Catalog
-  // Objet 2 : Pages
-  // Objet 3 : Font F1 (Helvetica)
-  // Objet 4 : Font F2 (Helvetica-Bold)
-  // Objet 5 : Font F3 (Helvetica-Oblique)
-  // Pour chaque page i (0..totalPages-1) :
-  //   Objet (6 + i*2) : Page
-  //   Objet (7 + i*2) : Content Stream
   const objects: string[] = [];
   const pageObjNumbers: number[] = [];
 
