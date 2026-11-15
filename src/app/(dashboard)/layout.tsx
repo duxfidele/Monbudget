@@ -3,7 +3,7 @@ import { Header } from "@/components/layout/header";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { MobileSidebar } from "@/components/layout/mobile-sidebar";
 import { StoreInitializer } from "@/components/store-initializer";
-import { WhatsAppFloatButton } from "@/components/common/whatsapp-button";
+import { HelpChatWidget } from "@/components/common/help-chat-widget";
 import { TrialChoiceModal } from "@/components/payments/trial-choice-modal";
 import { UpdateNotificationBanner } from "@/components/pwa/update-notification-banner";
 
@@ -30,7 +30,7 @@ export default function DashboardLayout({
         <div className="p-3 sm:p-4 md:p-6 lg:p-8 pb-32 lg:pb-8 flex-1 min-w-0">{children}</div>
       </main>
       <BottomNav />
-      <WhatsAppFloatButton phoneNumber="22898376101" />
+      <HelpChatWidget phoneNumber="22898376101" />
       <TrialChoiceModal />
       <StoreInitializer />
     </div>

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { WhatsAppFloatButton } from "@/components/common/whatsapp-button";
+import { HelpChatWidget } from "@/components/common/help-chat-widget";
 
 export const metadata: Metadata = {
   title: "MonBudget — Prenez le contrôle de votre argent | Gestion de budget & finances",
@@ -34,7 +34,7 @@ export default function MarketingLayout({
   return (
     <div className="min-h-screen bg-[#071324] text-white selection:bg-sky-500 selection:text-slate-950">
       {children}
-      <WhatsAppFloatButton phoneNumber="22898376101" />
+      <HelpChatWidget phoneNumber="22898376101" />
     </div>
   );
 }
