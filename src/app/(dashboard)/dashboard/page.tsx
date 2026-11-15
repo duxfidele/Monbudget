@@ -25,6 +25,8 @@ import {
   Lock,
   Clock,
   Crown,
+  Briefcase,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuickAddTransactionDialog } from "@/components/transactions/quick-add-transaction-dialog";
@@ -49,6 +51,11 @@ import {
   getTotalPayableDebts,
   getTotalReceivableDebts,
   getDebtAlerts,
+  getTotalInvestedCapital,
+  getTotalInvestmentReturns,
+  getPortfolioROI,
+  getMonthlyInvestedCapital,
+  getMonthlyInvestmentReturns,
   generateFinancialAIAnalysis
 } from "@/lib/utils/budget-calc";
 
@@ -61,6 +68,7 @@ export default function DashboardPage() {
     transactions,
     savingsGoals,
     debts,
+    investments,
     currency,
     payDay,
     notifications,
@@ -89,6 +97,8 @@ export default function DashboardPage() {
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "savings");
   const canViewDebts =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "debts");
+  const canViewInvestments =
+    isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "investments");
   const canExportReports =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "reports");
   const canAccessAdvisor =
@@ -97,6 +107,7 @@ export default function DashboardPage() {
   const showBudgetSection = !subscriptionHydrated || canUseBudgetTools;
   const showSavingsSection = !subscriptionHydrated || canViewSavings;
   const showDebtsSection = !subscriptionHydrated || canViewDebts;
+  const showInvestmentsSection = !subscriptionHydrated || canViewInvestments;
   const showReportsUnlocked = !subscriptionHydrated || canExportReports;
   const showAdvisorSection = !subscriptionHydrated || canAccessAdvisor;
 
@@ -128,6 +139,21 @@ export default function DashboardPage() {
   const dettesARecuperer = getTotalReceivableDebts(debts);
   const debtAlerts = getDebtAlerts(debts, new Date(), 7, currency);
 
+  // Portefeuille d'Investissements & Rendements
+  const capitalInvestiTotal = getTotalInvestedCapital(investments || []);
+  const gainsInvestissementTotal = getTotalInvestmentReturns(investments || []);
+  const roiPortefeuille = getPortfolioROI(investments || []);
+  const investiMois = getMonthlyInvestedCapital(
+    investments || [],
+    activeMonth.year,
+    activeMonth.month
+  );
+  const gainsMois = getMonthlyInvestmentReturns(
+    investments || [],
+    activeMonth.year,
+    activeMonth.month
+  );
+
   // Intelligence Artificielle Financière (Pilier F)
   const aiAnalysis = generateFinancialAIAnalysis({
     income,
@@ -136,6 +162,7 @@ export default function DashboardPage() {
     transactions,
     savingsGoals,
     debts,
+    investments,
     monthlySavings: epargneMois,
     currency,
     payDay: payDay || 28,
@@ -199,6 +226,7 @@ export default function DashboardPage() {
       transactions,
       savingsGoals,
       debts,
+      investments,
     });
     toast.success(`Rapport PDF (${capitalizedMonth}) généré !`);
   };
@@ -231,6 +259,7 @@ export default function DashboardPage() {
       transactions,
       savingsGoals,
       debts,
+      investments,
     });
     toast.success(`Rapport Excel / CSV (${capitalizedMonth}) téléchargé !`);
   };
@@ -848,6 +877,92 @@ export default function DashboardPage() {
         </Card>
         )}
       </div>
+
+      {/* Portefeuille d'Investissements & Rendements (ROI) */}
+      {showInvestmentsSection ? (
+        <Card className="border border-indigo-200/80 dark:border-indigo-900/50 shadow-xs bg-gradient-to-r from-indigo-50/70 via-white to-emerald-50/60 dark:from-indigo-950/30 dark:via-slate-900 dark:to-emerald-950/20 rounded-2xl overflow-hidden">
+          <CardContent className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 shrink-0">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-slate-100">
+                    Portefeuille d&apos;Investissements &amp; Rendements
+                  </h3>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300">
+                    <TrendingUp className="h-3 w-3" />
+                    ROI : {roiPortefeuille > 0 ? `+${roiPortefeuille}%` : `${roiPortefeuille}%`}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Synchronisé en temps réel avec Mon Budget (enveloppe Investissement) et vos Revenus du mois.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 lg:min-w-[440px]">
+              <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block">
+                  Capital Total Investi
+                </span>
+                <strong suppressHydrationWarning className="text-sm sm:text-base font-extrabold text-indigo-900 dark:text-indigo-300 block truncate">
+                  {formatMoney(capitalInvestiTotal, currency)}
+                </strong>
+                <span className="text-[10px] text-slate-400 block truncate">
+                  Ce mois : {formatMoney(investiMois, currency)}
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block">
+                  Gains / Rendements
+                </span>
+                <strong suppressHydrationWarning className="text-sm sm:text-base font-extrabold text-emerald-600 dark:text-emerald-400 block truncate">
+                  +{formatMoney(gainsInvestissementTotal, currency)}
+                </strong>
+                <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 block truncate">
+                  Ce mois : +{formatMoney(gainsMois, currency)}
+                </span>
+              </div>
+
+              <div className="col-span-2 sm:col-span-1 flex items-center justify-end">
+                <Link href="/investments" className="w-full">
+                  <Button className="w-full bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold h-10 rounded-xl gap-1.5">
+                    <span>Piloter mes actifs</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card
+          onClick={() => promptUnlockPersonal("Portefeuille d'Investissements & ROI")}
+          className="border border-amber-200/80 dark:border-amber-900/50 shadow-xs bg-slate-50/90 dark:bg-slate-900/70 rounded-2xl overflow-hidden cursor-pointer hover:border-amber-400 transition-colors"
+        >
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 shrink-0">
+                <Lock className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100">
+                  Portefeuille d&apos;Investissements &amp; Suivi des Rendements (ROI) cadenassé
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Disponible pendant les 30 jours d&apos;essai et avec l&apos;abonnement Particulier (500 FCFA/mois).
+                </p>
+              </div>
+            </div>
+            <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold rounded-xl shrink-0">
+              Débloquer (500 FCFA/mois) &rarr;
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 7. Progression des Objectifs Financiers & Intelligence Artificielle Financière (Piliers A, D, F) */}
       <div className="grid gap-6 lg:grid-cols-7">

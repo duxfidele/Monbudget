@@ -6,9 +6,14 @@ import {
   getMonthlySavingsContributions,
   getTotalPayableDebts,
   getTotalReceivableDebts,
+  getTotalInvestedCapital,
+  getTotalInvestmentReturns,
+  getInvestmentROI,
+  getPortfolioROI,
   isIncomeTransaction,
   generateFinancialAIAnalysis,
   type DebtItem,
+  type InvestmentItem,
 } from "@/lib/utils/budget-calc";
 import { escapeCsvCell } from "@/lib/utils/security";
 import type { Category, Transaction, SavingsGoal, IncomeSourceEntry } from "@/lib/store/ui-store";
@@ -24,6 +29,7 @@ export interface ReportExportPayload {
   transactions: Transaction[];
   savingsGoals: SavingsGoal[];
   debts: DebtItem[];
+  investments?: InvestmentItem[];
 }
 
 export interface UnifiedIncomeItem {
@@ -150,6 +156,7 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
     transactions,
     savingsGoals,
     debts,
+    investments = [],
   } = payload;
 
   const incomeBreakdown = buildUnifiedIncomeBreakdown(income, incomeEntries, transactions);
@@ -161,6 +168,9 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
   const remaining = getRemainingToLive(realIncome, totalExpenses);
   const payableDebts = getTotalPayableDebts(debts);
   const receivableDebts = getTotalReceivableDebts(debts);
+  const totalInvested = getTotalInvestedCapital(investments);
+  const totalReturns = getTotalInvestmentReturns(investments);
+  const portfolioRoi = getPortfolioROI(investments);
 
   const aiAnalysis = generateFinancialAIAnalysis({
     income: realIncome,
@@ -169,6 +179,7 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
     transactions,
     savingsGoals,
     debts,
+    investments,
     monthlySavings,
     currency,
   });
@@ -267,6 +278,14 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
     "-",
     "Créances totales à encaisser",
     receivableDebts > 0 ? "À recouvrer" : "Aucune créance",
+  ]);
+  rows.push([
+    "Portefeuille d'Investissements (Capital Investi)",
+    String(Math.round(totalInvested)),
+    formatMoney(totalInvested, currency),
+    `ROI : ${portfolioRoi}%`,
+    `Rendements encaissés : +${formatMoney(totalReturns, currency)} (${investments.length} actif(s))`,
+    totalInvested > 0 ? "Portefeuille actif" : "Aucun investissement",
   ]);
   rows.push([
     "Score de Santé Financière (IA)",
@@ -443,6 +462,33 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
     }
   } else {
     rows.push(["Aucune dette ou créance enregistrée", "-", "0", "0", "-", "-"]);
+  }
+  rows.push([]);
+
+  // 5b. PORTEFEUILLE D'INVESTISSEMENTS & RENDEMENTS
+  rows.push(["5b. PORTEFEUILLE D'INVESTISSEMENTS & RENDEMENTS (ROI)", "", "", "", "", ""]);
+  rows.push([
+    "Nom de l'investissement",
+    "Catégorie",
+    `Capital Investi (${currency})`,
+    `Gains Encaissés (${currency})`,
+    "Rentabilité (ROI %)",
+    "Statut",
+  ]);
+  if (investments.length > 0) {
+    for (const inv of investments) {
+      const roi = getInvestmentROI(inv);
+      rows.push([
+        inv.name,
+        inv.category,
+        String(Math.round(inv.investedAmount)),
+        String(Math.round(inv.totalReturns)),
+        `${roi}%`,
+        inv.status === "completed" ? "Clôturé" : "En cours",
+      ]);
+    }
+  } else {
+    rows.push(["Aucun investissement enregistré", "-", "0", "0", "0%", "-"]);
   }
   rows.push([]);
 
@@ -728,6 +774,7 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
     transactions,
     savingsGoals,
     debts,
+    investments = [],
   } = payload;
 
   const incomeBreakdown = buildUnifiedIncomeBreakdown(income, incomeEntries, transactions);
@@ -751,6 +798,7 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
     transactions,
     savingsGoals,
     debts,
+    investments,
     monthlySavings,
     currency,
   });
@@ -1489,6 +1537,42 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
         ];
 
   drawTable(debtCols, debtRows);
+
+  if (investments && investments.length > 0) {
+    drawSectionHeading(
+      "E2. Portefeuille d'Investissements & Rendements (ROI)",
+      "Suivi de vos placements en capital et des rendements encaissés"
+    );
+
+    const invCols: TableColumnSpec[] = [
+      { header: "Actif / Projet", width: 155, align: "left" },
+      { header: "Catégorie", width: 105, align: "left" },
+      { header: "Capital Investi", width: 95, align: "right" },
+      { header: "Gains Reçus", width: 95, align: "right" },
+      { header: "ROI (%)", width: 77.28, align: "right" },
+    ];
+
+    const invRows: TableCellSpec[][] = investments.map((inv) => {
+      const roi = getInvestmentROI(inv);
+      return [
+        { text: inv.name, bold: true },
+        { text: inv.category, color: COLORS.slate700 },
+        { text: formatMoney(inv.investedAmount, currency), color: COLORS.indigo900, bold: true },
+        {
+          text: `+${formatMoney(inv.totalReturns, currency)}`,
+          color: COLORS.emerald600,
+          bold: true,
+        },
+        {
+          text: `${roi > 0 ? "+" : ""}${roi}%`,
+          color: roi >= 0 ? COLORS.emerald600 : COLORS.red600,
+          bold: true,
+        },
+      ];
+    });
+
+    drawTable(invCols, invRows);
+  }
 
   // ==========================================================================
   // 8. SECTION F : JOURNAL DÉTAILLÉ DES TRANSACTIONS DU MOIS

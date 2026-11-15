@@ -20,6 +20,7 @@ import {
   ArrowRightLeft,
   PiggyBank,
   HandCoins,
+  Briefcase,
   Brain,
   LineChart,
   Settings,
@@ -70,6 +71,13 @@ const routes: Array<{
       href: "/debts",
       color: "text-amber-400",
       feature: "debts",
+    },
+    {
+      label: "Investissements",
+      icon: Briefcase,
+      href: "/investments",
+      color: "text-indigo-400",
+      feature: "investments",
     },
     {
       label: "Conseiller IA",

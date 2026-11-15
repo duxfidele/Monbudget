@@ -121,6 +121,7 @@ export function getPlanCatalog(): Record<SubscriptionPlanId, PlanPricingTier> {
       lockedFeatures: [
         "Pilotage quotidien & Reste à vivre journalier",
         "Objectifs d'épargne & Cagnottes",
+        "Portefeuille d'Investissements & Suivi des Rendements (ROI)",
         "Gestionnaire des Dettes & Créances",
         "Rapports avancés & Exports PDF/CSV",
         "Stockage de reçus & justificatifs de dépenses",
@@ -132,7 +133,7 @@ export function getPlanCatalog(): Record<SubscriptionPlanId, PlanPricingTier> {
       name: "Particulier",
       badge: "Tout inclus (actuel)",
       description:
-        "Débloque 100 % des fonctionnalités actuelles de MonBudget : budget, épargne, dettes, rapports, reçus et IA.",
+        "Débloque 100 % des fonctionnalités actuelles de MonBudget : budget, épargne, investissements, dettes, rapports, reçus et IA.",
       monthlyPriceXof: 500,
       yearlyPriceXof: 5000, // 2 mois offerts (10 x 500 FCFA au lieu de 6 000 FCFA)
       yearlySavingsXof: 1000,
@@ -141,6 +142,7 @@ export function getPlanCatalog(): Record<SubscriptionPlanId, PlanPricingTier> {
         "Tout ce qui est inclus dans le plan Gratuit",
         "Enveloppes budgétaires illimitées & Reste à vivre journalier",
         "Objectifs d'épargne, cagnottes & suivi des versements",
+        "Portefeuille d'Investissements & suivi des gains / ROI",
         "Gestionnaire complet des Dettes & Créances (WhatsApp intégré)",
         "Rapports financiers détaillés & Exports officiels PDF / CSV",
         "Stockage illimité de reçus et justificatifs de dépenses",
@@ -172,6 +174,7 @@ export type ProtectedFeatureKey =
   | "budget"
   | "daily_pilotage"
   | "savings"
+  | "investments"
   | "debts"
   | "reports"
   | "advisor"
@@ -181,6 +184,7 @@ const FEATURE_REQUIRED_PLAN: Record<ProtectedFeatureKey, SubscriptionPlanId> = {
   budget: "free",
   daily_pilotage: "personal",
   savings: "personal",
+  investments: "personal",
   debts: "personal",
   reports: "personal",
   advisor: "personal",

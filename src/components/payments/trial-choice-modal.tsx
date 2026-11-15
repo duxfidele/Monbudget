@@ -221,7 +221,7 @@ export function TrialChoiceModal() {
                     </li>
                     <li className="flex items-start gap-1.5 opacity-70">
                       <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                      <span>Pilotage quotidien, Épargne, Dettes, Rapports, Reçus &amp; IA cadenassés</span>
+                      <span>Pilotage quotidien, Épargne, Dettes, Investissements, Rapports, Reçus &amp; IA cadenassés</span>
                     </li>
                   </ul>
                 </div>
@@ -277,7 +277,7 @@ export function TrialChoiceModal() {
                     <li className="flex items-start gap-1.5">
                       <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                       <span>
-                        100 % des fonctionnalités (Pilotage quotidien, Budget, Épargne, Dettes, Rapports, Reçus &amp; IA)
+                        100 % des fonctionnalités (Pilotage quotidien, Budget, Épargne, Dettes, Investissements, Rapports, Reçus &amp; IA)
                       </span>
                     </li>
                   </ul>

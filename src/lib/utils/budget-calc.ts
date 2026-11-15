@@ -601,6 +601,174 @@ export function getDebtAlerts(
 
 /**
  * ============================================================================
+ * E2. GESTION DU PORTEFEUILLE D'INVESTISSEMENTS & RENDEMENTS (ROI)
+ * ============================================================================
+ */
+export interface InvestmentOperationItem {
+  id: string;
+  type: "capital_outflow" | "return_inflow"; // capital_outflow = capital investi | return_inflow = rendement/gain encaissé
+  amount: number;
+  date: string;
+  notes?: string;
+  linkedTransactionId?: string;
+}
+
+export interface InvestmentItem {
+  id: string;
+  name: string;
+  category: string;
+  targetAmount: number;
+  investedAmount: number;
+  totalReturns: number;
+  expectedReturnPercent: number;
+  startDate?: string;
+  status: "active" | "completed" | "paused";
+  color: string;
+  notes?: string;
+  operations: InvestmentOperationItem[];
+  createdAt?: string;
+}
+
+export const INVESTMENT_CATEGORIES = [
+  "Commerce & Boutique",
+  "Agriculture & Élevage",
+  "Immobilier & Terrain",
+  "Transport & Mobilité",
+  "Actions / BRVM & Placement",
+  "Équipement professionnel",
+  "Autre projet",
+] as const;
+
+export const INVESTMENT_TEMPLATES = [
+  {
+    name: "Stock Boutique / Petit Commerce",
+    category: "Commerce & Boutique",
+    suggestedTarget: 300000,
+    expectedReturnPercent: 25,
+    color: "bg-indigo-600",
+  },
+  {
+    name: "Élevage (Volaille / Bétail) & Agriculture",
+    category: "Agriculture & Élevage",
+    suggestedTarget: 500000,
+    expectedReturnPercent: 30,
+    color: "bg-emerald-600",
+  },
+  {
+    name: "Achat Parcelle / Terrain",
+    category: "Immobilier & Terrain",
+    suggestedTarget: 2500000,
+    expectedReturnPercent: 20,
+    color: "bg-amber-600",
+  },
+  {
+    name: "Moto-Taxi / Tricycle de transport",
+    category: "Transport & Mobilité",
+    suggestedTarget: 750000,
+    expectedReturnPercent: 35,
+    color: "bg-blue-600",
+  },
+  {
+    name: "Actions BRVM / FCP & Placements",
+    category: "Actions / BRVM & Placement",
+    suggestedTarget: 200000,
+    expectedReturnPercent: 12,
+    color: "bg-purple-600",
+  },
+] as const;
+
+/**
+ * Total du capital placé dans tous les projets d'investissement
+ */
+export function getTotalInvestedCapital(investments: InvestmentItem[]): number {
+  if (!investments || !Array.isArray(investments)) return 0;
+  return investments.reduce((sum, inv) => sum + (Number(inv.investedAmount) || 0), 0);
+}
+
+/**
+ * Total des gains / rendements encaissés sur l'ensemble du portefeuille
+ */
+export function getTotalInvestmentReturns(investments: InvestmentItem[]): number {
+  if (!investments || !Array.isArray(investments)) return 0;
+  return investments.reduce((sum, inv) => sum + (Number(inv.totalReturns) || 0), 0);
+}
+
+/**
+ * Calcule le ROI (%) d'un investissement individuel : (Rendements / Capital investi) * 100
+ */
+export function getInvestmentROI(
+  inv: Pick<InvestmentItem, "investedAmount" | "totalReturns">
+): number {
+  const invested = Number(inv.investedAmount) || 0;
+  const returns = Number(inv.totalReturns) || 0;
+  if (invested <= 0) return 0;
+  return Math.round((returns / invested) * 1000) / 10;
+}
+
+/**
+ * Calcule le ROI global (%) du portefeuille d'investissement
+ */
+export function getPortfolioROI(investments: InvestmentItem[]): number {
+  const totalInvested = getTotalInvestedCapital(investments);
+  const totalReturns = getTotalInvestmentReturns(investments);
+  if (totalInvested <= 0) return 0;
+  return Math.round((totalReturns / totalInvested) * 1000) / 10;
+}
+
+/**
+ * Total du capital investi durant un mois spécifique
+ */
+export function getMonthlyInvestedCapital(
+  investments: InvestmentItem[],
+  year: number,
+  month: number
+): number {
+  if (!investments || !Array.isArray(investments)) return 0;
+  let total = 0;
+  for (const inv of investments) {
+    for (const op of inv.operations || []) {
+      if (op.type !== "capital_outflow" || !op.date) continue;
+      const parts = op.date.split("-");
+      if (parts.length >= 2) {
+        const oYear = parseInt(parts[0], 10);
+        const oMonth = parseInt(parts[1], 10);
+        if (oYear === year && oMonth === month) {
+          total += Number(op.amount) || 0;
+        }
+      }
+    }
+  }
+  return total;
+}
+
+/**
+ * Total des rendements d'investissement encaissés durant un mois spécifique
+ */
+export function getMonthlyInvestmentReturns(
+  investments: InvestmentItem[],
+  year: number,
+  month: number
+): number {
+  if (!investments || !Array.isArray(investments)) return 0;
+  let total = 0;
+  for (const inv of investments) {
+    for (const op of inv.operations || []) {
+      if (op.type !== "return_inflow" || !op.date) continue;
+      const parts = op.date.split("-");
+      if (parts.length >= 2) {
+        const oYear = parseInt(parts[0], 10);
+        const oMonth = parseInt(parts[1], 10);
+        if (oYear === year && oMonth === month) {
+          total += Number(op.amount) || 0;
+        }
+      }
+    }
+  }
+  return total;
+}
+
+/**
+ * ============================================================================
  * F. MOTEUR D'INTELLIGENCE ARTIFICIELLE FINANCIÈRE (CONSEILLER MULTI-PAGES)
  * ============================================================================
  */
@@ -669,6 +837,7 @@ export function generateFinancialAIAnalysis({
   transactions,
   savingsGoals,
   debts,
+  investments = [],
   monthlySavings = 0,
   currency = "FCFA",
   currentDate = new Date(),
@@ -680,6 +849,7 @@ export function generateFinancialAIAnalysis({
   transactions: TransactionItem[];
   savingsGoals: { name: string; target: number; current: number; status?: string }[];
   debts: DebtItem[];
+  investments?: InvestmentItem[];
   monthlySavings?: number;
   currency?: string;
   currentDate?: Date;
@@ -693,6 +863,9 @@ export function generateFinancialAIAnalysis({
   const receivableDebts = getTotalReceivableDebts(debts);
   const debtAlerts = getDebtAlerts(debts, currentDate, 7, currency);
   const overBudgetCats = getOverBudgetCategories(categories, transactions, 80);
+  const totalInvested = getTotalInvestedCapital(investments);
+  const totalInvestmentReturns = getTotalInvestmentReturns(investments);
+  const portfolioRoi = getPortfolioROI(investments);
 
   // 1. Métriques temporelles (Jour du mois vs Rythme de sortie d'argent)
   const dayOfMonth = currentDate.getDate();
@@ -966,6 +1139,21 @@ export function generateFinancialAIAnalysis({
         impactAmount: freeMarginAfterEnvelopes,
       });
     }
+  }
+
+  // Constat E : Portefeuille d'investissements & Rendements (ROI)
+  if (totalInvested > 0) {
+    findings.push({
+      id: "finding-investments-portfolio",
+      severity: totalInvestmentReturns > 0 ? "positive" : "info",
+      sourcePages: ["Investissements", "Mon Budget", "Transactions"],
+      title: `Portefeuille d'investissements : ${formatMoney(totalInvested, currency)} engagés (ROI : +${portfolioRoi}%)`,
+      detail:
+        totalInvestmentReturns > 0
+          ? `Vos ${investments.length} projet(s) d'investissement ont déjà généré ${formatMoney(totalInvestmentReturns, currency)} de rendements encaissés et synchronisés avec votre revenu réel.`
+          : `Vous avez engagé ${formatMoney(totalInvested, currency)} dans ${investments.length} projet(s) d'investissement. Pensez à enregistrer chaque gain encaissé pour suivre votre rentabilité réelle.`,
+      impactAmount: totalInvestmentReturns > 0 ? totalInvestmentReturns : totalInvested,
+    });
   }
 
   // ==========================================================================

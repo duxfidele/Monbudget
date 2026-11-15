@@ -16,12 +16,21 @@ import {
   getTotalPayableDebts,
   getTotalReceivableDebts,
   getDebtAlerts,
+  getTotalInvestedCapital,
+  getTotalInvestmentReturns,
+  getInvestmentROI,
+  getPortfolioROI,
+  getMonthlyInvestedCapital,
+  getMonthlyInvestmentReturns,
+  INVESTMENT_CATEGORIES,
+  INVESTMENT_TEMPLATES,
   generateFinancialAIAnalysis,
   INCOME_SOURCES,
   AFRICAN_EXPENSE_CATEGORIES,
   SAVINGS_GOAL_TEMPLATES,
 } from '../src/lib/utils/budget-calc';
 import { deduplicateCategories } from '../src/lib/utils/budget-calc';
+import { canAccessFeature, getSubscriptionCountdownInfo } from '../src/lib/moneriz-plans';
 
 test.describe('Budget Calculation Engine (budget-calc)', () => {
   test('calculates daily budget correctly before payday', () => {
@@ -339,5 +348,102 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
     expect(analysis.findings.some((f) => f.id === "finding-heavy-early-savings")).toBe(true);
     expect(analysis.recommendations.some((r) => r.correctiveActionType === "align_overbudget")).toBe(true);
     expect(analysis.temporal.dailySurvivalQuota).toBeGreaterThan(0);
+  });
+
+  test("calculates investments portfolio capital, returns, ROI and enforces Free plan lock after 30-day trial", () => {
+    expect(INVESTMENT_CATEGORIES.length).toBeGreaterThanOrEqual(7);
+    expect(INVESTMENT_TEMPLATES.length).toBeGreaterThanOrEqual(5);
+
+    const investments = [
+      {
+        id: "inv-1",
+        name: "Commerce de détail",
+        category: "Commerce & Négoce",
+        investedAmount: 200000,
+        targetAmount: 500000,
+        totalReturns: 50000,
+        expectedReturnPercent: 25,
+        startDate: "2026-11-02",
+        status: "active" as const,
+        color: "bg-indigo-600",
+        operations: [
+          {
+            id: "op-1",
+            type: "capital_outflow" as const,
+            amount: 200000,
+            date: "2026-11-02",
+            note: "Apport initial",
+          },
+          {
+            id: "op-2",
+            type: "return_inflow" as const,
+            amount: 50000,
+            date: "2026-11-12",
+            note: "Bénéfice mensuel",
+          },
+        ],
+      },
+      {
+        id: "inv-2",
+        name: "Actions BRVM",
+        category: "Bourse (BRVM) & Actions",
+        investedAmount: 100000,
+        targetAmount: 200000,
+        totalReturns: 10000,
+        expectedReturnPercent: 10,
+        startDate: "2026-10-15",
+        status: "active" as const,
+        color: "bg-emerald-600",
+        operations: [
+          {
+            id: "op-3",
+            type: "capital_outflow" as const,
+            amount: 100000,
+            date: "2026-10-15",
+          },
+          {
+            id: "op-4",
+            type: "return_inflow" as const,
+            amount: 10000,
+            date: "2026-11-14",
+          },
+        ],
+      },
+    ];
+
+    expect(getTotalInvestedCapital(investments)).toBe(300000);
+    expect(getTotalInvestmentReturns(investments)).toBe(60000);
+    expect(getInvestmentROI(investments[0])).toBe(25);
+    expect(getPortfolioROI(investments)).toBe(20); // 60k / 300k = 20%
+    expect(getMonthlyInvestedCapital(investments, 2026, 11)).toBe(200000);
+    expect(getMonthlyInvestmentReturns(investments, 2026, 11)).toBe(60000);
+
+    // Gating verification: locked on Free plan after 30-day trial, unlocked during 30-day trial and on Personal/Business
+    expect(canAccessFeature("free", "investments")).toBe(false);
+    expect(canAccessFeature("personal", "investments")).toBe(true);
+    expect(canAccessFeature("business", "investments")).toBe(true);
+
+    // During 30-day trial: effectivePlanId is "personal" -> unlocked
+    const duringTrial = getSubscriptionCountdownInfo({
+      planId: "free",
+      status: "active",
+      expiresAt: null,
+      trialEndsAt: "2026-12-01T00:00:00Z",
+      now: new Date("2026-11-15T12:00:00Z"),
+    });
+    expect(duringTrial.isTrialActive).toBe(true);
+    expect(canAccessFeature(duringTrial.effectivePlanId, "investments")).toBe(true);
+
+    // After 30-day trial on Free plan: effectivePlanId is "free" -> locked (cadenassé)
+    const afterTrialFree = getSubscriptionCountdownInfo({
+      planId: "free",
+      status: "active",
+      expiresAt: null,
+      trialEndsAt: "2026-11-01T00:00:00Z",
+      trialChoiceMadeAt: "2026-11-02T00:00:00Z",
+      now: new Date("2026-11-15T12:00:00Z"),
+    });
+    expect(afterTrialFree.effectivePlanId).toBe("free");
+    expect(canAccessFeature(afterTrialFree.effectivePlanId, "investments")).toBe(false);
   });
 });

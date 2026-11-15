@@ -6,7 +6,10 @@ import {
   deduplicateCategories,
   DebtItem,
   DebtPaymentItem,
+  InvestmentItem,
+  InvestmentOperationItem,
   IncomeSourceType,
+  getMonthlyInvestedCapital,
   getMonthlySavingsContributions,
   getSpentByCategory,
   AFRICAN_EXPENSE_CATEGORIES,
@@ -96,6 +99,8 @@ export type Transaction = {
   linkedPaymentId?: string;
   linkedSavingsGoalId?: string;
   linkedContributionId?: string;
+  linkedInvestmentId?: string;
+  linkedInvestmentOpId?: string;
   receiptUrl?: string;
   receiptName?: string;
   pendingSync?: boolean;
@@ -174,6 +179,7 @@ export interface LocalCache {
   months: Record<string, MonthData>;
   savingsGoals: SavingsGoal[];
   debts?: DebtItem[];
+  investments?: InvestmentItem[];
   pendingSyncQueue?: PendingSyncAction[];
   subscriptionPlan?: SubscriptionPlanId;
   billingCycle?: BillingCycle | "none";
@@ -263,6 +269,27 @@ interface UIState {
   removeDebt: (id: string) => Promise<void>;
   addDebtPayment: (debtId: string, amount: number, notes?: string, date?: string) => Promise<void>;
   removeDebtPayment: (paymentId: string, debtId: string) => Promise<void>;
+
+  investments: InvestmentItem[];
+  addInvestment: (inv: {
+    name: string;
+    category: string;
+    targetAmount: number;
+    expectedReturnPercent?: number;
+    startDate?: string;
+    color?: string;
+    notes?: string;
+  }) => Promise<void>;
+  removeInvestment: (id: string) => Promise<void>;
+  updateInvestmentStatus: (id: string, status: "active" | "completed" | "paused") => Promise<void>;
+  addInvestmentOperation: (
+    investmentId: string,
+    type: "capital_outflow" | "return_inflow",
+    amount: number,
+    notes?: string,
+    date?: string
+  ) => Promise<void>;
+  removeInvestmentOperation: (operationId: string, investmentId: string) => Promise<void>;
 
   // Abonnement SaaS (Moneriz), Essai 30j & Notifications (évalué côté serveur uniquement)
   isAdminUser: boolean;
@@ -428,6 +455,7 @@ function saveLocalCache(cache: LocalCache, uid?: string | null) {
       months: monthsRecord,
       savingsGoals: cache.savingsGoals || [],
       debts: cache.debts || [],
+      investments: cache.investments || [],
       subscriptionPlan: cache.subscriptionPlan,
       billingCycle: cache.billingCycle,
       subscriptionExpiresAt: cache.subscriptionExpiresAt ?? null,
@@ -497,6 +525,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       transactions: [],
       savingsGoals: [],
       debts: [],
+      investments: [],
       isSidebarOpen: false,
       alertThreshold: 80,
       currency: "FCFA",
@@ -547,6 +576,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       transactions: curState.transactions,
     };
     cache.debts = curState.debts;
+    cache.investments = curState.investments;
     saveLocalCache(cache);
 
     // 2. Préparer le nouveau mois
@@ -1476,6 +1506,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   }),
   savingsGoals: initialCache?.savingsGoals || [],
   debts: initialCache?.debts || [],
+  investments: initialCache?.investments || [],
 
   initStore: async () => {
     try {
@@ -1570,6 +1601,10 @@ export const useUIStore = create<UIState>((set, get) => ({
             idbSnapshot.debts && idbSnapshot.debts.length > 0
               ? idbSnapshot.debts
               : state.debts,
+          investments:
+            idbSnapshot.investments && idbSnapshot.investments.length > 0
+              ? idbSnapshot.investments
+              : state.investments,
           subscriptionPlan:
             (idbSnapshot.subscriptionPlan as SubscriptionPlanId) || state.subscriptionPlan,
           billingCycle:
@@ -1852,6 +1887,8 @@ export const useUIStore = create<UIState>((set, get) => ({
           const isDebtRepay = desc.startsWith("Remboursement dette :");
           const isDebtRecover = desc.startsWith("Remboursement reçu :");
           const isSavingsTx = desc.startsWith("Épargne :");
+          const isInvestmentOutflow = desc.startsWith("Investissement :");
+          const isInvestmentReturn = desc.startsWith("Rendement :");
           return {
             id: tx.id,
             label: desc,
@@ -1859,12 +1896,16 @@ export const useUIStore = create<UIState>((set, get) => ({
             category: isInc
               ? isDebtRecover
                 ? "Recouvrement de créance"
+                : isInvestmentReturn
+                ? "Rendement d'investissement"
                 : tx.income_source || "Revenu"
               : tx.categories?.name ||
                 (isDebtRepay
                   ? "Remboursement de dette"
                   : isSavingsTx
                   ? "Épargne"
+                  : isInvestmentOutflow
+                  ? "Investissement"
                   : "Autre (Hors Budget)"),
             category_id: isInc ? undefined : tx.category_id,
             date: tx.transaction_date,
@@ -2134,6 +2175,108 @@ export const useUIStore = create<UIState>((set, get) => ({
           }
         } catch {}
 
+        // 12b. Portefeuille d'investissements & opérations de rendement
+        try {
+          const { data: remoteInvestments } = await supabase
+            .from("investments")
+            .select("*, investment_operations(*)")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+
+          if (remoteInvestments) {
+            const mappedInvestments: (InvestmentItem & {
+              updatedAt?: string;
+              deletedAt?: string | null;
+            })[] =
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              remoteInvestments.map((inv: any) => {
+                const operations: InvestmentOperationItem[] = (inv.investment_operations || [])
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .filter((op: any) => !op.deleted_at)
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .map((op: any) => ({
+                    id: op.id,
+                    type: (op.type === "return_inflow"
+                      ? "return_inflow"
+                      : "capital_outflow") as "capital_outflow" | "return_inflow",
+                    amount: Number(op.amount) || 0,
+                    date: op.operation_date,
+                    notes: op.notes || undefined,
+                  }))
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                const sumInvested = operations
+                  .filter((o) => o.type === "capital_outflow")
+                  .reduce((s, o) => s + o.amount, 0);
+                const sumReturns = operations
+                  .filter((o) => o.type === "return_inflow")
+                  .reduce((s, o) => s + o.amount, 0);
+
+                return {
+                  id: inv.id,
+                  name: inv.name,
+                  category: inv.category || "Autre projet",
+                  targetAmount: Number(inv.target_amount) || 0,
+                  investedAmount:
+                    operations.length > 0 ? sumInvested : Number(inv.invested_amount) || 0,
+                  totalReturns:
+                    operations.length > 0 ? sumReturns : Number(inv.total_returns) || 0,
+                  expectedReturnPercent: Number(inv.expected_return_percent) || 0,
+                  startDate: inv.start_date || undefined,
+                  status: (inv.status as "active" | "completed" | "paused") || "active",
+                  color: inv.color || "bg-indigo-600",
+                  notes: inv.notes || undefined,
+                  operations,
+                  createdAt: inv.created_at,
+                  updatedAt: inv.updated_at,
+                  deletedAt: inv.deleted_at || null,
+                };
+              });
+
+            const reconciledInvestments = await reconcileRecordsWithConflictDetection({
+              userId: user.id,
+              entityType: "investment",
+              remoteItems: mappedInvestments,
+              localItems: get().investments,
+              pendingOutbox: activeOutbox,
+              lastSyncedAt: lastSyncedCursor,
+              getLabel: (item) => item.name,
+            });
+            set({ investments: reconciledInvestments });
+          }
+        } catch {}
+
+        // Synchroniser automatiquement l'enveloppe Investissement dans Mon Budget si du capital a été placé ce mois-ci
+        const activeInvestments = get().investments;
+        const monthlyInvAmount = getMonthlyInvestedCapital(activeInvestments, year, month);
+        const txInvAmount = getSpentByCategory(get().transactions, "Investissement");
+        const effectiveMonthlyInv = Math.max(monthlyInvAmount, txInvAmount);
+        if (canModifyPaidFeature(get()) && effectiveMonthlyInv > 0) {
+          const currentCats3 = get().categories;
+          const hasInvCat = currentCats3.some(
+            (c) => c.name.trim().toLowerCase() === "investissement"
+          );
+          let syncedInvCats = currentCats3;
+          if (!hasInvCat) {
+            const newInvCat: Category = {
+              id: ensureValidUuid(null),
+              name: "Investissement",
+              amount: effectiveMonthlyInv,
+              color: "bg-indigo-600",
+            };
+            syncedInvCats = deduplicateCategories([...currentCats3, newInvCat]);
+          } else {
+            syncedInvCats = currentCats3.map((c) => {
+              if (c.name.trim().toLowerCase() === "investissement") {
+                return { ...c, amount: Math.max(Number(c.amount) || 0, effectiveMonthlyInv) };
+              }
+              return c;
+            });
+          }
+          set({ categories: syncedInvCats });
+        }
+
         // 13. Sauvegarder le snapshot complet réconcilié dans IndexedDB + miroir localStorage
         const syncNowIso = probe.serverTime || new Date().toISOString();
         const cache = loadLocalCache(user.id) || {
@@ -2143,6 +2286,7 @@ export const useUIStore = create<UIState>((set, get) => ({
           months: {},
           savingsGoals: get().savingsGoals,
           debts: get().debts,
+          investments: get().investments,
         };
         cache.currency = get().currency;
         cache.payDay = get().payDay;
@@ -2150,6 +2294,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         cache.notifications = get().notifications;
         cache.savingsGoals = get().savingsGoals;
         cache.debts = get().debts;
+        cache.investments = get().investments;
         cache.subscriptionPlan = get().subscriptionPlan;
         cache.billingCycle = get().billingCycle;
         cache.subscriptionExpiresAt = get().subscriptionExpiresAt;
@@ -2993,11 +3138,71 @@ export const useUIStore = create<UIState>((set, get) => ({
         });
       }
 
+      const isInvestmentTx =
+        tx.linkedInvestmentOpId ||
+        tx.label.startsWith("Investissement :") ||
+        tx.label.startsWith("Rendement :") ||
+        tx.category.trim().toLowerCase() === "investissement" ||
+        tx.category.trim().toLowerCase() === "rendement d'investissement";
+      let updatedInvestments = get().investments;
+      let syncedInvOpIdToRemove: string | null = null;
+      let syncedInvestmentToUpdate: InvestmentItem | null = null;
+
+      if (isInvestmentTx) {
+        const { year: curYear, month: curMonth } = get().activeMonth;
+        const prevMonthlyInv = Math.max(
+          getMonthlyInvestedCapital(get().investments, curYear, curMonth),
+          getSpentByCategory(get().transactions, "Investissement")
+        );
+
+        updatedInvestments = get().investments.map((inv) => {
+          const matchingOp = (inv.operations || []).find(
+            (op) =>
+              (tx.linkedInvestmentOpId && op.id === tx.linkedInvestmentOpId) ||
+              op.linkedTransactionId === tx.id ||
+              (tx.label.includes(inv.name) && op.amount === tx.amount && op.date === tx.date)
+          );
+          if (!matchingOp) return inv;
+          syncedInvOpIdToRemove = matchingOp.id;
+          const filteredOps = (inv.operations || []).filter((op) => op.id !== matchingOp.id);
+          const newInvested = filteredOps
+            .filter((o) => o.type === "capital_outflow")
+            .reduce((s, o) => s + o.amount, 0);
+          const newReturns = filteredOps
+            .filter((o) => o.type === "return_inflow")
+            .reduce((s, o) => s + o.amount, 0);
+          const newStatus: "active" | "completed" | "paused" =
+            inv.targetAmount > 0 && newInvested >= inv.targetAmount ? "completed" : "active";
+          const updatedInv: InvestmentItem = {
+            ...inv,
+            investedAmount: newInvested,
+            totalReturns: newReturns,
+            status: newStatus,
+            operations: filteredOps,
+          };
+          syncedInvestmentToUpdate = updatedInv;
+          return updatedInv;
+        });
+
+        const newMonthlyInv = Math.max(
+          getMonthlyInvestedCapital(updatedInvestments, curYear, curMonth),
+          getSpentByCategory(newTransactions, "Investissement")
+        );
+        updatedCategories = updatedCategories.map((c) => {
+          const norm = c.name.trim().toLowerCase();
+          if (norm === "investissement" && (Number(c.amount) || 0) <= prevMonthlyInv) {
+            return { ...c, amount: newMonthlyInv };
+          }
+          return c;
+        });
+      }
+
       set({
         transactions: newTransactions,
         income: newIncome,
         debts: updatedDebts,
         savingsGoals: updatedGoals,
+        investments: updatedInvestments,
         categories: updatedCategories,
       });
 
@@ -3012,6 +3217,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         }
         cache.debts = updatedDebts;
         cache.savingsGoals = updatedGoals;
+        cache.investments = updatedInvestments;
         saveLocalCache(cache);
       }
 
@@ -3054,6 +3260,23 @@ export const useUIStore = create<UIState>((set, get) => ({
             goalId: gUpd.id,
             newCurrent: gUpd.current,
             goalStatus: gUpd.status,
+          },
+          clientUpdatedAt: new Date().toISOString(),
+        });
+      }
+
+      if (syncedInvOpIdToRemove && syncedInvestmentToUpdate) {
+        const invUpd = syncedInvestmentToUpdate as InvestmentItem;
+        await enqueueOutboxEntry(uid, {
+          entityType: "investment_operation",
+          entityId: syncedInvOpIdToRemove,
+          type: "delete_investment_operation",
+          payload: {
+            id: syncedInvOpIdToRemove,
+            investmentId: invUpd.id,
+            investedAmount: invUpd.investedAmount,
+            totalReturns: invUpd.totalReturns,
+            investmentStatus: invUpd.status,
           },
           clientUpdatedAt: new Date().toISOString(),
         });
@@ -3918,6 +4141,502 @@ export const useUIStore = create<UIState>((set, get) => ({
         debtId,
         remainingAmount: updatedDebt?.remainingAmount,
         debtStatus: updatedDebt?.status,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+
+    if (txToRemoveId) {
+      await enqueueOutboxEntry(uid, {
+        entityType: "transaction",
+        entityId: txToRemoveId,
+        monthKey,
+        type: "delete_transaction",
+        payload: { id: txToRemoveId },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+    }
+
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
+    }
+  },
+
+  addInvestment: async (inv) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
+    const cleanTarget = Math.max(0, Number(inv.targetAmount) || 0);
+    if (!inv.name.trim()) return;
+
+    const invId = ensureValidUuid(null);
+    const startDate = inv.startDate || new Date().toISOString().split("T")[0];
+    const newInv: InvestmentItem = {
+      id: invId,
+      name: inv.name.trim(),
+      category: inv.category?.trim() || "Autre projet",
+      targetAmount: cleanTarget,
+      investedAmount: 0,
+      totalReturns: 0,
+      expectedReturnPercent: Math.max(0, Number(inv.expectedReturnPercent) || 0),
+      startDate,
+      status: "active",
+      color: inv.color || "bg-indigo-600",
+      notes: inv.notes?.trim() || undefined,
+      operations: [],
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedInvestments = [newInv, ...get().investments];
+    set({ investments: updatedInvestments });
+
+    const cache = loadLocalCache() || {
+      currency: get().currency,
+      payDay: get().payDay,
+      alertThreshold: get().alertThreshold,
+      months: {},
+      savingsGoals: get().savingsGoals,
+      debts: get().debts,
+      investments: updatedInvestments,
+    };
+    cache.investments = updatedInvestments;
+    saveLocalCache(cache);
+
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "investment",
+      entityId: invId,
+      type: "upsert_investment",
+      payload: {
+        id: invId,
+        name: newInv.name,
+        category: newInv.category,
+        target_amount: newInv.targetAmount,
+        invested_amount: 0,
+        total_returns: 0,
+        expected_return_percent: newInv.expectedReturnPercent,
+        start_date: newInv.startDate || null,
+        status: "active",
+        color: newInv.color,
+        notes: newInv.notes || null,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
+    }
+  },
+
+  removeInvestment: async (id) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
+    const targetInv = get().investments.find((i) => i.id === id);
+    const updatedInvestments = get().investments.filter((i) => i.id !== id);
+
+    // Supprimer aussi les transactions liées du mois actif pour maintenir la concordance 100 %
+    const currentTxs = get().transactions;
+    const opIds = new Set((targetInv?.operations || []).map((o) => o.id));
+    const txIdsFromOps = new Set(
+      (targetInv?.operations || [])
+        .map((o) => o.linkedTransactionId)
+        .filter((x): x is string => Boolean(x))
+    );
+
+    const txsToRemove = currentTxs.filter(
+      (t) =>
+        t.linkedInvestmentId === id ||
+        (t.linkedInvestmentOpId && opIds.has(t.linkedInvestmentOpId)) ||
+        txIdsFromOps.has(t.id) ||
+        (targetInv &&
+          (t.label.startsWith(`Investissement : ${targetInv.name}`) ||
+            t.label.startsWith(`Rendement : ${targetInv.name}`)))
+    );
+
+    const removedIds = new Set(txsToRemove.map((t) => t.id));
+    const updatedTransactions = currentTxs.filter((t) => !removedIds.has(t.id));
+
+    const removedIncomeAmount = txsToRemove
+      .filter((t) => t.type === "income" || t.type === "income_adjustment")
+      .reduce((sum, t) => sum + t.amount, 0);
+    const updatedIncome = Math.max(0, get().income - removedIncomeAmount);
+
+    const { year, month } = get().activeMonth;
+    const prevMonthlyInv = Math.max(
+      getMonthlyInvestedCapital(get().investments, year, month),
+      getSpentByCategory(currentTxs, "Investissement")
+    );
+    const newMonthlyInv = Math.max(
+      getMonthlyInvestedCapital(updatedInvestments, year, month),
+      getSpentByCategory(updatedTransactions, "Investissement")
+    );
+
+    const updatedCategories = get().categories.map((c) => {
+      if (c.name.trim().toLowerCase() === "investissement" && (Number(c.amount) || 0) <= prevMonthlyInv) {
+        return { ...c, amount: newMonthlyInv };
+      }
+      return c;
+    });
+
+    set({
+      investments: updatedInvestments,
+      transactions: updatedTransactions,
+      income: updatedIncome,
+      categories: updatedCategories,
+    });
+
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.investments = updatedInvestments;
+      if (cache.months[monthKey]) {
+        cache.months[monthKey].transactions = updatedTransactions;
+        cache.months[monthKey].income = updatedIncome;
+        cache.months[monthKey].categories = updatedCategories;
+      }
+      saveLocalCache(cache);
+    }
+
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "investment",
+      entityId: id,
+      type: "delete_investment",
+      payload: { id },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+
+    for (const removedTx of txsToRemove) {
+      await enqueueOutboxEntry(uid, {
+        entityType: "transaction",
+        entityId: removedTx.id,
+        monthKey,
+        type: "delete_transaction",
+        payload: { id: removedTx.id },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+    }
+
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
+    }
+  },
+
+  updateInvestmentStatus: async (id, status) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
+    const updatedInvestments = get().investments.map((inv) =>
+      inv.id === id ? { ...inv, status } : inv
+    );
+    set({ investments: updatedInvestments });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.investments = updatedInvestments;
+      saveLocalCache(cache);
+    }
+
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "investment",
+      entityId: id,
+      coalesceKey: `investment_status:${id}`,
+      type: "update_investment_status",
+      payload: { id, status },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
+    }
+  },
+
+  addInvestmentOperation: async (investmentId, type, amount, notes, date) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
+    const inv = get().investments.find((i) => i.id === investmentId);
+    if (!inv) return;
+
+    const cleanAmount = Math.max(0, Number(amount) || 0);
+    if (cleanAmount <= 0) return;
+
+    const operationDate = date || new Date().toISOString().split("T")[0];
+    const txId = ensureValidUuid(null);
+    const opId = ensureValidUuid(null);
+
+    const opItem: InvestmentOperationItem = {
+      id: opId,
+      type,
+      amount: cleanAmount,
+      date: operationDate,
+      notes: notes?.trim() || undefined,
+      linkedTransactionId: txId,
+    };
+
+    const isReturn = type === "return_inflow";
+    const newInvested = isReturn ? inv.investedAmount : inv.investedAmount + cleanAmount;
+    const newReturns = isReturn ? inv.totalReturns + cleanAmount : inv.totalReturns;
+    const nextStatus: "active" | "completed" | "paused" =
+      !isReturn && inv.targetAmount > 0 && newInvested >= inv.targetAmount
+        ? "completed"
+        : inv.status;
+
+    const updatedInvestments = get().investments.map((item) => {
+      if (item.id !== investmentId) return item;
+      return {
+        ...item,
+        investedAmount: newInvested,
+        totalReturns: newReturns,
+        status: nextStatus,
+        operations: [opItem, ...(item.operations || [])],
+      };
+    });
+
+    const txLabel = isReturn
+      ? `Rendement : ${inv.name}${notes?.trim() ? ` (${notes.trim()})` : ""}`
+      : `Investissement : ${inv.name}${notes?.trim() ? ` (${notes.trim()})` : ""}`;
+
+    const linkedTx: Transaction = {
+      id: txId,
+      label: txLabel,
+      amount: cleanAmount,
+      category: isReturn ? "Rendement d'investissement" : "Investissement",
+      date: operationDate,
+      type: isReturn ? "income" : "expense",
+      linkedInvestmentId: investmentId,
+      linkedInvestmentOpId: opId,
+      pendingSync: true,
+    };
+
+    const updatedTransactions = [linkedTx, ...get().transactions];
+    const updatedIncome = isReturn ? get().income + cleanAmount : get().income;
+
+    const { year, month } = get().activeMonth;
+    let updatedCategories = get().categories;
+
+    // Si placement de capital (sortie), synchroniser automatiquement l'enveloppe "Investissement" dans Mon Budget
+    if (!isReturn) {
+      const monthlyInvTotal = Math.max(
+        getMonthlyInvestedCapital(updatedInvestments, year, month),
+        getSpentByCategory(updatedTransactions, "Investissement")
+      );
+      const hasInvCat = updatedCategories.some(
+        (c) => c.name.trim().toLowerCase() === "investissement"
+      );
+      if (!hasInvCat) {
+        const newInvCat: Category = {
+          id: ensureValidUuid(null),
+          name: "Investissement",
+          amount: monthlyInvTotal,
+          color: "bg-indigo-600",
+        };
+        updatedCategories = deduplicateCategories([...updatedCategories, newInvCat]);
+      } else {
+        updatedCategories = updatedCategories.map((c) => {
+          if (c.name.trim().toLowerCase() === "investissement") {
+            return { ...c, amount: Math.max(Number(c.amount) || 0, monthlyInvTotal) };
+          }
+          return c;
+        });
+      }
+    }
+
+    set({
+      investments: updatedInvestments,
+      transactions: updatedTransactions,
+      income: updatedIncome,
+      categories: updatedCategories,
+    });
+
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache() || {
+      currency: get().currency,
+      payDay: get().payDay,
+      alertThreshold: get().alertThreshold,
+      months: {},
+      savingsGoals: get().savingsGoals,
+      debts: get().debts,
+      investments: updatedInvestments,
+    };
+    cache.investments = updatedInvestments;
+    if (!cache.months[monthKey]) {
+      cache.months[monthKey] = {
+        budgetId: get().budget_id,
+        baseSalary: get().baseSalary,
+        income: updatedIncome,
+        incomeEntries: get().incomeEntries,
+        categories: updatedCategories,
+        transactions: updatedTransactions,
+      };
+    } else {
+      cache.months[monthKey].transactions = updatedTransactions;
+      cache.months[monthKey].income = updatedIncome;
+      cache.months[monthKey].categories = updatedCategories;
+    }
+    saveLocalCache(cache);
+
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "investment_operation",
+      entityId: opId,
+      type: "upsert_investment_operation",
+      payload: {
+        id: opId,
+        investment_id: investmentId,
+        type,
+        amount: cleanAmount,
+        operation_date: operationDate,
+        notes: notes?.trim() || null,
+        investedAmount: newInvested,
+        totalReturns: newReturns,
+        investmentStatus: nextStatus,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "transaction",
+      entityId: txId,
+      monthKey,
+      type: "upsert_transaction",
+      payload: {
+        id: txId,
+        monthly_budget_id: get().budget_id,
+        year,
+        month,
+        category_id: null,
+        amount: cleanAmount,
+        description: txLabel,
+        transaction_date: operationDate,
+        type: isReturn ? "income_adjustment" : "expense",
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
+    }
+  },
+
+  removeInvestmentOperation: async (operationId, investmentId) => {
+    if (!canModifyPaidFeature(get())) {
+      toast.error(LOCKED_FEATURE_TOAST);
+      return;
+    }
+    const targetInv = get().investments.find((i) => i.id === investmentId);
+    const opToRemove = targetInv?.operations?.find((o) => o.id === operationId);
+
+    const updatedInvestments = get().investments.map((inv) => {
+      if (inv.id !== investmentId) return inv;
+      const filtered = (inv.operations || []).filter((o) => o.id !== operationId);
+      const newInvested = filtered
+        .filter((o) => o.type === "capital_outflow")
+        .reduce((s, o) => s + o.amount, 0);
+      const newReturns = filtered
+        .filter((o) => o.type === "return_inflow")
+        .reduce((s, o) => s + o.amount, 0);
+      const newStatus: "active" | "completed" | "paused" =
+        inv.targetAmount > 0 && newInvested >= inv.targetAmount ? "completed" : "active";
+      return {
+        ...inv,
+        investedAmount: newInvested,
+        totalReturns: newReturns,
+        status: newStatus,
+        operations: filtered,
+      };
+    });
+
+    let txToRemoveId: string | null = null;
+    const currentTxs = get().transactions;
+    const matchingTx = currentTxs.find(
+      (t) =>
+        t.linkedInvestmentOpId === operationId ||
+        (opToRemove?.linkedTransactionId && t.id === opToRemove.linkedTransactionId) ||
+        (targetInv &&
+          opToRemove &&
+          t.amount === opToRemove.amount &&
+          t.date === opToRemove.date &&
+          t.label.includes(targetInv.name))
+    );
+
+    let updatedTransactions = currentTxs;
+    let updatedIncome = get().income;
+
+    if (matchingTx) {
+      txToRemoveId = matchingTx.id;
+      updatedTransactions = currentTxs.filter((t) => t.id !== matchingTx.id);
+      if (matchingTx.type === "income" || matchingTx.type === "income_adjustment") {
+        updatedIncome = Math.max(0, updatedIncome - matchingTx.amount);
+      }
+    }
+
+    const { year, month } = get().activeMonth;
+    const prevMonthlyInv = Math.max(
+      getMonthlyInvestedCapital(get().investments, year, month),
+      getSpentByCategory(currentTxs, "Investissement")
+    );
+    const newMonthlyInv = Math.max(
+      getMonthlyInvestedCapital(updatedInvestments, year, month),
+      getSpentByCategory(updatedTransactions, "Investissement")
+    );
+
+    const updatedCategories = get().categories.map((c) => {
+      if (c.name.trim().toLowerCase() === "investissement" && (Number(c.amount) || 0) <= prevMonthlyInv) {
+        return { ...c, amount: newMonthlyInv };
+      }
+      return c;
+    });
+
+    set({
+      investments: updatedInvestments,
+      transactions: updatedTransactions,
+      income: updatedIncome,
+      categories: updatedCategories,
+    });
+
+    const monthKey = getMonthKey(year, month);
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.investments = updatedInvestments;
+      if (cache.months[monthKey]) {
+        cache.months[monthKey].transactions = updatedTransactions;
+        cache.months[monthKey].income = updatedIncome;
+        cache.months[monthKey].categories = updatedCategories;
+      }
+      saveLocalCache(cache);
+    }
+
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    const updatedInv = updatedInvestments.find((i) => i.id === investmentId);
+    await enqueueOutboxEntry(uid, {
+      entityType: "investment_operation",
+      entityId: operationId,
+      type: "delete_investment_operation",
+      payload: {
+        id: operationId,
+        investmentId,
+        investedAmount: updatedInv?.investedAmount,
+        totalReturns: updatedInv?.totalReturns,
+        investmentStatus: updatedInv?.status,
       },
       clientUpdatedAt: new Date().toISOString(),
     });

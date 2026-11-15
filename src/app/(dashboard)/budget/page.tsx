@@ -25,6 +25,7 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   PiggyBank,
+  Briefcase,
   Lock,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -45,6 +46,10 @@ import {
   getMonthlySavingsContributions,
   getTotalPayableDebts,
   getTotalReceivableDebts,
+  getTotalInvestedCapital,
+  getTotalInvestmentReturns,
+  getMonthlyInvestedCapital,
+  getMonthlyInvestmentReturns,
   AFRICAN_EXPENSE_CATEGORIES,
   INCOME_SOURCES
 } from "@/lib/utils/budget-calc";
@@ -529,6 +534,7 @@ export default function BudgetPage() {
     duplicatePreviousMonth,
     savingsGoals,
     debts,
+    investments,
     payDay,
     subscriptionHydrated,
     subscriptionPlan,
@@ -618,6 +624,79 @@ export default function BudgetPage() {
     (c) => c.name.trim().toLowerCase() === "épargne" || c.name.trim().toLowerCase() === "epargne"
   );
   const totalSavingsAccumulated = savingsGoals.reduce((sum, g) => sum + (Number(g.current) || 0), 0);
+
+  // Liaison directe avec Portefeuille d'Investissements
+  const totalInvestedCapital = getTotalInvestedCapital(investments || []);
+  const totalInvestmentReturns = getTotalInvestmentReturns(investments || []);
+  const investedThisMonth = Math.max(
+    getMonthlyInvestedCapital(investments || [], activeMonth.year, activeMonth.month),
+    getSpentByCategory(transactions, "Investissement")
+  );
+  const investmentReturnsThisMonth = Math.max(
+    getMonthlyInvestmentReturns(investments || [], activeMonth.year, activeMonth.month),
+    transactions
+      .filter(
+        (tx) =>
+          isIncomeTransaction(tx) &&
+          (tx.category === "Rendement d'investissement" || tx.label.startsWith("Rendement :"))
+      )
+      .reduce((sum, tx) => sum + tx.amount, 0)
+  );
+  const investmentEnvelope = categories.find(
+    (c) =>
+      c.name.trim().toLowerCase() === "investissement" ||
+      c.name.trim().toLowerCase() === "investissements"
+  );
+
+  // Comptabilisation automatique des investissements du mois dans Mon Budget
+  useEffect(() => {
+    if (!canUseBudget || investedThisMonth <= 0) return;
+    if (!investmentEnvelope) {
+      const uuid =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `cat-inv-${Date.now()}`;
+      addCategory({
+        id: uuid,
+        name: "Investissement",
+        amount: investedThisMonth,
+        color: "bg-indigo-600",
+      });
+    } else if ((Number(investmentEnvelope.amount) || 0) < investedThisMonth) {
+      updateCategoryAmount(investmentEnvelope.id, investedThisMonth);
+    }
+  }, [canUseBudget, investedThisMonth, investmentEnvelope, addCategory, updateCategoryAmount]);
+
+  const handleBudgetizeInvestmentEnvelope = async () => {
+    const suggestedAmount =
+      investedThisMonth > 0
+        ? investedThisMonth
+        : income > 0
+        ? Math.max(15000, Math.round((income * 0.1) / 1000) * 1000)
+        : 25000;
+
+    if (investmentEnvelope) {
+      await updateCategoryAmount(investmentEnvelope.id, suggestedAmount);
+      toast.success(
+        `Enveloppe « Investissement » ajustée à ${formatMoney(suggestedAmount, currency)} !`
+      );
+      return;
+    }
+
+    const uuid =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `cat-inv-${Date.now()}`;
+    await addCategory({
+      id: uuid,
+      name: "Investissement",
+      amount: suggestedAmount,
+      color: "bg-indigo-600",
+    });
+    toast.success(
+      `Enveloppe « Investissement » (${formatMoney(suggestedAmount, currency)}) créée dans votre budget !`
+    );
+  };
 
   // Comptabilisation automatique de l'épargne dans Mon Budget même si elle n'a pas été budgétisée manuellement
   useEffect(() => {
@@ -1218,6 +1297,72 @@ export default function BudgetPage() {
             </CardContent>
           </Card>
 
+          {/* Carte Liaison directe Portefeuille d'Investissements <-> Mon Budget */}
+          <Card className="border border-indigo-200/80 dark:border-indigo-900/40 shadow-sm bg-gradient-to-br from-indigo-50/70 via-white to-emerald-50/40 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  Lien Investissements &amp; ROI
+                </CardTitle>
+                <Link
+                  href="/investments"
+                  className="text-xs font-semibold text-[#1E3A5F] dark:text-sky-400 hover:underline flex items-center gap-1"
+                >
+                  <span>Portefeuille</span>
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+              <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
+                Placements en capital (sorties) et rendements encaissés (+ revenu)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2.5 text-xs">
+              <div className="p-2.5 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 space-y-1">
+                <div className="flex items-center justify-between text-indigo-950 dark:text-indigo-200">
+                  <span className="font-medium">Investi ce mois-ci :</span>
+                  <strong className="font-bold">{formatMoney(investedThisMonth, currency)}</strong>
+                </div>
+                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+                  <span>Capital total investi ({(investments || []).length} actif(s)) :</span>
+                  <strong className="text-indigo-700 dark:text-indigo-300">{formatMoney(totalInvestedCapital, currency)}</strong>
+                </div>
+                {investmentEnvelope ? (
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-indigo-200/60 dark:border-indigo-800 text-slate-700 dark:text-slate-300">
+                    <span>Enveloppe Investissement :</span>
+                    <strong>{formatMoney(investmentEnvelope.amount, currency)}</strong>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleBudgetizeInvestmentEnvelope}
+                    className="w-full mt-1.5 h-7 text-[11px] border-indigo-200 dark:border-indigo-900 bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-semibold"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Créer l&apos;enveloppe « Investissement »
+                  </Button>
+                )}
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 space-y-1">
+                <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
+                  <span className="font-medium">Rendements reçus ce mois (+ Revenu) :</span>
+                  <strong className="font-bold text-emerald-700 dark:text-emerald-300">
+                    +{formatMoney(investmentReturnsThisMonth, currency)}
+                  </strong>
+                </div>
+                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+                  <span>Total cumulé des gains :</span>
+                  <strong className="text-emerald-700 dark:text-emerald-300">
+                    +{formatMoney(totalInvestmentReturns, currency)}
+                  </strong>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Astuce Ergonomie */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-2">
             <div className="flex items-center gap-1.5 font-semibold text-slate-800">
@@ -1341,11 +1486,14 @@ export default function BudgetPage() {
             <div className="space-y-3">
               {categories.map((cat) => {
                 const spent = getSpentByCategory(transactions, cat.name, epargne);
-                const isSav =
-                  cat.name.trim().toLowerCase() === "épargne" ||
-                  cat.name.trim().toLowerCase() === "epargne";
+                const normName = cat.name.trim().toLowerCase();
+                const isSavOrInv =
+                  normName === "épargne" ||
+                  normName === "epargne" ||
+                  normName === "investissement" ||
+                  normName === "investissements";
                 const displayCat =
-                  isSav && (Number(cat.amount) || 0) < spent
+                  isSavOrInv && (Number(cat.amount) || 0) < spent
                     ? { ...cat, amount: spent }
                     : cat;
                 return (

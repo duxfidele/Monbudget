@@ -27,6 +27,7 @@ import {
   Calculator,
   Calendar,
   Activity,
+  Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useUIStore } from "@/lib/store/ui-store";
@@ -49,6 +50,7 @@ export default function AdvisorPage() {
     transactions,
     savingsGoals,
     debts,
+    investments,
     currency,
     activeMonth,
     payDay,
@@ -76,6 +78,7 @@ export default function AdvisorPage() {
     transactions,
     savingsGoals,
     debts,
+    investments,
     monthlySavings,
     currency,
     currentDate: new Date(),
@@ -220,6 +223,12 @@ export default function AdvisorPage() {
             <Button variant="outline" size="sm" className="gap-1.5 border-slate-300">
               <Activity className="h-4 w-4 text-violet-600" />
               <span>Transactions</span>
+            </Button>
+          </Link>
+          <Link href="/investments">
+            <Button variant="outline" size="sm" className="gap-1.5 border-slate-300">
+              <Briefcase className="h-4 w-4 text-indigo-600" />
+              <span>Investissements</span>
             </Button>
           </Link>
         </div>

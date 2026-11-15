@@ -235,6 +235,7 @@ export async function migrateLegacyCacheToIndexedDb(
       months: legacyCache.months || {},
       savingsGoals: Array.isArray(legacyCache.savingsGoals) ? legacyCache.savingsGoals : [],
       debts: Array.isArray(legacyCache.debts) ? legacyCache.debts : [],
+      investments: Array.isArray(legacyCache.investments) ? legacyCache.investments : [],
       subscriptionPlan: legacyCache.subscriptionPlan,
       billingCycle: legacyCache.billingCycle,
       subscriptionExpiresAt: legacyCache.subscriptionExpiresAt ?? null,
@@ -840,6 +841,148 @@ export async function executeSingleOutboxEntry(
           })
           .eq("id", String(p.debtId));
         if (debtUpdErr) throw new Error(debtUpdErr.message);
+      }
+      return;
+    }
+
+    case "upsert_investment": {
+      const invId = ensureValidUuid(p.id || entry.entityId);
+      const row = {
+        id: invId,
+        user_id: userId,
+        name: String(p.name || "Investissement").trim(),
+        category: String(p.category || "Autre projet").trim(),
+        target_amount: Math.max(0, Number(p.target_amount ?? p.targetAmount) || 0),
+        invested_amount: Math.max(0, Number(p.invested_amount ?? p.investedAmount) || 0),
+        total_returns: Math.max(0, Number(p.total_returns ?? p.totalReturns) || 0),
+        expected_return_percent: Math.max(
+          0,
+          Number(p.expected_return_percent ?? p.expectedReturnPercent) || 0
+        ),
+        start_date: p.start_date ?? p.startDate ?? null,
+        status: p.status || "active",
+        color: p.color || "bg-indigo-600",
+        notes: p.notes || null,
+        client_op_id: entry.opId,
+        deleted_at: null,
+      };
+
+      const { error } = await supabase.from("investments").upsert(row, { onConflict: "id" });
+      if (error) {
+        if (isMissingColumnError(error)) {
+          const { error: fbErr } = await supabase
+            .from("investments")
+            .upsert(stripExtendedSyncColumns(row), { onConflict: "id" });
+          if (fbErr) throw new Error(fbErr.message);
+          return;
+        }
+        throw new Error(error.message);
+      }
+      return;
+    }
+
+    case "update_investment_status": {
+      const invId = String(p.id || entry.entityId);
+      if (!UUID_V4_REGEX.test(invId)) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updates: Record<string, any> = {};
+      if (p.status !== undefined) updates.status = p.status;
+      if (p.invested_amount !== undefined) updates.invested_amount = Number(p.invested_amount);
+      if (p.total_returns !== undefined) updates.total_returns = Number(p.total_returns);
+      const { error } = await supabase.from("investments").update(updates).eq("id", invId);
+      if (error) throw new Error(error.message);
+      return;
+    }
+
+    case "delete_investment": {
+      const invId = String(p.id || entry.entityId);
+      if (!UUID_V4_REGEX.test(invId)) return;
+      const deletedAt = entry.clientUpdatedAt || new Date().toISOString();
+      try {
+        await supabase
+          .from("investment_operations")
+          .update({ deleted_at: deletedAt })
+          .eq("investment_id", invId);
+      } catch {}
+      await softDeleteRecord(supabase, "investments", invId, entry);
+      return;
+    }
+
+    case "upsert_investment_operation": {
+      const opId = ensureValidUuid(p.id || entry.entityId);
+      const invId = ensureValidUuid(p.investment_id || p.investmentId);
+
+      const row = {
+        id: opId,
+        investment_id: invId,
+        type: p.type === "return_inflow" ? "return_inflow" : "capital_outflow",
+        amount: Math.max(0, Number(p.amount) || 0),
+        operation_date: p.operation_date || p.date || new Date().toISOString().split("T")[0],
+        notes: p.notes || null,
+        client_op_id: entry.opId,
+        deleted_at: null,
+      };
+
+      const { error } = await supabase
+        .from("investment_operations")
+        .upsert(row, { onConflict: "id" });
+      if (error) {
+        if (isMissingColumnError(error)) {
+          const { error: fbErr } = await supabase
+            .from("investment_operations")
+            .upsert(stripExtendedSyncColumns(row), { onConflict: "id" });
+          if (fbErr) throw new Error(fbErr.message);
+        } else {
+          throw new Error(error.message);
+        }
+      }
+
+      // Mettre à jour les totaux de l'investissement parent
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const invUpdates: Record<string, any> = {};
+      if (p.investedAmount !== undefined) {
+        invUpdates.invested_amount = Math.max(0, Number(p.investedAmount) || 0);
+      }
+      if (p.totalReturns !== undefined) {
+        invUpdates.total_returns = Math.max(0, Number(p.totalReturns) || 0);
+      }
+      if (p.investmentStatus) {
+        invUpdates.status = p.investmentStatus;
+      }
+      if (Object.keys(invUpdates).length > 0) {
+        const { error: invUpdErr } = await supabase
+          .from("investments")
+          .update(invUpdates)
+          .eq("id", invId);
+        if (invUpdErr) throw new Error(invUpdErr.message);
+      }
+      return;
+    }
+
+    case "delete_investment_operation": {
+      const opId = String(p.id || entry.entityId);
+      if (UUID_V4_REGEX.test(opId)) {
+        await softDeleteRecord(supabase, "investment_operations", opId, entry);
+      }
+      if (p.investmentId && UUID_V4_REGEX.test(String(p.investmentId))) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const invUpdates: Record<string, any> = {};
+        if (p.investedAmount !== undefined) {
+          invUpdates.invested_amount = Math.max(0, Number(p.investedAmount) || 0);
+        }
+        if (p.totalReturns !== undefined) {
+          invUpdates.total_returns = Math.max(0, Number(p.totalReturns) || 0);
+        }
+        if (p.investmentStatus) {
+          invUpdates.status = p.investmentStatus;
+        }
+        if (Object.keys(invUpdates).length > 0) {
+          const { error: invUpdErr } = await supabase
+            .from("investments")
+            .update(invUpdates)
+            .eq("id", String(p.investmentId));
+          if (invUpdErr) throw new Error(invUpdErr.message);
+        }
       }
       return;
     }

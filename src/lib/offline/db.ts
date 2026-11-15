@@ -24,6 +24,8 @@ export type OutboxEntityType =
   | "savings_contribution"
   | "debt"
   | "debt_payment"
+  | "investment"
+  | "investment_operation"
   | "preferences";
 
 export type OutboxOperationType =
@@ -46,6 +48,11 @@ export type OutboxOperationType =
   | "delete_debt"
   | "upsert_debt_payment"
   | "delete_debt_payment"
+  | "upsert_investment"
+  | "update_investment_status"
+  | "delete_investment"
+  | "upsert_investment_operation"
+  | "delete_investment_operation"
   | "update_preferences";
 
 export type OutboxStatus = "pending" | "syncing" | "failed" | "auth_paused";
@@ -128,6 +135,8 @@ export interface OfflineSnapshot {
   savingsGoals: any[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   debts: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  investments?: any[];
   subscriptionPlan?: string;
   billingCycle?: string;
   subscriptionExpiresAt?: string | null;
@@ -465,6 +474,8 @@ const CREATE_OPS = new Set<OutboxOperationType>([
   "upsert_savings_contribution",
   "upsert_debt",
   "upsert_debt_payment",
+  "upsert_investment",
+  "upsert_investment_operation",
 ]);
 
 const DELETE_TO_CREATE_OP: Partial<Record<OutboxOperationType, OutboxOperationType>> = {
@@ -475,6 +486,8 @@ const DELETE_TO_CREATE_OP: Partial<Record<OutboxOperationType, OutboxOperationTy
   delete_savings_contribution: "upsert_savings_contribution",
   delete_debt: "upsert_debt",
   delete_debt_payment: "upsert_debt_payment",
+  delete_investment: "upsert_investment",
+  delete_investment_operation: "upsert_investment_operation",
 };
 
 export async function enqueueOutboxEntry(

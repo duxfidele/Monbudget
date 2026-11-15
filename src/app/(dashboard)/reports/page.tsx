@@ -81,6 +81,7 @@ export default function ReportsPage() {
     incomeEntries,
     savingsGoals,
     debts,
+    investments,
     currency,
     activeMonth,
     payDay,
@@ -236,6 +237,7 @@ export default function ReportsPage() {
     categories,
     savingsGoals,
     debts,
+    investments,
     monthlySavings,
     currency,
     payDay: payDay || 28,
@@ -303,6 +305,7 @@ export default function ReportsPage() {
       transactions,
       savingsGoals,
       debts,
+      investments,
     });
     toast.success(`Rapport PDF (${capitalizedMonth}) téléchargé dans votre dossier Téléchargements !`);
   };
@@ -319,6 +322,7 @@ export default function ReportsPage() {
       transactions,
       savingsGoals,
       debts,
+      investments,
     });
     toast.success(`Rapport Excel / CSV (${capitalizedMonth}) téléchargé !`);
   };
