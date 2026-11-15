@@ -39,6 +39,112 @@ interface HelpChatWidgetProps {
   defaultMessage?: string;
 }
 
+/**
+ * Analyseur de mise en forme inline pour convertir le Markdown (gras, italique, code)
+ * en éléments HTML React sans astérisques bruts apparents (Rendu Chat Pro).
+ */
+function parseInlineText(text: string): React.ReactNode {
+  if (!text) return "";
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    if (match[2]) {
+      // **Gras**
+      parts.push(
+        <strong key={match.index} className="font-bold text-slate-900 dark:text-white">
+          {match[2]}
+        </strong>
+      );
+    } else if (match[3]) {
+      // *Italique*
+      parts.push(
+        <em key={match.index} className="italic text-slate-700 dark:text-slate-200">
+          {match[3]}
+        </em>
+      );
+    } else if (match[4]) {
+      // `Code`
+      parts.push(
+        <code key={match.index} className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-mono text-[11px]">
+          {match[4]}
+        </code>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
+
+/**
+ * Rendu professionnel des messages du chat :
+ * - Remplace les astérisques ** par du vrai gras
+ * - Met en page les listes à puces (•) et numérotées avec retrait et puces colorées
+ * - Gère les sauts de ligne et paragraphes proprement
+ */
+function FormattedChatText({ content }: { content: string }) {
+  if (!content) return null;
+  const lines = content.split("\n");
+
+  return (
+    <div className="space-y-1.5 text-slate-700 dark:text-slate-300 leading-relaxed text-[12px]">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          return <div key={idx} className="h-1" />;
+        }
+
+        // Ligne de liste à puces (• ou - ou *)
+        if (trimmed.startsWith("•") || trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+          const itemText = trimmed.replace(/^[•\-\*]\s*/, "");
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-0.5 my-1">
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold select-none text-xs leading-5 mt-0.5">
+                •
+              </span>
+              <div className="flex-1 text-[11.5px] leading-relaxed text-slate-700 dark:text-slate-300">
+                {parseInlineText(itemText)}
+              </div>
+            </div>
+          );
+        }
+
+        // Ligne de liste numérotée (1., 2., etc.)
+        const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+        if (numMatch) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-0.5 my-1">
+              <span className="font-bold text-[#1E3A5F] dark:text-sky-400 select-none text-[11px] leading-5 shrink-0 mt-0.5">
+                {numMatch[1]}.
+              </span>
+              <div className="flex-1 text-[11.5px] leading-relaxed text-slate-700 dark:text-slate-300">
+                {parseInlineText(numMatch[2])}
+              </div>
+            </div>
+          );
+        }
+
+        // Paragraphe standard
+        return (
+          <p key={idx} className="my-0.5 leading-relaxed">
+            {parseInlineText(trimmed)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 export function HelpChatWidget({
   phoneNumber = "22898376101",
   defaultMessage = "Bonjour, j'ai une question concernant l'application MonBudget.",
@@ -278,27 +384,27 @@ export function HelpChatWidget({
                 {msg.sender === "bot" && (
                   <div className="max-w-[92%] space-y-2">
                     {msg.text && (
-                      <div className="rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-100 p-3 shadow-xs space-y-2 leading-relaxed">
-                        <p className="whitespace-pre-wrap">{msg.text}</p>
+                      <div className="rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 p-3 shadow-xs">
+                        <FormattedChatText content={msg.text} />
                       </div>
                     )}
 
-                    {/* Article principal complet trouvé */}
+                    {/* Article principal complet trouvé (Rendu Chat Pro sans astérisques) */}
                     {msg.article && (
-                      <div className="rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-900/60 p-3.5 shadow-sm space-y-2.5">
-                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold text-xs">
-                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <div className="rounded-2xl rounded-tl-xs bg-white dark:bg-slate-800 border border-emerald-200/90 dark:border-emerald-900/60 p-3.5 shadow-xs space-y-2.5">
+                        <div className="flex items-start gap-2 text-emerald-800 dark:text-emerald-400 font-bold text-xs leading-snug">
+                          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
                           <span>{msg.article.title}</span>
                         </div>
-                        <div className="text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed text-[11.5px] border-t border-slate-100 dark:border-slate-700/60 pt-2">
-                          {msg.article.content}
+                        <div className="border-t border-slate-100 dark:border-slate-700/60 pt-2">
+                          <FormattedChatText content={msg.article.content} />
                         </div>
                         {msg.article.action && (
-                          <div className="pt-1">
+                          <div className="pt-1.5">
                             <Link
                               href={msg.article.action.href}
                               onClick={() => setIsOpen(false)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 font-semibold text-xs border border-emerald-200 dark:border-emerald-800 transition"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 font-semibold text-xs border border-emerald-200 dark:border-emerald-800 transition"
                             >
                               <span>{msg.article.action.label}</span>
                               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -463,3 +569,4 @@ export function HelpChatWidget({
     </>
   );
 }
+
