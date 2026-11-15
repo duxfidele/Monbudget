@@ -7,13 +7,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
@@ -22,6 +25,10 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     if (!password || password.length < 8) {
       toast.error("Le mot de passe doit comporter au moins 8 caractères.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error("Les deux mots de passe ne correspondent pas.");
       return;
     }
     setLoading(true);
@@ -59,22 +66,59 @@ export default function ResetPasswordPage() {
         </Link>
         <CardTitle className="text-2xl font-bold text-center">Nouveau mot de passe</CardTitle>
         <CardDescription className="text-center">
-          Veuillez entrer votre nouveau mot de passe.
+          Veuillez entrer et confirmer votre nouveau mot de passe.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleUpdate} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="password">Nouveau mot de passe</Label>
-            <Input 
-              id="password" 
-              type="password" 
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={8}
-            />
+            <div className="relative">
+              <Input 
+                id="password" 
+                type={showPassword ? "text" : "password"} 
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
+                placeholder="Au moins 8 caractères"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
+            <div className="relative">
+              <Input 
+                id="confirmPassword" 
+                type={showConfirmPassword ? "text" : "password"} 
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                minLength={8}
+                placeholder="Retapez votre mot de passe"
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
           <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loading}>
             {loading ? "Mise à jour..." : "Mettre à jour le mot de passe"}
           </Button>

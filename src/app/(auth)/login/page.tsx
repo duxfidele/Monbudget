@@ -19,7 +19,10 @@ import { TurnstileWidget, isTurnstileConfigured } from "@/components/security/tu
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const emailFromUrl = searchParams.get("email")?.trim().toLowerCase() || "";
+  const rawErrorFromUrl = searchParams.get("error_description") || searchParams.get("error");
+
+  const [email, setEmail] = useState(emailFromUrl);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [inputsUnlocked, setInputsUnlocked] = useState(false);
@@ -28,15 +31,10 @@ function LoginForm() {
   const [turnstileResetKey, setTurnstileResetKey] = useState(0);
   const mountedAtRef = useRef<number>(0);
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(() =>
+    rawErrorFromUrl ? translateAuthError(rawErrorFromUrl) : null
+  );
   const supabase = createClient();
-
-  useEffect(() => {
-    const emailParam = searchParams.get("email");
-    if (emailParam) {
-      setEmail(emailParam.trim().toLowerCase());
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     mountedAtRef.current = Date.now();
@@ -46,17 +44,14 @@ function LoginForm() {
   }, []);
 
   useEffect(() => {
-    const rawError = searchParams.get("error_description") || searchParams.get("error");
-    if (rawError) {
-      setErrorMsg(translateAuthError(rawError));
-    } else if (typeof window !== "undefined" && window.location.hash) {
+    if (typeof window !== "undefined" && window.location.hash) {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const hashError = hashParams.get("error_description") || hashParams.get("error");
       if (hashError) {
         setErrorMsg(translateAuthError(hashError));
       }
     }
-  }, [searchParams]);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

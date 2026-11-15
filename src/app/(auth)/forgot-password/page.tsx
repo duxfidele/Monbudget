@@ -43,13 +43,14 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
+      const normalizedEmail = email.replace(/[\u00A0\u202F\uFEFF]/g, " ").trim().toLowerCase();
       const formLoadedAt = mountedAtRef.current;
       const antiSpamRes = await fetch("/api/auth/anti-spam", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "forgot-password",
-          email: email.trim(),
+          email: normalizedEmail,
           honeypot,
           formLoadedAt,
           formElapsedMs: formLoadedAt > 0 ? Math.max(0, Date.now() - formLoadedAt) : 0,
@@ -68,7 +69,7 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
       });
 

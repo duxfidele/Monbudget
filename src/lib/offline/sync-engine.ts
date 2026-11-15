@@ -687,6 +687,26 @@ export async function executeSingleOutboxEntry(
       const contribId = ensureValidUuid(p.id || entry.entityId);
       const goalId = ensureValidUuid(p.savings_goal_id || p.goalId);
 
+      // S'assurer que l'objectif parent existe sur le serveur avant d'insérer la contribution
+      try {
+        const { data: goalExists } = await supabase
+          .from("savings_goals")
+          .select("id")
+          .eq("id", goalId)
+          .maybeSingle();
+
+        if (!goalExists) {
+          const queue = await listOutboxEntries(userId);
+          const parentGoal = queue.find(
+            (q) => q.entityType === "savings_goal" && q.entityId === goalId
+          );
+          if (parentGoal) {
+            await executeSingleOutboxEntry(supabase, userId, parentGoal);
+            await removeOutboxEntry(userId, parentGoal.id);
+          }
+        }
+      } catch {}
+
       const row = {
         id: contribId,
         savings_goal_id: goalId,
@@ -791,6 +811,26 @@ export async function executeSingleOutboxEntry(
     case "upsert_debt_payment": {
       const paymentId = ensureValidUuid(p.id || entry.entityId);
       const debtId = ensureValidUuid(p.debt_id || p.debtId);
+
+      // S'assurer que la dette parente existe sur le serveur avant d'insérer le paiement
+      try {
+        const { data: debtExists } = await supabase
+          .from("debts")
+          .select("id")
+          .eq("id", debtId)
+          .maybeSingle();
+
+        if (!debtExists) {
+          const queue = await listOutboxEntries(userId);
+          const parentDebt = queue.find(
+            (q) => q.entityType === "debt" && q.entityId === debtId
+          );
+          if (parentDebt) {
+            await executeSingleOutboxEntry(supabase, userId, parentDebt);
+            await removeOutboxEntry(userId, parentDebt.id);
+          }
+        }
+      } catch {}
 
       const row = {
         id: paymentId,
@@ -937,6 +977,26 @@ export async function executeSingleOutboxEntry(
     case "upsert_investment_operation": {
       const opId = ensureValidUuid(p.id || entry.entityId);
       const invId = ensureValidUuid(p.investment_id || p.investmentId);
+
+      // S'assurer que l'investissement parent existe sur le serveur avant d'insérer l'opération
+      try {
+        const { data: invExists } = await supabase
+          .from("investments")
+          .select("id")
+          .eq("id", invId)
+          .maybeSingle();
+
+        if (!invExists) {
+          const queue = await listOutboxEntries(userId);
+          const parentInv = queue.find(
+            (q) => q.entityType === "investment" && q.entityId === invId
+          );
+          if (parentInv) {
+            await executeSingleOutboxEntry(supabase, userId, parentInv);
+            await removeOutboxEntry(userId, parentInv.id);
+          }
+        }
+      } catch {}
 
       const opType = [
         "capital_outflow",
@@ -1132,9 +1192,33 @@ export async function processOutboxQueue(
     }
 
     const now = Date.now();
-    const dueItems = allQueue.filter(
+    const rawDueItems = allQueue.filter(
       (item) => options.force || item.status === "auth_paused" || item.nextRetryAt <= now
     );
+
+    // Ordre de priorité strict pour garantir que les entités parentes soient envoyées avant leurs enfants
+    const entityPriorityOrder: Record<string, number> = {
+      profile: 1,
+      preference: 2,
+      monthly_budget: 3,
+      category: 4,
+      savings_goal: 5,
+      debt: 6,
+      investment: 7,
+      savings_contribution: 8,
+      debt_payment: 9,
+      investment_operation: 10,
+      income_entry: 11,
+      budget_allocation: 12,
+      transaction: 13,
+    };
+
+    const dueItems = [...rawDueItems].sort((a, b) => {
+      const prioA = entityPriorityOrder[a.entityType] ?? 50;
+      const prioB = entityPriorityOrder[b.entityType] ?? 50;
+      if (prioA !== prioB) return prioA - prioB;
+      return a.createdAt - b.createdAt;
+    });
 
     let synced = 0;
     let failed = 0;

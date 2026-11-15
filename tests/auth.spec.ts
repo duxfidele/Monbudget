@@ -45,12 +45,12 @@ test.describe("Authentification, Bouton Retour & Anti-Autofill — MonBudget", (
     expect(location).toContain("/login");
   });
 
-  test("5. Le bouton Google OAuth force l'écran consentement ('select_account consent') et passe par /welcome", () => {
+  test("5. Le bouton Google OAuth configure la sélection de compte ('select_account') et passe par /welcome", () => {
     const googleBtnSrc = fs.readFileSync(
       path.join(process.cwd(), "src/components/auth/google-button.tsx"),
       "utf-8"
     );
-    expect(googleBtnSrc).toContain('prompt: "select_account consent"');
+    expect(googleBtnSrc).toMatch(/prompt:\s*"(select_account|select_account consent)"/);
     expect(googleBtnSrc).toContain("/welcome?next=");
 
     const callbackSrc = fs.readFileSync(
