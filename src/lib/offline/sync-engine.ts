@@ -849,6 +849,10 @@ export async function executeSingleOutboxEntry(
 
     case "upsert_investment": {
       const invId = ensureValidUuid(p.id || entry.entityId);
+      const expectedRate = Math.max(
+        0,
+        Number(p.expected_return_percent ?? p.expectedReturnPercent ?? p.expected_return_rate ?? 15) || 0
+      );
       const row = {
         id: invId,
         user_id: userId,
@@ -857,10 +861,7 @@ export async function executeSingleOutboxEntry(
         target_amount: Math.max(0, Number(p.target_amount ?? p.targetAmount) || 0),
         invested_amount: Math.max(0, Number(p.invested_amount ?? p.investedAmount) || 0),
         total_returns: Math.max(0, Number(p.total_returns ?? p.totalReturns) || 0),
-        expected_return_percent: Math.max(
-          0,
-          Number(p.expected_return_percent ?? p.expectedReturnPercent) || 0
-        ),
+        expected_return_percent: expectedRate,
         start_date: p.start_date ?? p.startDate ?? null,
         status: p.status || "active",
         color: p.color || "bg-indigo-600",
@@ -878,11 +879,27 @@ export async function executeSingleOutboxEntry(
 
       const { error } = await supabase.from("investments").upsert(row, { onConflict: "id" });
       if (error) {
-        if (isMissingColumnError(error)) {
+        // Si expected_return_percent n'existe pas dans le schéma PostgREST, repli automatique vers expected_return_rate
+        if (
+          error.message?.includes("expected_return_percent") ||
+          error.code === "PGRST204" ||
+          isMissingColumnError(error)
+        ) {
+          const fallbackRow: Record<string, unknown> = { ...row };
+          delete fallbackRow.expected_return_percent;
+          fallbackRow.expected_return_rate = expectedRate;
+
           const { error: fbErr } = await supabase
             .from("investments")
-            .upsert(stripExtendedSyncColumns(row), { onConflict: "id" });
-          if (fbErr) throw new Error(fbErr.message);
+            .upsert(fallbackRow, { onConflict: "id" });
+          if (!fbErr) return;
+
+          // Second repli en retirant aussi les colonnes étendues si ancien schéma
+          const minimalRow = stripExtendedSyncColumns(fallbackRow);
+          const { error: minErr } = await supabase
+            .from("investments")
+            .upsert(minimalRow, { onConflict: "id" });
+          if (minErr) throw new Error(minErr.message);
           return;
         }
         throw new Error(error.message);
