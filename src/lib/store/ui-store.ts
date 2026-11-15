@@ -1765,12 +1765,39 @@ export const useUIStore = create<UIState>((set, get) => ({
       const activeOutbox = await listOutboxEntries(user.id);
       const lastSyncedCursor = idbSnapshot?.lastSyncedAt || null;
 
+      // Wave 1 : Chargement parallèle ultra-rapide de toutes les entités dépendantes de user.id
+      const [
+        profileRes,
+        budgetRes,
+        allCategoriesRes,
+        goalsRes,
+        remoteDebtsRes,
+        remoteInvestmentsRes,
+      ] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
+        supabase
+          .from("monthly_budgets")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("year", year)
+          .eq("month", month)
+          .maybeSingle(),
+        supabase.from("categories").select("*").eq("user_id", user.id).eq("is_active", true),
+        supabase.from("savings_goals").select("*, savings_contributions(*)").eq("user_id", user.id),
+        supabase
+          .from("debts")
+          .select("*, debt_payments(*)")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("investments")
+          .select("*, investment_operations(*)")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+      ]);
+
       // 6. Profil & Préférences
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
+      const profile = profileRes.data;
 
       if (!profile) {
         await supabase.from("profiles").insert({
@@ -1801,13 +1828,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       }
 
       // 7. Budget mensuel
-      let { data: budget } = await supabase
-        .from("monthly_budgets")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("year", year)
-        .eq("month", month)
-        .maybeSingle();
+      let budget = budgetRes.data;
 
       if (!budget) {
         const { data: newBudget } = await supabase
@@ -1821,11 +1842,23 @@ export const useUIStore = create<UIState>((set, get) => ({
       if (budget) {
         set({ budget_id: budget.id });
 
+        // Wave 2 : Chargement parallèle des données du mois actif (revenus, allocations, transactions)
+        const [incomesRes, allocationsRes, txsRes] = await Promise.all([
+          supabase.from("income_entries").select("*").eq("monthly_budget_id", budget.id),
+          supabase.from("budget_allocations").select("*").eq("monthly_budget_id", budget.id),
+          supabase
+            .from("transactions")
+            .select("*, categories(name)")
+            .eq("monthly_budget_id", budget.id)
+            .order("transaction_date", { ascending: false }),
+        ]);
+
+        const incomes = incomesRes.data;
+        let allCategories = allCategoriesRes.data;
+        const allocations = allocationsRes.data;
+        const txs = txsRes.data;
+
         // 8. Revenus de base (multi-sources) avec réconciliation & tombstones deleted_at
-        const { data: incomes } = await supabase
-          .from("income_entries")
-          .select("*")
-          .eq("monthly_budget_id", budget.id);
 
         const remoteIncomeEntries: (IncomeSourceEntry & {
           updatedAt?: string;
@@ -1854,12 +1887,6 @@ export const useUIStore = create<UIState>((set, get) => ({
         const fetchedBaseSalary = reconciledIncomeEntries.reduce((sum, inc) => sum + inc.amount, 0);
 
         // 9. Catégories & Allocations (exclusion stricte de deleted_at non nul)
-        let { data: allCategories } = await supabase
-          .from("categories")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("is_active", true);
-
         if (!allCategories || allCategories.length === 0) {
           try {
             const defaultCatsToInsert = AFRICAN_EXPENSE_CATEGORIES.map((cat) => ({
@@ -1895,11 +1922,6 @@ export const useUIStore = create<UIState>((set, get) => ({
                 user_id: user.id,
                 is_active: true,
               }));
-
-        const { data: allocations } = await supabase
-          .from("budget_allocations")
-          .select("*")
-          .eq("monthly_budget_id", budget.id);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const activeAllocations = (allocations || []).filter((a: any) => !a.deleted_at);
@@ -1943,11 +1965,6 @@ export const useUIStore = create<UIState>((set, get) => ({
         }
 
         // 10. Transactions avec réconciliation anti-résurrection, tombstones & détection de conflits
-        const { data: txs } = await supabase
-          .from("transactions")
-          .select("*, categories(name)")
-          .eq("monthly_budget_id", budget.id)
-          .order("transaction_date", { ascending: false });
 
         const mappedTxs: (Transaction & { updatedAt?: string; deletedAt?: string | null })[] = (
           txs || []
@@ -2101,10 +2118,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         await subscriptionPromise;
 
         // 11. Objectifs d'épargne avec réconciliation & filtrage des contributions supprimées (deleted_at)
-        const { data: goals } = await supabase
-          .from("savings_goals")
-          .select("*, savings_contributions(*)")
-          .eq("user_id", user.id);
+        const goals = goalsRes.data;
 
         if (goals) {
           const mappedGoals: (SavingsGoal & { updatedAt?: string; deletedAt?: string | null })[] =
@@ -2185,11 +2199,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
         // 12. Dettes & Créances avec réconciliation & filtrage des paiements supprimés (deleted_at)
         try {
-          const { data: remoteDebts } = await supabase
-            .from("debts")
-            .select("*, debt_payments(*)")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
+          const remoteDebts = remoteDebtsRes.data;
 
           if (remoteDebts) {
             const mappedDebts: (DebtItem & { updatedAt?: string; deletedAt?: string | null })[] =
@@ -2247,11 +2257,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
         // 12b. Portefeuille d'investissements & opérations de rendement
         try {
-          const { data: remoteInvestments } = await supabase
-            .from("investments")
-            .select("*, investment_operations(*)")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
+          const remoteInvestments = remoteInvestmentsRes.data;
 
           if (remoteInvestments) {
             const mappedInvestments: (InvestmentItem & {

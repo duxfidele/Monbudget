@@ -84,13 +84,21 @@ function RegisterForm() {
     setLoading(true);
 
     try {
+      const cleanEmail = email
+        .replace(/[\u00A0\u202F\u2000-\u200A\uFEFF]/g, " ")
+        .trim()
+        .toLowerCase();
+      const cleanName = name
+        .replace(/[\u00A0\u202F\u2000-\u200A\uFEFF]/g, " ")
+        .trim();
+
       const formLoadedAt = mountedAtRef.current;
       const antiSpamRes = await fetch("/api/auth/anti-spam", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "register",
-          email: email.trim(),
+          email: cleanEmail,
           honeypot,
           formLoadedAt,
           formElapsedMs: formLoadedAt > 0 ? Math.max(0, Date.now() - formLoadedAt) : 0,
@@ -126,12 +134,12 @@ function RegisterForm() {
       const emailRedirectTo = `${window.location.origin}/auth/confirm?next=${encodeURIComponent(redirectNext)}`;
 
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: cleanEmail,
         password,
         options: {
           emailRedirectTo,
           data: {
-            full_name: name.trim(),
+            full_name: cleanName || cleanEmail.split("@")[0] || "Membre",
           },
         },
       });
@@ -145,22 +153,26 @@ function RegisterForm() {
         setLoading(false);
       } else if (data?.user && data.user.identities && data.user.identities.length === 0) {
         // Supabase sign-up avec email déjà existant
-        const msg = "Cette adresse email est déjà inscrite. Veuillez vous connecter avec votre mot de passe ou via Google.";
+        const msg = "Cette adresse email est déjà inscrite. Connectez-vous simplement avec votre mot de passe ou via Google.";
         setErrorMsg(msg);
         toast.info(msg);
         setTurnstileToken("");
         setTurnstileResetKey((k) => k + 1);
         setLoading(false);
+        // Redirige vers la connexion en préremplissant l'email après un court délai
+        setTimeout(() => {
+          router.push(`/login?email=${encodeURIComponent(cleanEmail)}&next=${encodeURIComponent(redirectNext)}`);
+        }, 2000);
       } else if (data?.session) {
         toast.success("Compte créé ! Votre essai complet de 30 jours est activé.");
-        window.location.href = redirectNext;
+        router.push(redirectNext);
       } else {
-        const msg = "Inscription réussie ! Un email de confirmation vous a été envoyé (vérifiez vos spams).";
+        const msg = "Inscription réussie ! Un email de confirmation vous a été envoyé (vérifiez vos spams). Cliquez dessus pour ouvrir MonBudget.";
         setSuccessMsg(msg);
         toast.success(msg);
         setLoading(false);
         setTimeout(() => {
-          router.push(`/login?next=${encodeURIComponent(redirectNext)}`);
+          router.push(`/login?email=${encodeURIComponent(cleanEmail)}&next=${encodeURIComponent(redirectNext)}`);
         }, 2200);
       }
     } catch (err: unknown) {

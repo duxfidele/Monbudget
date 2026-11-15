@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const requestOrigin = getSafeRequestOrigin(request);
   const code = searchParams.get("code");
+  const accessToken = searchParams.get("access_token");
+  const refreshToken = searchParams.get("refresh_token");
   const next = searchParams.get("next") || "/welcome";
   const errorParam = searchParams.get("error_description") || searchParams.get("error");
 
@@ -21,20 +23,41 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(errorUrl);
   }
 
+  const supabase = await createClient();
+  let sessionUser = null;
+
   if (code) {
-    const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      const friendlyError = translateAuthError(error.message) || error.message;
+      const errorUrl = new URL(
+        `/login?error=${encodeURIComponent(friendlyError)}`,
+        requestOrigin
+      );
+      return NextResponse.redirect(errorUrl);
+    }
+    sessionUser = data?.user || null;
+  } else if (accessToken && refreshToken) {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (!error) {
+      sessionUser = data?.user || null;
+    }
+  }
 
-    if (!error && data?.user) {
-      // Garantir l'initialisation du profil utilisateur s'il n'existe pas encore
+  if (sessionUser) {
+    // Tâches asynchrones en arrière-plan non bloquantes pour une redirection instantanée (<100ms)
+    const user = sessionUser;
+    const fullName =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.email?.split("@")[0] ||
+      "Membre";
+
+    void (async () => {
       try {
-        const user = data.user;
-        const fullName =
-          user.user_metadata?.full_name ||
-          user.user_metadata?.name ||
-          user.email?.split("@")[0] ||
-          "Membre";
-
         await supabase.from("profiles").upsert(
           {
             id: user.id,
@@ -57,21 +80,12 @@ export async function GET(request: NextRequest) {
           fullName,
         }).catch(() => null);
       } catch (profileErr) {
-        console.warn("Notice: could not pre-create profile in callback", profileErr);
+        console.warn("Notice: background profile init in callback", profileErr);
       }
+    })();
 
-      const redirectUrl = getSafeRedirectUrl(next, requestOrigin);
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    if (error) {
-      const friendlyError = translateAuthError(error.message) || error.message;
-      const errorUrl = new URL(
-        `/login?error=${encodeURIComponent(friendlyError)}`,
-        requestOrigin
-      );
-      return NextResponse.redirect(errorUrl);
-    }
+    const redirectUrl = getSafeRedirectUrl(next, requestOrigin);
+    return NextResponse.redirect(redirectUrl);
   }
 
   const errorUrl = new URL(

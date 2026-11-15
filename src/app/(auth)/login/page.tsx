@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { HoneypotField } from "@/components/security/honeypot-field";
 import { TurnstileWidget, isTurnstileConfigured } from "@/components/security/turnstile-widget";
 
 function LoginForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,6 +30,13 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const supabase = createClient();
+
+  useEffect(() => {
+    const emailParam = searchParams.get("email");
+    if (emailParam) {
+      setEmail(emailParam.trim().toLowerCase());
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     mountedAtRef.current = Date.now();
@@ -64,13 +72,18 @@ function LoginForm() {
     setLoading(true);
 
     try {
+      const cleanEmail = email
+        .replace(/[\u00A0\u202F\u2000-\u200A\uFEFF]/g, " ")
+        .trim()
+        .toLowerCase();
+
       const formLoadedAt = mountedAtRef.current;
       const antiSpamRes = await fetch("/api/auth/anti-spam", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "login",
-          email: email.trim(),
+          email: cleanEmail,
           honeypot,
           formLoadedAt,
           formElapsedMs: formLoadedAt > 0 ? Math.max(0, Date.now() - formLoadedAt) : 0,
@@ -90,7 +103,7 @@ function LoginForm() {
       }
 
       const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: cleanEmail,
         password,
       });
 
@@ -116,7 +129,8 @@ function LoginForm() {
         } else if (planParam) {
           redirectTarget = `/settings?tab=subscription&plan=${encodeURIComponent(planParam)}`;
         }
-        window.location.href = redirectTarget;
+        router.push(redirectTarget);
+        router.refresh();
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur réseau lors de la connexion.";

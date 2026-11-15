@@ -50,8 +50,8 @@ export function GoogleAuthButton({ mode = "signin", nextTarget }: GoogleAuthButt
           redirectTo,
           queryParams: {
             access_type: "offline",
-            // Affiche systématiquement la sélection de compte ET l'écran de confirmation Google « Continuer »
-            prompt: "select_account consent",
+            // Affiche la sélection de compte sans réimposer l'écran de consentement à chaque connexion
+            prompt: "select_account",
           },
         },
       });

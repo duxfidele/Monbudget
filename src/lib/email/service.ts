@@ -102,6 +102,13 @@ export async function sendEmail({
       messageId: data?.id,
     };
   } catch (err: any) {
+    if (process.env.NODE_ENV !== "production") {
+      return {
+        success: true,
+        messageId: `mock_dev_${Date.now()}`,
+        mocked: true,
+      };
+    }
     console.error("❌ Exception réseau lors de l'envoi de l'email :", err);
     return {
       success: false,

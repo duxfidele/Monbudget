@@ -78,7 +78,8 @@ export async function POST(req: Request) {
       honeypot: body.honeypot,
       formLoadedAt: body.formLoadedAt,
       formElapsedMs: body.formElapsedMs,
-      minElapsedMs: action === "register" ? 1200 : action === "forgot-password" ? 800 : 0,
+      // Seuil réduit à 300ms pour ne pas pénaliser les utilisateurs utilisant le remplissage auto / gestionnaire de mots de passe
+      minElapsedMs: action === "register" ? 300 : action === "forgot-password" ? 200 : 0,
       requireTiming: action !== "login",
     });
 
@@ -92,7 +93,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const email = (body.email || "").trim();
+    const email = (body.email || "")
+      .replace(/[\u00A0\u202F\u2000-\u200A\uFEFF]/g, " ")
+      .trim()
+      .toLowerCase();
     if (!isValidEmailFormat(email)) {
       return NextResponse.json(
         {

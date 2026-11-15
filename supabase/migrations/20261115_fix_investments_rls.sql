@@ -188,3 +188,4 @@ CREATE POLICY "Users can delete own investment operations."
     WHERE id::text = investment_operations.investment_id::text
       AND user_id::text = auth.uid()::text
   ));
+
