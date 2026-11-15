@@ -46,6 +46,7 @@ import { InstallButton } from "@/components/pwa/install-button";
 import { buildFullAccountExport, downloadJsonFile } from "@/lib/utils/account-export";
 import { getUserStorageKey } from "@/lib/utils/security";
 import { SubscriptionPlansWidget } from "@/components/payments/subscription-plans-widget";
+import { CURRENT_APP_VERSION } from "@/lib/app-version";
 import {
   getPlanCatalog,
   getSubscriptionCountdownInfo,
@@ -275,7 +276,37 @@ export default function SettingsPage() {
     subscriptionStatus,
     refreshSubscription,
     chooseFreePlan,
+    isUpdateAvailable,
+    applyAppUpdate,
+    setIsNewFeatureModalOpen,
   } = useUIStore();
+
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+
+  const handleCheckForUpdates = async () => {
+    setIsCheckingUpdate(true);
+    try {
+      if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          await registration.update();
+          if (registration.waiting) {
+            toast.info("Une nouvelle version de MonBudget est prête à être installée !");
+          } else {
+            toast.success(`Vous utilisez déjà la toute dernière version de MonBudget (v${CURRENT_APP_VERSION}).`);
+          }
+        } else {
+          toast.success(`MonBudget est à jour (v${CURRENT_APP_VERSION}).`);
+        }
+      } else {
+        toast.success(`MonBudget est à jour (v${CURRENT_APP_VERSION}).`);
+      }
+    } catch {
+      toast.info("Vérification terminée.");
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
 
   const subscriptionCountdown = getSubscriptionCountdownInfo({
     planId: subscriptionPlan,
@@ -1077,6 +1108,62 @@ export default function SettingsPage() {
                         <CheckCircle2 className="h-3.5 w-3.5" /> Synchronisé
                       </span>
                     )}
+                  </div>
+
+                  {/* Carte Version & Mises à Jour de l'Application */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-gradient-to-r from-slate-50 to-indigo-50/50 dark:from-slate-800/80 dark:to-slate-900 border border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-indigo-600 text-white shrink-0 shadow-xs">
+                        <Sparkles className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                            Version & Mises à Jour
+                          </p>
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                            v{CURRENT_APP_VERSION}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                          {isUpdateAvailable
+                            ? "Une nouvelle mise à jour avec de nouvelles fonctionnalités est prête à être installée."
+                            : "Votre application est à jour avec les dernières fonctionnalités et améliorations."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsNewFeatureModalOpen(true)}
+                        className="cursor-pointer text-xs rounded-xl"
+                      >
+                        Nouveautés de la version
+                      </Button>
+                      {isUpdateAvailable ? (
+                        <Button
+                          size="sm"
+                          onClick={applyAppUpdate}
+                          className="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl gap-1.5 shadow-xs"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          <span>Installer la mise à jour</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={isCheckingUpdate}
+                          onClick={() => void handleCheckForUpdates()}
+                          className="cursor-pointer text-xs rounded-xl gap-1.5"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${isCheckingUpdate ? "animate-spin" : ""}`} />
+                          <span>{isCheckingUpdate ? "Recherche..." : "Vérifier les màj"}</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>

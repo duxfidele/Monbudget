@@ -1,7 +1,7 @@
 // Service Worker PWA Offline-First pour MonBudget
-// Version: 4.0.0
+// Version: 4.2.0
 
-const CACHE_NAME = "monbudget-cache-v4";
+const CACHE_NAME = "monbudget-cache-v5";
 const OUTBOX_SYNC_TAG = "monbudget-outbox-sync";
 const SW_REGISTRY_DB_NAME = "monbudget_sw_registry_v1";
 const OFFLINE_DB_PREFIX = "monbudget_offline_v1_";
@@ -23,6 +23,7 @@ const APP_SHELL_ROUTES = [
   "/transactions",
   "/budget",
   "/savings",
+  "/investments",
   "/debts",
   "/reports",
   "/settings",

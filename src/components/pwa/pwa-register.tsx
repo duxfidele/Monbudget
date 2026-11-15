@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { useUIStore } from "@/lib/store/ui-store";
+import { useUIStore, setWaitingServiceWorker } from "@/lib/store/ui-store";
 import {
   checkServerReachability,
   requestBackgroundSync,
@@ -16,6 +16,7 @@ export function PWARegister() {
     setOnlineStatus,
     setDeferredPrompt,
     setAppInstalled,
+    setUpdateAvailable,
     syncPendingQueue,
     refreshOfflineDiagnostics,
     initStore,
@@ -62,8 +63,10 @@ export function PWARegister() {
           });
 
           if (registration.waiting) {
-            toast.info("Une nouvelle version de MonBudget est prête.", {
-              duration: 10000,
+            setWaitingServiceWorker(registration.waiting);
+            setUpdateAvailable(true);
+            toast.info("Une nouvelle mise à jour de MonBudget est prête.", {
+              duration: 15000,
               action: {
                 label: "Mettre à jour",
                 onClick: () => {
@@ -81,10 +84,12 @@ export function PWARegister() {
                 newWorker.state === "installed" &&
                 navigator.serviceWorker.controller
               ) {
+                setWaitingServiceWorker(newWorker);
+                setUpdateAvailable(true);
                 toast.info("Nouvelle mise à jour de MonBudget disponible.", {
-                  duration: 10000,
+                  duration: 15000,
                   action: {
-                    label: "Actualiser",
+                    label: "Installer",
                     onClick: () => {
                       newWorker.postMessage({ type: "SKIP_WAITING" });
                     },
@@ -93,6 +98,18 @@ export function PWARegister() {
               }
             });
           });
+
+          // Vérification périodique toutes les 30 minutes
+          const swCheckInterval = setInterval(() => {
+            void registration.update().catch(() => {});
+          }, 30 * 60 * 1000);
+
+          const handleSwVisibility = () => {
+            if (document.visibilityState === "visible") {
+              void registration.update().catch(() => {});
+            }
+          };
+          document.addEventListener("visibilitychange", handleSwVisibility);
         } catch (error) {
           console.warn("Échec d'enregistrement du Service Worker :", error);
         }

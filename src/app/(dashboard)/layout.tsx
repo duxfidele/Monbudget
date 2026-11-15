@@ -5,6 +5,7 @@ import { MobileSidebar } from "@/components/layout/mobile-sidebar";
 import { StoreInitializer } from "@/components/store-initializer";
 import { WhatsAppFloatButton } from "@/components/common/whatsapp-button";
 import { TrialChoiceModal } from "@/components/payments/trial-choice-modal";
+import { UpdateNotificationBanner } from "@/components/pwa/update-notification-banner";
 
 export default function DashboardLayout({
   children,
@@ -25,6 +26,7 @@ export default function DashboardLayout({
         <div className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
           <Header />
         </div>
+        <UpdateNotificationBanner />
         <div className="p-3 sm:p-4 md:p-6 lg:p-8 pb-32 lg:pb-8 flex-1 min-w-0">{children}</div>
       </main>
       <BottomNav />

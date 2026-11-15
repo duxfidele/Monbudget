@@ -230,9 +230,16 @@ interface UIState {
   syncConflicts: ConflictRecord[];
   canInstallPwa: boolean;
   isPwaInstalled: boolean;
+  isUpdateAvailable: boolean;
+  updateDismissed: boolean;
+  isNewFeatureModalOpen: boolean;
   setOnlineStatus: (online: boolean) => void;
   setDeferredPrompt: (prompt: any) => void;
   setAppInstalled: () => void;
+  setUpdateAvailable: (available: boolean) => void;
+  setUpdateDismissed: (dismissed: boolean) => void;
+  setIsNewFeatureModalOpen: (open: boolean) => void;
+  applyAppUpdate: () => void;
   installPwa: () => Promise<boolean>;
   syncPendingQueue: (force?: boolean, quietIfSingle?: boolean) => Promise<number>;
   enqueueSyncAction: (action: Omit<PendingSyncAction, "id" | "timestamp">) => void;
@@ -366,6 +373,15 @@ function getSavedUserId(): string | null {
 
 let activeUserId: string | null = typeof window !== "undefined" ? getSavedUserId() : null;
 let deferredInstallPrompt: any = null;
+let waitingServiceWorker: ServiceWorker | null = null;
+
+export function setWaitingServiceWorker(sw: ServiceWorker | null) {
+  waitingServiceWorker = sw;
+}
+
+export function getWaitingServiceWorker(): ServiceWorker | null {
+  return waitingServiceWorker;
+}
 
 export function getStorageKey(uid?: string | null): string {
   return getUserStorageKey(uid ?? activeUserId);
@@ -808,6 +824,29 @@ export const useUIStore = create<UIState>((set, get) => ({
   syncConflicts: [],
   canInstallPwa: false,
   isPwaInstalled: false,
+  isUpdateAvailable: false,
+  updateDismissed: false,
+  isNewFeatureModalOpen: false,
+
+  setUpdateAvailable: (available) => set({ isUpdateAvailable: available }),
+  setUpdateDismissed: (dismissed) => set({ updateDismissed: dismissed }),
+  setIsNewFeatureModalOpen: (open) => set({ isNewFeatureModalOpen: open }),
+
+  applyAppUpdate: () => {
+    if (waitingServiceWorker) {
+      waitingServiceWorker.postMessage({ type: "SKIP_WAITING" });
+    } else if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg?.waiting) {
+          reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        } else {
+          window.location.reload();
+        }
+      });
+    } else if (typeof window !== "undefined") {
+      window.location.reload();
+    }
+  },
 
   setOnlineStatus: (online) => {
     set((state) => ({

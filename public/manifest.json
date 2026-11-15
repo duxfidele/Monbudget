@@ -58,6 +58,12 @@
       "short_name": "Budget",
       "url": "/budget",
       "description": "Ajuster vos prévisions et plafonds par catégorie"
+    },
+    {
+      "name": "Investissements & Rendements",
+      "short_name": "Investissements",
+      "url": "/investments",
+      "description": "Suivre vos projets, capitaux et gains ROI"
     }
   ]
 }
