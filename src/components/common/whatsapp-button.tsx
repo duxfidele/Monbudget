@@ -21,7 +21,7 @@ export function WhatsAppFloatButton({
   return (
     <aside
       aria-label="Assistance WhatsApp MonBudget"
-      className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:bottom-6 right-3 sm:right-6 z-40 flex items-center gap-3 select-none"
+      className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-6 right-3 sm:right-6 z-40 flex items-center gap-3 select-none"
     >
       {/* Bulle d'information interactive */}
       {showTooltip && (

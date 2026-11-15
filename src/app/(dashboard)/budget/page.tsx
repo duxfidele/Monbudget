@@ -930,9 +930,9 @@ export default function BudgetPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-3">
         {/* Résumé & Pilotage */}
-        <div className="lg:col-span-1 space-y-5 min-w-0">
+        <div className="md:col-span-1 space-y-5 min-w-0">
           {/* Revenu Card avec multi-sources (Pilier B) */}
           <Card className="border-none shadow-md bg-gradient-to-br from-[#1E3A5F] to-[#2B4E7E] text-white">
             <CardHeader className="pb-3">
@@ -1378,7 +1378,7 @@ export default function BudgetPage() {
         </div>
 
         {/* Répartition par Catégorie (Pilier C) */}
-        <Card className="lg:col-span-2 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        <Card className="md:col-span-2 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>

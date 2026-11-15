@@ -218,7 +218,7 @@ export function SubscriptionPlansWidget({
       </div>
 
       {/* Grille des 3 plans interactifs */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5 items-stretch">
         {plansList.map((plan) => {
           const isCurrentPlan =
             effectivePlanId === plan.id &&

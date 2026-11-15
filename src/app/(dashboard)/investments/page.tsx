@@ -1270,7 +1270,7 @@ export default function InvestmentsPage() {
         {/* =========================================================================
             TABLEAU DE BORD : 5 CARTES KPI PATRIMONIALES
         ========================================================================== */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4">
           {/* 1. Capital Investi Total */}
           <Card className="min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
             <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
@@ -1379,7 +1379,7 @@ export default function InvestmentsPage() {
           </Card>
 
           {/* 5. Flux du Mois */}
-          <Card className="col-span-2 lg:col-span-1 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+          <Card className="col-span-2 md:col-span-1 lg:col-span-1 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
             <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-5 pb-1 sm:pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 truncate">
                 Mouvements du Mois
