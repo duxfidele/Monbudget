@@ -37,7 +37,6 @@ import {
   getCategoryProgress,
   getEffectiveTotalAllocated,
   formatThousands,
-  parseThousands,
   isIncomeTransaction,
   getTotalExpenses,
   getRemainingToLive,
@@ -930,455 +929,461 @@ export default function BudgetPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Résumé & Pilotage */}
-        <div className="md:col-span-1 space-y-5 min-w-0">
-          {/* Revenu Card avec multi-sources (Pilier B) */}
-          <Card className="border-none shadow-md bg-gradient-to-br from-[#1E3A5F] to-[#2B4E7E] text-white">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
-                  <Wallet className="h-4 w-4 text-emerald-300" />
-                  Sources de Revenus du Mois
-                </CardTitle>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowAddIncomeForm(!showAddIncomeForm)}
-                  className="h-7 px-2.5 text-xs bg-white/15 hover:bg-white/25 text-white rounded-lg gap-1"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Ajouter une source</span>
-                </Button>
-              </div>
-              <CardDescription className="text-xs text-slate-300">
-                Salaire, Commerce, Activités secondaires, Prestations, Loyers...
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-3">
-                <div>
-                  <span className="text-[11px] uppercase tracking-wider text-slate-300 font-semibold block mb-1">
-                    Revenu principal ou total déclaré
-                  </span>
-                  <IncomeInput 
-                    initialIncome={baseSalary > 0 ? baseSalary : income} 
-                    currency={currency} 
-                    onCommit={(val) => setSalary(val)} 
-                  />
-                </div>
-
-                {/* Formulaire d'ajout d'une source de revenu spécifique */}
-                {showAddIncomeForm && (
-                  <div className="p-3 rounded-xl bg-white/10 border border-white/20 space-y-2.5 animate-in fade-in">
-                    <div className="text-xs font-semibold text-emerald-300">
-                      Nouvelle source de revenu
-                    </div>
-                    <select
-                      value={incomeSourceType}
-                      onChange={(e) => setIncomeSourceType(e.target.value)}
-                      className="flex h-9 w-full rounded-lg bg-slate-900/70 border border-white/20 px-2.5 text-xs text-white focus:outline-none"
-                    >
-                      {INCOME_SOURCES.map((src) => (
-                        <option key={src} value={src} className="bg-slate-900 text-white">
-                          {src}
-                        </option>
-                      ))}
-                    </select>
-                    <Input
-                      placeholder="Précision (ex: Boutique, Chantier, Loyer studio...)"
-                      value={incomeLabel}
-                      onChange={(e) => setIncomeLabel(e.target.value)}
-                      className="h-9 text-xs bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    />
-                    <BudgetAmountInput
-                      value={incomeAmount}
-                      onChange={(val) => setIncomeAmount(val)}
-                      currency={currency}
-                      placeholder="Montant"
-                      inputClassName="bg-white/10 border-white/20 text-white h-9 text-xs"
-                    />
-                    <div className="flex justify-end gap-2 pt-1">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setShowAddIncomeForm(false)}
-                        className="h-8 text-xs text-slate-300 hover:text-white hover:bg-white/10"
-                      >
-                        Annuler
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={async () => {
-                          if (incomeAmount <= 0) {
-                            toast.error("Veuillez saisir un montant supérieur à 0.");
-                            return;
-                          }
-                          await addIncomeEntry({
-                            sourceType: incomeSourceType,
-                            label: incomeLabel.trim() || incomeSourceType,
-                            amount: incomeAmount,
-                          });
-                          setIncomeLabel("");
-                          setIncomeAmount(0);
-                          setShowAddIncomeForm(false);
-                          toast.success(`Source "${incomeSourceType}" ajoutée à vos revenus !`);
-                        }}
-                        className="h-8 text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
-                      >
-                        Ajouter ce revenu
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Liste des sources de revenus enregistrées */}
-                {incomeEntries && incomeEntries.length > 0 && (
-                  <div className="space-y-1.5 bg-black/20 p-2.5 rounded-xl border border-white/10">
-                    <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">
-                      Détail des sources ({incomeEntries.length})
-                    </div>
-                    {incomeEntries.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-none"
-                      >
-                        <div className="truncate pr-2">
-                          <span className="font-semibold text-emerald-300">{entry.sourceType}</span>
-                          {entry.label && entry.label !== entry.sourceType && (
-                            <span className="text-slate-300"> • {entry.label}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <strong className="text-white">{formatMoney(entry.amount, currency)}</strong>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              removeIncomeEntry(entry.id);
-                              toast.info("Source de revenu retirée.");
-                            }}
-                            className="text-slate-400 hover:text-red-300 p-0.5"
-                            title="Supprimer cette source"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {income > 0 && (
-                  <div className="bg-white/10 p-2.5 rounded-lg border border-white/10 text-xs space-y-1.5 mt-1">
-                    {showDailyPilotage ? (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-200">Budget journalier conseillé :</span>
-                          <strong className="text-white">{formatMoney(dailyInfo.dailyBudget, currency)}/j</strong>
-                        </div>
-                        <div className="flex items-center justify-between text-emerald-300 font-semibold text-[11px]">
-                          <span>Disponible aujourd&apos;hui (déduit auto) :</span>
-                          <span>{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <Link
-                        href="/settings?tab=subscription&plan=personal#plan-card-personal"
-                        className="flex items-center justify-between gap-2 text-[11px] text-amber-300 hover:underline font-semibold"
-                      >
-                        <span className="inline-flex items-center gap-1">
-                          <Lock className="h-3 w-3 shrink-0" />
-                          Pilotage journalier conseillé
-                        </span>
-                        <span>Débloquer (500 F) &rarr;</span>
-                      </Link>
-                    )}
-                    <div className="flex items-center justify-between text-slate-300 text-[11px] pt-1 border-t border-white/10">
-                      <span>Solde disponible en caisse :</span>
-                      <strong className="text-white">{formatMoney(resteReel, currency)}</strong>
-                    </div>
-                  </div>
-                )}
-                {additionalIncomes > 0 && (
-                  <div className="text-[11px] bg-white/10 p-2 rounded-lg text-slate-200 space-y-0.5 border border-white/10">
-                    <div className="flex justify-between">
-                      <span className="text-slate-300">Revenus fixes / déclarés :</span>
-                      <strong>{formatMoney(baseSalary, currency)}</strong>
-                    </div>
-                    <div className="flex justify-between text-emerald-300">
-                      <span>Entrées additionnelles (Transactions) :</span>
-                      <strong>+{formatMoney(additionalIncomes, currency)}</strong>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Solde réel restant & Répartition Card */}
-          <Card className={`border-none shadow-sm transition-colors ${resteReel < 0 ? "bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60" : resteReel === 0 ? "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60" : "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800"}`}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-300">Solde réel restant</CardTitle>
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                  Solde disponible réel
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div suppressHydrationWarning className={`text-2xl sm:text-3xl font-extrabold ${resteReel < 0 ? "text-red-600 dark:text-rose-400" : resteReel === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-800 dark:text-slate-100"}`}>
-                {formatMoney(resteReel, currency)}
-              </div>
-
-              <div className="mt-3 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+      <div className="flex flex-col md:grid md:grid-cols-3 gap-6 items-start">
+        {/* Colonne gauche sur Desktop / Éléments 1 et 3 ordonnés sur Mobile */}
+        <div className="contents md:block md:col-span-1 md:space-y-5 w-full min-w-0">
+          {/* 1. Carte Revenus avec multi-sources (Pilier B) - En 1er sur Mobile et Desktop */}
+          <div className="order-1 w-full">
+            <Card className="border-none shadow-md bg-gradient-to-br from-[#1E3A5F] to-[#2B4E7E] text-white">
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <span>Dépenses + Épargne déjà sorties :</span>
-                  <strong className="text-slate-800 dark:text-slate-100">{formatMoney(totalRealOutflows, currency)}</strong>
+                  <CardTitle className="text-sm font-medium text-slate-200 flex items-center gap-2">
+                    <Wallet className="h-4 w-4 text-emerald-300" />
+                    Sources de Revenus du Mois
+                  </CardTitle>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowAddIncomeForm(!showAddIncomeForm)}
+                    className="h-7 px-2.5 text-xs bg-white/15 hover:bg-white/25 text-white rounded-lg gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Ajouter une source</span>
+                  </Button>
                 </div>
-                {epargne > 0 && (
-                  <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 text-[11px]">
-                    <span>• dont Épargne comptabilisée auto :</span>
-                    <strong>{formatMoney(epargne, currency)}</strong>
+                <CardDescription className="text-xs text-slate-300">
+                  Salaire, Commerce, Activités secondaires, Prestations, Loyers...
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <span className="text-[11px] uppercase tracking-wider text-slate-300 font-semibold block mb-1">
+                      Revenu principal ou total déclaré
+                    </span>
+                    <IncomeInput 
+                      initialIncome={baseSalary > 0 ? baseSalary : income} 
+                      currency={currency} 
+                      onCommit={(val) => setSalary(val)} 
+                    />
                   </div>
-                )}
-                <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 dark:border-slate-700 text-[11px]">
-                  <span>Réservé dans vos enveloppes restantes :</span>
-                  <strong className="text-amber-700 dark:text-amber-400">{formatMoney(reservedInEnvelopes, currency)}</strong>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span>Marge libre non affectée (à allouer) :</span>
-                  <strong className={remaining < 0 ? "text-red-600 dark:text-rose-400" : "text-[#1E3A5F] dark:text-sky-300"}>
-                    {formatMoney(remaining, currency)}
-                  </strong>
-                </div>
-              </div>
 
-              {remaining === 0 && resteReel >= 0 && (
-                <div className="flex items-center gap-1.5 text-emerald-700 text-xs mt-3 font-medium bg-emerald-100/60 p-2.5 rounded-lg">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                  <span>Budget Base Zéro parfait : chaque franc de votre solde a une affectation précise !</span>
+                  {/* Formulaire d'ajout d'une source de revenu spécifique */}
+                  {showAddIncomeForm && (
+                    <div className="p-3 rounded-xl bg-white/10 border border-white/20 space-y-2.5 animate-in fade-in">
+                      <div className="text-xs font-semibold text-emerald-300">
+                        Nouvelle source de revenu
+                      </div>
+                      <select
+                        value={incomeSourceType}
+                        onChange={(e) => setIncomeSourceType(e.target.value)}
+                        className="flex h-9 w-full rounded-lg bg-slate-900/70 border border-white/20 px-2.5 text-xs text-white focus:outline-none"
+                      >
+                        {INCOME_SOURCES.map((src) => (
+                          <option key={src} value={src} className="bg-slate-900 text-white">
+                            {src}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        placeholder="Précision (ex: Boutique, Chantier, Loyer studio...)"
+                        value={incomeLabel}
+                        onChange={(e) => setIncomeLabel(e.target.value)}
+                        className="h-9 text-xs bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                      />
+                      <BudgetAmountInput
+                        value={incomeAmount}
+                        onChange={(val) => setIncomeAmount(val)}
+                        currency={currency}
+                        placeholder="Montant"
+                        inputClassName="bg-white/10 border-white/20 text-white h-9 text-xs"
+                      />
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setShowAddIncomeForm(false)}
+                          className="h-8 text-xs text-slate-300 hover:text-white hover:bg-white/10"
+                        >
+                          Annuler
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={async () => {
+                            if (incomeAmount <= 0) {
+                              toast.error("Veuillez saisir un montant supérieur à 0.");
+                              return;
+                            }
+                            await addIncomeEntry({
+                              sourceType: incomeSourceType,
+                              label: incomeLabel.trim() || incomeSourceType,
+                              amount: incomeAmount,
+                            });
+                            setIncomeLabel("");
+                            setIncomeAmount(0);
+                            setShowAddIncomeForm(false);
+                            toast.success(`Source "${incomeSourceType}" ajoutée à vos revenus !`);
+                          }}
+                          className="h-8 text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
+                        >
+                          Ajouter ce revenu
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Liste des sources de revenus enregistrées */}
+                  {incomeEntries && incomeEntries.length > 0 && (
+                    <div className="space-y-1.5 bg-black/20 p-2.5 rounded-xl border border-white/10">
+                      <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">
+                        Détail des sources ({incomeEntries.length})
+                      </div>
+                      {incomeEntries.map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-none"
+                        >
+                          <div className="truncate pr-2">
+                            <span className="font-semibold text-emerald-300">{entry.sourceType}</span>
+                            {entry.label && entry.label !== entry.sourceType && (
+                              <span className="text-slate-300"> • {entry.label}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <strong className="text-white">{formatMoney(entry.amount, currency)}</strong>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                removeIncomeEntry(entry.id);
+                                toast.info("Source de revenu retirée.");
+                              }}
+                              className="text-slate-400 hover:text-red-300 p-0.5"
+                              title="Supprimer cette source"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {income > 0 && (
+                    <div className="bg-white/10 p-2.5 rounded-lg border border-white/10 text-xs space-y-1.5 mt-1">
+                      {showDailyPilotage ? (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-200">Budget journalier conseillé :</span>
+                            <strong className="text-white">{formatMoney(dailyInfo.dailyBudget, currency)}/j</strong>
+                          </div>
+                          <div className="flex items-center justify-between text-emerald-300 font-semibold text-[11px]">
+                            <span>Disponible aujourd&apos;hui (déduit auto) :</span>
+                            <span>{formatMoney(Math.max(0, dailyInfo.todayRemaining), currency)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <Link
+                          href="/settings?tab=subscription&plan=personal#plan-card-personal"
+                          className="flex items-center justify-between gap-2 text-[11px] text-amber-300 hover:underline font-semibold"
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            <Lock className="h-3 w-3 shrink-0" />
+                            Pilotage journalier conseillé
+                          </span>
+                          <span>Débloquer (500 F) &rarr;</span>
+                        </Link>
+                      )}
+                      <div className="flex items-center justify-between text-slate-300 text-[11px] pt-1 border-t border-white/10">
+                        <span>Solde disponible en caisse :</span>
+                        <strong className="text-white">{formatMoney(resteReel, currency)}</strong>
+                      </div>
+                    </div>
+                  )}
+                  {additionalIncomes > 0 && (
+                    <div className="text-[11px] bg-white/10 p-2 rounded-lg text-slate-200 space-y-0.5 border border-white/10">
+                      <div className="flex justify-between">
+                        <span className="text-slate-300">Revenus fixes / déclarés :</span>
+                        <strong>{formatMoney(baseSalary, currency)}</strong>
+                      </div>
+                      <div className="flex justify-between text-emerald-300">
+                        <span>Entrées additionnelles (Transactions) :</span>
+                        <strong>+{formatMoney(additionalIncomes, currency)}</strong>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </CardContent>
+            </Card>
+          </div>
 
-              {remaining > 0 && (
-                <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                  Sur vos <strong>{formatMoney(resteReel, currency)}</strong> en caisse, <strong>{formatMoney(reservedInEnvelopes, currency)}</strong> sont réservés dans vos enveloppes et <strong>{formatMoney(remaining, currency)}</strong> sont libres à allouer.
-                </p>
-              )}
-
-              {remaining < 0 && (
-                <div className="flex items-start gap-1.5 text-red-600 text-xs mt-3 font-medium bg-red-100/70 p-2.5 rounded-lg">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>Vos enveloppes prévues dépassent votre solde disponible de {formatMoney(Math.abs(remaining), currency)}. Réduisez certains plafonds.</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Carte Liaison directe Dettes & Créances <-> Mon Budget */}
-          <Card className="border border-amber-200/80 shadow-sm bg-gradient-to-br from-amber-50/70 via-white to-rose-50/40">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                  <HandCoins className="h-4 w-4 text-amber-600" />
-                  Lien Dettes & Créances
-                </CardTitle>
-                <Link
-                  href="/debts"
-                  className="text-xs font-semibold text-[#1E3A5F] hover:underline flex items-center gap-1"
-                >
-                  <span>Gérer</span>
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-              <CardDescription className="text-xs text-slate-500">
-                Synchronisation automatique avec votre budget du mois
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-xs">
-              <div className="p-2.5 rounded-lg bg-rose-50/80 border border-rose-100 space-y-1">
-                <div className="flex items-center justify-between text-rose-900">
-                  <span className="flex items-center gap-1 font-medium">
-                    <ArrowUpRight className="h-3.5 w-3.5 text-rose-600" />
-                    Dettes restant à payer :
+          {/* 3. Bloc Synthèse, Pilotage & Liaisons - En 3ème sur Mobile (après Enveloppes et Enregistrer) / Sous les revenus sur Desktop */}
+          <div className="order-3 space-y-5 w-full min-w-0">
+            {/* Solde réel restant & Répartition Card */}
+            <Card className={`border-none shadow-sm transition-colors ${resteReel < 0 ? "bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-900/60" : resteReel === 0 ? "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60" : "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800"}`}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-300">Solde réel restant</CardTitle>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    Solde disponible réel
                   </span>
-                  <strong className="font-bold">{formatMoney(totalPayableDebts, currency)}</strong>
                 </div>
-                <div className="flex items-center justify-between text-slate-600 text-[11px]">
-                  <span>Remboursé ce mois-ci :</span>
-                  <strong className="text-rose-700">{formatMoney(repaidThisMonth, currency)}</strong>
+              </CardHeader>
+              <CardContent>
+                <div suppressHydrationWarning className={`text-2xl sm:text-3xl font-extrabold ${resteReel < 0 ? "text-red-600 dark:text-rose-400" : resteReel === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-800 dark:text-slate-100"}`}>
+                  {formatMoney(resteReel, currency)}
                 </div>
-                {debtEnvelope ? (
-                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-rose-200/60 text-slate-700">
-                    <span>Enveloppe prévue :</span>
-                    <strong>{formatMoney(debtEnvelope.amount, currency)}</strong>
+
+                <div className="mt-3 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+                  <div className="flex items-center justify-between">
+                    <span>Dépenses + Épargne déjà sorties :</span>
+                    <strong className="text-slate-800 dark:text-slate-100">{formatMoney(totalRealOutflows, currency)}</strong>
                   </div>
-                ) : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={handleBudgetizeDebtEnvelope}
-                    className="w-full mt-1.5 h-7 text-[11px] border-rose-200 dark:border-rose-900 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-400 font-semibold"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Créer l&apos;enveloppe « Remboursement de dette »
-                  </Button>
-                )}
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 space-y-1">
-                <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
-                  <span className="flex items-center gap-1 font-medium">
-                    <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                    Créances à récupérer :
-                  </span>
-                  <strong className="font-bold">{formatMoney(totalReceivableDebts, currency)}</strong>
-                </div>
-                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
-                  <span>Encaissé ce mois (+ Revenu) :</span>
-                  <strong className="text-emerald-700 dark:text-emerald-300">+{formatMoney(recoveredThisMonth, currency)}</strong>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Carte Liaison directe Épargne & Objectifs <-> Mon Budget */}
-          <Card className="border border-emerald-200/80 dark:border-emerald-900/40 shadow-sm bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <PiggyBank className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  Lien Épargne & Objectifs
-                </CardTitle>
-                <Link
-                  href="/savings"
-                  className="text-xs font-semibold text-[#1E3A5F] dark:text-sky-400 hover:underline flex items-center gap-1"
-                >
-                  <span>Voir objectifs</span>
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-              <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
-                Synchronisé avec vos versements d&apos;épargne et vos transactions
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2.5 text-xs">
-              <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 space-y-1">
-                <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
-                  <span className="font-medium">Épargné ce mois-ci :</span>
-                  <strong className="font-bold">{formatMoney(epargne, currency)}</strong>
-                </div>
-                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
-                  <span>Cumul total des objectifs ({savingsGoals.length}) :</span>
-                  <strong className="text-emerald-700 dark:text-emerald-300">{formatMoney(totalSavingsAccumulated, currency)}</strong>
-                </div>
-                {savingsEnvelope ? (
-                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-emerald-200/60 dark:border-emerald-800 text-slate-700 dark:text-slate-300">
-                    <span>Enveloppe Épargne prévue :</span>
-                    <strong>{formatMoney(savingsEnvelope.amount, currency)}</strong>
+                  {epargne > 0 && (
+                    <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 text-[11px]">
+                      <span>• dont Épargne comptabilisée auto :</span>
+                      <strong>{formatMoney(epargne, currency)}</strong>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 dark:border-slate-700 text-[11px]">
+                    <span>Réservé dans vos enveloppes restantes :</span>
+                    <strong className="text-amber-700 dark:text-amber-400">{formatMoney(reservedInEnvelopes, currency)}</strong>
                   </div>
-                ) : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={handleBudgetizeSavingsEnvelope}
-                    className="w-full mt-1.5 h-7 text-[11px] border-emerald-200 dark:border-emerald-900 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-semibold"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Créer l&apos;enveloppe « Épargne » (10%)
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Carte Liaison directe Portefeuille d'Investissements <-> Mon Budget */}
-          <Card className="border border-indigo-200/80 dark:border-indigo-900/40 shadow-sm bg-gradient-to-br from-indigo-50/70 via-white to-emerald-50/40 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <Briefcase className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                  Lien Investissements &amp; ROI
-                </CardTitle>
-                <Link
-                  href="/investments"
-                  className="text-xs font-semibold text-[#1E3A5F] dark:text-sky-400 hover:underline flex items-center gap-1"
-                >
-                  <span>Portefeuille</span>
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-              <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
-                Placements en capital (sorties) et rendements encaissés (+ revenu)
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2.5 text-xs">
-              <div className="p-2.5 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 space-y-1">
-                <div className="flex items-center justify-between text-indigo-950 dark:text-indigo-200">
-                  <span className="font-medium">Investi ce mois-ci :</span>
-                  <strong className="font-bold">{formatMoney(investedThisMonth, currency)}</strong>
-                </div>
-                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
-                  <span>Capital total investi ({(investments || []).length} actif(s)) :</span>
-                  <strong className="text-indigo-700 dark:text-indigo-300">{formatMoney(totalInvestedCapital, currency)}</strong>
-                </div>
-                {investmentEnvelope ? (
-                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-indigo-200/60 dark:border-indigo-800 text-slate-700 dark:text-slate-300">
-                    <span>Enveloppe Investissement :</span>
-                    <strong>{formatMoney(investmentEnvelope.amount, currency)}</strong>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span>Marge libre non affectée (à allouer) :</span>
+                    <strong className={remaining < 0 ? "text-red-600 dark:text-rose-400" : "text-[#1E3A5F] dark:text-sky-300"}>
+                      {formatMoney(remaining, currency)}
+                    </strong>
                   </div>
-                ) : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={handleBudgetizeInvestmentEnvelope}
-                    className="w-full mt-1.5 h-7 text-[11px] border-indigo-200 dark:border-indigo-900 bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-semibold"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Créer l&apos;enveloppe « Investissement »
-                  </Button>
+                </div>
+
+                {remaining === 0 && resteReel >= 0 && (
+                  <div className="flex items-center gap-1.5 text-emerald-700 text-xs mt-3 font-medium bg-emerald-100/60 p-2.5 rounded-lg">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span>Budget Base Zéro parfait : chaque franc de votre solde a une affectation précise !</span>
+                  </div>
                 )}
-              </div>
 
-              <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 space-y-1">
-                <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
-                  <span className="font-medium">Rendements reçus ce mois (+ Revenu) :</span>
-                  <strong className="font-bold text-emerald-700 dark:text-emerald-300">
-                    +{formatMoney(investmentReturnsThisMonth, currency)}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
-                  <span>Total cumulé des gains :</span>
-                  <strong className="text-emerald-700 dark:text-emerald-300">
-                    +{formatMoney(totalInvestmentReturns, currency)}
-                  </strong>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                {remaining > 0 && (
+                  <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+                    Sur vos <strong>{formatMoney(resteReel, currency)}</strong> en caisse, <strong>{formatMoney(reservedInEnvelopes, currency)}</strong> sont réservés dans vos enveloppes et <strong>{formatMoney(remaining, currency)}</strong> sont libres à allouer.
+                  </p>
+                )}
 
-          {/* Astuce Ergonomie */}
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-2">
-            <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-              <span>Astuces de saisie ultra rapide</span>
+                {remaining < 0 && (
+                  <div className="flex items-start gap-1.5 text-red-600 text-xs mt-3 font-medium bg-red-100/70 p-2.5 rounded-lg">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>Vos enveloppes prévues dépassent votre solde disponible de {formatMoney(Math.abs(remaining), currency)}. Réduisez certains plafonds.</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Carte Liaison directe Dettes & Créances <-> Mon Budget */}
+            <Card className="border border-amber-200/80 shadow-sm bg-gradient-to-br from-amber-50/70 via-white to-rose-50/40">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <HandCoins className="h-4 w-4 text-amber-600" />
+                    Lien Dettes & Créances
+                  </CardTitle>
+                  <Link
+                    href="/debts"
+                    className="text-xs font-semibold text-[#1E3A5F] hover:underline flex items-center gap-1"
+                  >
+                    <span>Gérer</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+                <CardDescription className="text-xs text-slate-500">
+                  Synchronisation automatique avec votre budget du mois
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs">
+                <div className="p-2.5 rounded-lg bg-rose-50/80 border border-rose-100 space-y-1">
+                  <div className="flex items-center justify-between text-rose-900">
+                    <span className="flex items-center gap-1 font-medium">
+                      <ArrowUpRight className="h-3.5 w-3.5 text-rose-600" />
+                      Dettes restant à payer :
+                    </span>
+                    <strong className="font-bold">{formatMoney(totalPayableDebts, currency)}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600 text-[11px]">
+                    <span>Remboursé ce mois-ci :</span>
+                    <strong className="text-rose-700">{formatMoney(repaidThisMonth, currency)}</strong>
+                  </div>
+                  {debtEnvelope ? (
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-rose-200/60 text-slate-700">
+                      <span>Enveloppe prévue :</span>
+                      <strong>{formatMoney(debtEnvelope.amount, currency)}</strong>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleBudgetizeDebtEnvelope}
+                      className="w-full mt-1.5 h-7 text-[11px] border-rose-200 dark:border-rose-900 bg-white dark:bg-slate-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-700 dark:text-rose-400 font-semibold"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Créer l&apos;enveloppe « Remboursement de dette »
+                    </Button>
+                  )}
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 space-y-1">
+                  <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
+                    <span className="flex items-center gap-1 font-medium">
+                      <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      Créances à récupérer :
+                    </span>
+                    <strong className="font-bold">{formatMoney(totalReceivableDebts, currency)}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+                    <span>Encaissé ce mois (+ Revenu) :</span>
+                    <strong className="text-emerald-700 dark:text-emerald-300">+{formatMoney(recoveredThisMonth, currency)}</strong>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Carte Liaison directe Épargne & Objectifs <-> Mon Budget */}
+            <Card className="border border-emerald-200/80 dark:border-emerald-900/40 shadow-sm bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <PiggyBank className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    Lien Épargne & Objectifs
+                  </CardTitle>
+                  <Link
+                    href="/savings"
+                    className="text-xs font-semibold text-[#1E3A5F] dark:text-sky-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Voir objectifs</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+                <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
+                  Synchronisé avec vos versements d&apos;épargne et vos transactions
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2.5 text-xs">
+                <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 space-y-1">
+                  <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
+                    <span className="font-medium">Épargné ce mois-ci :</span>
+                    <strong className="font-bold">{formatMoney(epargne, currency)}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+                    <span>Cumul total des objectifs ({savingsGoals.length}) :</span>
+                    <strong className="text-emerald-700 dark:text-emerald-300">{formatMoney(totalSavingsAccumulated, currency)}</strong>
+                  </div>
+                  {savingsEnvelope ? (
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-emerald-200/60 dark:border-emerald-800 text-slate-700 dark:text-slate-300">
+                      <span>Enveloppe Épargne prévue :</span>
+                      <strong>{formatMoney(savingsEnvelope.amount, currency)}</strong>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleBudgetizeSavingsEnvelope}
+                      className="w-full mt-1.5 h-7 text-[11px] border-emerald-200 dark:border-emerald-900 bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-semibold"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Créer l&apos;enveloppe « Épargne » (10%)
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Carte Liaison directe Portefeuille d'Investissements <-> Mon Budget */}
+            <Card className="border border-indigo-200/80 dark:border-indigo-900/40 shadow-sm bg-gradient-to-br from-indigo-50/70 via-white to-emerald-50/40 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                    Lien Investissements &amp; ROI
+                  </CardTitle>
+                  <Link
+                    href="/investments"
+                    className="text-xs font-semibold text-[#1E3A5F] dark:text-sky-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Portefeuille</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+                <CardDescription className="text-xs text-slate-500 dark:text-slate-400">
+                  Placements en capital (sorties) et rendements encaissés (+ revenu)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2.5 text-xs">
+                <div className="p-2.5 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 space-y-1">
+                  <div className="flex items-center justify-between text-indigo-950 dark:text-indigo-200">
+                    <span className="font-medium">Investi ce mois-ci :</span>
+                    <strong className="font-bold">{formatMoney(investedThisMonth, currency)}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+                    <span>Capital total investi ({(investments || []).length} actif(s)) :</span>
+                    <strong className="text-indigo-700 dark:text-indigo-300">{formatMoney(totalInvestedCapital, currency)}</strong>
+                  </div>
+                  {investmentEnvelope ? (
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-indigo-200/60 dark:border-indigo-800 text-slate-700 dark:text-slate-300">
+                      <span>Enveloppe Investissement :</span>
+                      <strong>{formatMoney(investmentEnvelope.amount, currency)}</strong>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleBudgetizeInvestmentEnvelope}
+                      className="w-full mt-1.5 h-7 text-[11px] border-indigo-200 dark:border-indigo-900 bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-semibold"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Créer l&apos;enveloppe « Investissement »
+                    </Button>
+                  )}
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/60 space-y-1">
+                  <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
+                    <span className="font-medium">Rendements reçus ce mois (+ Revenu) :</span>
+                    <strong className="font-bold text-emerald-700 dark:text-emerald-300">
+                      +{formatMoney(investmentReturnsThisMonth, currency)}
+                    </strong>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+                    <span>Total cumulé des gains :</span>
+                    <strong className="text-emerald-700 dark:text-emerald-300">
+                      +{formatMoney(totalInvestmentReturns, currency)}
+                    </strong>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Astuce Ergonomie */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-2">
+              <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                <span>Astuces de saisie ultra rapide</span>
+              </div>
+              <ul className="space-y-1.5 text-slate-500 leading-relaxed list-disc list-inside">
+                <li><strong>Cliquez sur un montant</strong> : la valeur entière se surligne automatiquement pour être remplacée d un seul coup.</li>
+                <li><strong>Bouton éclair ⚡</strong> : affiche les boutons rapides (+5k, +10k, +50k) et le bouton « + Reste » pour allouer le reliquat d un clic.</li>
+                <li><strong>Renommer</strong> : cliquez sur le nom d une enveloppe pour la modifier directement.</li>
+              </ul>
             </div>
-            <ul className="space-y-1.5 text-slate-500 leading-relaxed list-disc list-inside">
-              <li><strong>Cliquez sur un montant</strong> : la valeur entière se surligne automatiquement pour être remplacée d un seul coup.</li>
-              <li><strong>Bouton éclair ⚡</strong> : affiche les boutons rapides (+5k, +10k, +50k) et le bouton « + Reste » pour allouer le reliquat d un clic.</li>
-              <li><strong>Renommer</strong> : cliquez sur le nom d une enveloppe pour la modifier directement.</li>
-            </ul>
           </div>
         </div>
 
-        {/* Répartition par Catégorie (Pilier C) */}
-        <Card className="md:col-span-2 min-w-0 border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+        {/* 2. Répartition par Catégorie / Enveloppes (Pilier C) - En 2ème sur Mobile / Colonne droite sur Desktop */}
+        <div className="order-2 md:order-none md:col-span-2 w-full min-w-0">
+          <Card className="w-full border-none shadow-sm bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
@@ -1545,9 +1550,21 @@ export default function BudgetPage() {
                 </div>
               </div>
             </div>
+
+            {/* Bouton Enregistrer le budget - Directement sous les enveloppes (Ergonomie mobile & desktop) */}
+            <div className="pt-5 border-t border-slate-200/80 dark:border-slate-800 mt-6">
+              <Button 
+                onClick={handleSave} 
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 text-sm sm:text-base shadow-sm gap-2 rounded-xl transition-all"
+              >
+                <Save className="h-5 w-5" />
+                <span>Enregistrer le budget</span>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     </div>
+  </div>
   );
 }
