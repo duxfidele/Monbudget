@@ -598,3 +598,4 @@ export function searchKnowledgeBase(rawQuery: string): SearchMatch[] {
   // Tri décroissant par score
   return results.sort((a, b) => b.score - a.score);
 }
+

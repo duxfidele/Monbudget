@@ -50,3 +50,4 @@ test.describe('Knowledge Base & Local NLP Search Engine', () => {
     expect(nonsenseResults).toEqual([]);
   });
 });
+
