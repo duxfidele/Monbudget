@@ -302,12 +302,27 @@ interface UIState {
     startDate?: string;
     color?: string;
     notes?: string;
+    currentValuation?: number;
   }) => Promise<void>;
+  updateInvestment: (
+    id: string,
+    updates: Partial<{
+      name: string;
+      category: string;
+      targetAmount: number;
+      expectedReturnPercent: number;
+      startDate?: string;
+      status: "active" | "completed" | "paused";
+      color?: string;
+      notes?: string;
+      currentValuation?: number;
+    }>
+  ) => Promise<void>;
   removeInvestment: (id: string) => Promise<void>;
   updateInvestmentStatus: (id: string, status: "active" | "completed" | "paused") => Promise<void>;
   addInvestmentOperation: (
     investmentId: string,
-    type: "capital_outflow" | "return_inflow",
+    type: "capital_outflow" | "return_inflow" | "capital_withdrawal" | "valuation_update",
     amount: number,
     notes?: string,
     date?: string
@@ -4395,6 +4410,84 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
   },
 
+  updateInvestment: async (id, updates) => {
+    if (!canModifyPaidFeature(get())) {
+      notifyLockedPaidFeature("Investissements");
+      return;
+    }
+    const existing = get().investments.find((i) => i.id === id);
+    if (!existing) return;
+
+    const cleanTarget =
+      updates.targetAmount !== undefined
+        ? Math.max(0, Number(updates.targetAmount) || 0)
+        : existing.targetAmount;
+    const cleanRoi =
+      updates.expectedReturnPercent !== undefined
+        ? Math.max(0, Number(updates.expectedReturnPercent) || 0)
+        : existing.expectedReturnPercent;
+    const cleanValuation =
+      updates.currentValuation !== undefined
+        ? Math.max(0, Number(updates.currentValuation) || 0)
+        : existing.currentValuation;
+
+    const updatedInvestments = get().investments.map((inv) => {
+      if (inv.id !== id) return inv;
+      return {
+        ...inv,
+        name: updates.name !== undefined ? updates.name.trim() : inv.name,
+        category: updates.category !== undefined ? updates.category.trim() : inv.category,
+        targetAmount: cleanTarget,
+        expectedReturnPercent: cleanRoi,
+        startDate: updates.startDate !== undefined ? updates.startDate : inv.startDate,
+        status: updates.status !== undefined ? updates.status : inv.status,
+        color: updates.color !== undefined ? updates.color : inv.color,
+        notes: updates.notes !== undefined ? updates.notes.trim() || undefined : inv.notes,
+        currentValuation: cleanValuation,
+      };
+    });
+
+    set({ investments: updatedInvestments });
+
+    const cache = loadLocalCache();
+    if (cache) {
+      cache.investments = updatedInvestments;
+      saveLocalCache(cache);
+    }
+
+    const uid = get().userId || activeUserId;
+    if (!uid) return;
+
+    const target = updatedInvestments.find((i) => i.id === id);
+    if (!target) return;
+
+    await enqueueOutboxEntry(uid, {
+      entityType: "investment",
+      entityId: id,
+      type: "upsert_investment",
+      payload: {
+        id,
+        name: target.name,
+        category: target.category,
+        target_amount: target.targetAmount,
+        invested_amount: target.investedAmount,
+        total_returns: target.totalReturns,
+        expected_return_percent: target.expectedReturnPercent,
+        start_date: target.startDate || null,
+        status: target.status,
+        color: target.color,
+        notes: target.notes || null,
+        current_valuation: target.currentValuation ?? null,
+        total_withdrawals: target.totalWithdrawals ?? 0,
+      },
+      clientUpdatedAt: new Date().toISOString(),
+    });
+    await get().refreshOfflineDiagnostics();
+    if (get().isOnline) {
+      void get().syncPendingQueue(false, true);
+    }
+  },
+
   addInvestmentOperation: async (investmentId, type, amount, notes, date) => {
     if (!canModifyPaidFeature(get())) {
       notifyLockedPaidFeature("Investissements");
@@ -4407,8 +4500,8 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (cleanAmount <= 0) return;
 
     const operationDate = date || new Date().toISOString().split("T")[0];
-    const txId = ensureValidUuid(null);
     const opId = ensureValidUuid(null);
+    const txId = type !== "valuation_update" ? ensureValidUuid(null) : undefined;
 
     const opItem: InvestmentOperationItem = {
       id: opId,
@@ -4420,10 +4513,19 @@ export const useUIStore = create<UIState>((set, get) => ({
     };
 
     const isReturn = type === "return_inflow";
-    const newInvested = isReturn ? inv.investedAmount : inv.investedAmount + cleanAmount;
+    const isWithdrawal = type === "capital_withdrawal";
+    const isValuation = type === "valuation_update";
+    const isCapitalOutflow = type === "capital_outflow";
+
+    const newInvested = isCapitalOutflow ? inv.investedAmount + cleanAmount : inv.investedAmount;
     const newReturns = isReturn ? inv.totalReturns + cleanAmount : inv.totalReturns;
+    const newWithdrawals = isWithdrawal
+      ? (inv.totalWithdrawals || 0) + cleanAmount
+      : inv.totalWithdrawals || 0;
+    const newValuation = isValuation ? cleanAmount : inv.currentValuation;
+
     const nextStatus: "active" | "completed" | "paused" =
-      !isReturn && inv.targetAmount > 0 && newInvested >= inv.targetAmount
+      isCapitalOutflow && inv.targetAmount > 0 && newInvested >= inv.targetAmount
         ? "completed"
         : inv.status;
 
@@ -4433,57 +4535,74 @@ export const useUIStore = create<UIState>((set, get) => ({
         ...item,
         investedAmount: newInvested,
         totalReturns: newReturns,
+        totalWithdrawals: newWithdrawals,
+        currentValuation: newValuation,
         status: nextStatus,
         operations: [opItem, ...(item.operations || [])],
       };
     });
 
-    const txLabel = isReturn
-      ? `Rendement : ${inv.name}${notes?.trim() ? ` (${notes.trim()})` : ""}`
-      : `Investissement : ${inv.name}${notes?.trim() ? ` (${notes.trim()})` : ""}`;
-
-    const linkedTx: Transaction = {
-      id: txId,
-      label: txLabel,
-      amount: cleanAmount,
-      category: isReturn ? "Rendement d'investissement" : "Investissement",
-      date: operationDate,
-      type: isReturn ? "income" : "expense",
-      linkedInvestmentId: investmentId,
-      linkedInvestmentOpId: opId,
-      pendingSync: true,
-    };
-
-    const updatedTransactions = [linkedTx, ...get().transactions];
-    const updatedIncome = isReturn ? get().income + cleanAmount : get().income;
-
+    let updatedTransactions = get().transactions;
+    let updatedIncome = get().income;
     const { year, month } = get().activeMonth;
     let updatedCategories = get().categories;
 
-    // Si placement de capital (sortie), synchroniser automatiquement l'enveloppe "Investissement" dans Mon Budget
-    if (!isReturn) {
-      const monthlyInvTotal = Math.max(
-        getMonthlyInvestedCapital(updatedInvestments, year, month),
-        getSpentByCategory(updatedTransactions, "Investissement")
-      );
-      const hasInvCat = updatedCategories.some(
-        (c) => c.name.trim().toLowerCase() === "investissement"
-      );
-      if (!hasInvCat) {
-        const newInvCat: Category = {
-          id: ensureValidUuid(null),
-          name: "Investissement",
-          amount: monthlyInvTotal,
-          color: "bg-indigo-600",
-        };
-        updatedCategories = deduplicateCategories([...updatedCategories, newInvCat]);
+    let txLabel = "";
+    if (txId) {
+      if (isReturn) {
+        txLabel = `Rendement : ${inv.name}${notes?.trim() ? ` (${notes.trim()})` : ""}`;
+      } else if (isWithdrawal) {
+        txLabel = `Retrait capital : ${inv.name}${notes?.trim() ? ` (${notes.trim()})` : ""}`;
       } else {
-        updatedCategories = updatedCategories.map((c) => {
-          if (c.name.trim().toLowerCase() === "investissement") {
-            return { ...c, amount: Math.max(Number(c.amount) || 0, monthlyInvTotal) };
-          }
-          return c;
-        });
+        txLabel = `Investissement : ${inv.name}${notes?.trim() ? ` (${notes.trim()})` : ""}`;
+      }
+
+      const linkedTx: Transaction = {
+        id: txId,
+        label: txLabel,
+        amount: cleanAmount,
+        category: isReturn
+          ? "Rendement d'investissement"
+          : isWithdrawal
+          ? "Retrait d'investissement"
+          : "Investissement",
+        date: operationDate,
+        type: isReturn || isWithdrawal ? "income" : "expense",
+        linkedInvestmentId: investmentId,
+        linkedInvestmentOpId: opId,
+        pendingSync: true,
+      };
+
+      updatedTransactions = [linkedTx, ...get().transactions];
+      if (isReturn || isWithdrawal) {
+        updatedIncome = get().income + cleanAmount;
+      }
+
+      // Si placement de capital (sortie), synchroniser automatiquement l'enveloppe "Investissement" dans Mon Budget
+      if (isCapitalOutflow) {
+        const monthlyInvTotal = Math.max(
+          getMonthlyInvestedCapital(updatedInvestments, year, month),
+          getSpentByCategory(updatedTransactions, "Investissement")
+        );
+        const hasInvCat = updatedCategories.some(
+          (c) => c.name.trim().toLowerCase() === "investissement"
+        );
+        if (!hasInvCat) {
+          const newInvCat: Category = {
+            id: ensureValidUuid(null),
+            name: "Investissement",
+            amount: monthlyInvTotal,
+            color: "bg-indigo-600",
+          };
+          updatedCategories = deduplicateCategories([...updatedCategories, newInvCat]);
+        } else {
+          updatedCategories = updatedCategories.map((c) => {
+            if (c.name.trim().toLowerCase() === "investissement") {
+              return { ...c, amount: Math.max(Number(c.amount) || 0, monthlyInvTotal) };
+            }
+            return c;
+          });
+        }
       }
     }
 
@@ -4537,29 +4656,56 @@ export const useUIStore = create<UIState>((set, get) => ({
         notes: notes?.trim() || null,
         investedAmount: newInvested,
         totalReturns: newReturns,
+        totalWithdrawals: newWithdrawals,
+        currentValuation: newValuation,
         investmentStatus: nextStatus,
       },
       clientUpdatedAt: new Date().toISOString(),
     });
 
-    await enqueueOutboxEntry(uid, {
-      entityType: "transaction",
-      entityId: txId,
-      monthKey,
-      type: "upsert_transaction",
-      payload: {
-        id: txId,
-        monthly_budget_id: get().budget_id,
-        year,
-        month,
-        category_id: null,
-        amount: cleanAmount,
-        description: txLabel,
-        transaction_date: operationDate,
-        type: isReturn ? "income_adjustment" : "expense",
-      },
-      clientUpdatedAt: new Date().toISOString(),
-    });
+    if (txId) {
+      await enqueueOutboxEntry(uid, {
+        entityType: "transaction",
+        entityId: txId,
+        monthKey,
+        type: "upsert_transaction",
+        payload: {
+          id: txId,
+          monthly_budget_id: get().budget_id,
+          year,
+          month,
+          category_id: null,
+          amount: cleanAmount,
+          description: txLabel,
+          transaction_date: operationDate,
+          type: isReturn || isWithdrawal ? "income_adjustment" : "expense",
+        },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+    } else if (isValuation) {
+      // Pour une mise à jour de valorisation sans transaction, sauvegarder l'investissement parent
+      await enqueueOutboxEntry(uid, {
+        entityType: "investment",
+        entityId: investmentId,
+        type: "upsert_investment",
+        payload: {
+          id: investmentId,
+          name: inv.name,
+          category: inv.category,
+          target_amount: inv.targetAmount,
+          invested_amount: newInvested,
+          total_returns: newReturns,
+          total_withdrawals: newWithdrawals,
+          current_valuation: newValuation,
+          expected_return_percent: inv.expectedReturnPercent,
+          start_date: inv.startDate || null,
+          status: nextStatus,
+          color: inv.color,
+          notes: inv.notes || null,
+        },
+        clientUpdatedAt: new Date().toISOString(),
+      });
+    }
 
     await get().refreshOfflineDiagnostics();
     if (get().isOnline) {
@@ -4584,12 +4730,20 @@ export const useUIStore = create<UIState>((set, get) => ({
       const newReturns = filtered
         .filter((o) => o.type === "return_inflow")
         .reduce((s, o) => s + o.amount, 0);
+      const newWithdrawals = filtered
+        .filter((o) => o.type === "capital_withdrawal")
+        .reduce((s, o) => s + o.amount, 0);
+      const lastValuationOp = filtered.find((o) => o.type === "valuation_update");
+      const newValuation = lastValuationOp ? lastValuationOp.amount : undefined;
+
       const newStatus: "active" | "completed" | "paused" =
-        inv.targetAmount > 0 && newInvested >= inv.targetAmount ? "completed" : "active";
+        inv.targetAmount > 0 && newInvested >= inv.targetAmount ? "completed" : inv.status;
       return {
         ...inv,
         investedAmount: newInvested,
         totalReturns: newReturns,
+        totalWithdrawals: newWithdrawals,
+        currentValuation: newValuation,
         status: newStatus,
         operations: filtered,
       };
@@ -4668,6 +4822,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         investmentId,
         investedAmount: updatedInv?.investedAmount,
         totalReturns: updatedInv?.totalReturns,
+        totalWithdrawals: updatedInv?.totalWithdrawals,
+        currentValuation: updatedInv?.currentValuation,
         investmentStatus: updatedInv?.status,
       },
       clientUpdatedAt: new Date().toISOString(),

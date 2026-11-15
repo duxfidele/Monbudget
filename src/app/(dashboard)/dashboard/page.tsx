@@ -52,8 +52,12 @@ import {
   getTotalReceivableDebts,
   getDebtAlerts,
   getTotalInvestedCapital,
+  getTotalNetInvestedCapital,
+  getTotalPortfolioCurrentValue,
+  getTotalPortfolioUnrealizedGain,
   getTotalInvestmentReturns,
   getPortfolioROI,
+  getPortfolioGlobalROI,
   getMonthlyInvestedCapital,
   getMonthlyInvestmentReturns,
   generateFinancialAIAnalysis
@@ -141,8 +145,11 @@ export default function DashboardPage() {
 
   // Portefeuille d'Investissements & Rendements
   const capitalInvestiTotal = getTotalInvestedCapital(investments || []);
+  const capitalNetTotal = getTotalNetInvestedCapital(investments || []);
+  const valeurActuelleTotal = getTotalPortfolioCurrentValue(investments || []);
+  const plusValueLatente = getTotalPortfolioUnrealizedGain(investments || []);
   const gainsInvestissementTotal = getTotalInvestmentReturns(investments || []);
-  const roiPortefeuille = getPortfolioROI(investments || []);
+  const roiPortefeuille = getPortfolioGlobalROI(investments || []);
   const investiMois = getMonthlyInvestedCapital(
     investments || [],
     activeMonth.year,
@@ -902,22 +909,37 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 lg:min-w-[440px]">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 lg:min-w-[560px]">
               <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700">
                 <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block">
-                  Capital Total Investi
+                  Capital Net Engagé
                 </span>
                 <strong suppressHydrationWarning className="text-sm sm:text-base font-extrabold text-indigo-900 dark:text-indigo-300 block truncate">
-                  {formatMoney(capitalInvestiTotal, currency)}
+                  {formatMoney(capitalNetTotal, currency)}
                 </strong>
                 <span className="text-[10px] text-slate-400 block truncate">
-                  Ce mois : {formatMoney(investiMois, currency)}
+                  Injecté : {formatMoney(capitalInvestiTotal, currency)}
                 </span>
               </div>
 
               <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700">
                 <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block">
-                  Gains / Rendements
+                  Valeur Actuelle (Actifs)
+                </span>
+                <strong suppressHydrationWarning className="text-sm sm:text-base font-extrabold text-sky-700 dark:text-sky-300 block truncate">
+                  {formatMoney(valeurActuelleTotal, currency)}
+                </strong>
+                <span className="text-[10px] text-slate-400 block truncate">
+                  Plus-value :{" "}
+                  <span className={plusValueLatente >= 0 ? "text-emerald-600 font-semibold" : "text-red-500 font-semibold"}>
+                    {plusValueLatente >= 0 ? "+" : ""}{formatMoney(plusValueLatente, currency)}
+                  </span>
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block">
+                  Gains Encaissés (Cash)
                 </span>
                 <strong suppressHydrationWarning className="text-sm sm:text-base font-extrabold text-emerald-600 dark:text-emerald-400 block truncate">
                   +{formatMoney(gainsInvestissementTotal, currency)}

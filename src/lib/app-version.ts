@@ -84,3 +84,4 @@ export const APP_CHANGELOG: AppFeatureRelease[] = [
     ],
   },
 ];
+

@@ -7,9 +7,13 @@ import {
   getTotalPayableDebts,
   getTotalReceivableDebts,
   getTotalInvestedCapital,
+  getTotalNetInvestedCapital,
+  getTotalPortfolioCurrentValue,
   getTotalInvestmentReturns,
   getInvestmentROI,
+  getInvestmentGlobalROI,
   getPortfolioROI,
+  getPortfolioGlobalROI,
   isIncomeTransaction,
   generateFinancialAIAnalysis,
   type DebtItem,
@@ -169,8 +173,10 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
   const payableDebts = getTotalPayableDebts(debts);
   const receivableDebts = getTotalReceivableDebts(debts);
   const totalInvested = getTotalInvestedCapital(investments);
+  const totalNetInvested = getTotalNetInvestedCapital(investments);
+  const totalCurrentValue = getTotalPortfolioCurrentValue(investments);
   const totalReturns = getTotalInvestmentReturns(investments);
-  const portfolioRoi = getPortfolioROI(investments);
+  const portfolioRoi = getPortfolioGlobalROI(investments);
 
   const aiAnalysis = generateFinancialAIAnalysis({
     income: realIncome,
@@ -280,11 +286,11 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
     receivableDebts > 0 ? "À recouvrer" : "Aucune créance",
   ]);
   rows.push([
-    "Portefeuille d'Investissements (Capital Investi)",
-    String(Math.round(totalInvested)),
-    formatMoney(totalInvested, currency),
-    `ROI : ${portfolioRoi}%`,
-    `Rendements encaissés : +${formatMoney(totalReturns, currency)} (${investments.length} actif(s))`,
+    "Portefeuille d'Investissements (Actifs valorisés)",
+    String(Math.round(totalCurrentValue)),
+    formatMoney(totalCurrentValue, currency),
+    `ROI Net : ${portfolioRoi}%`,
+    `Gains reçus : +${formatMoney(totalReturns, currency)} (Net engagé : ${formatMoney(totalNetInvested, currency)})`,
     totalInvested > 0 ? "Portefeuille actif" : "Aucun investissement",
   ]);
   rows.push([
@@ -477,7 +483,7 @@ export function exportMonthlyReportCSV(payload: ReportExportPayload): void {
   ]);
   if (investments.length > 0) {
     for (const inv of investments) {
-      const roi = getInvestmentROI(inv);
+      const roi = getInvestmentGlobalROI(inv);
       rows.push([
         inv.name,
         inv.category,
@@ -1553,7 +1559,7 @@ export function generateMonthlyReportPdfBytes(payload: ReportExportPayload): Uin
     ];
 
     const invRows: TableCellSpec[][] = investments.map((inv) => {
-      const roi = getInvestmentROI(inv);
+      const roi = getInvestmentGlobalROI(inv);
       return [
         { text: inv.name, bold: true },
         { text: inv.category, color: COLORS.slate700 },

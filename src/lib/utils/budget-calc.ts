@@ -606,7 +606,11 @@ export function getDebtAlerts(
  */
 export interface InvestmentOperationItem {
   id: string;
-  type: "capital_outflow" | "return_inflow"; // capital_outflow = capital investi | return_inflow = rendement/gain encaissé
+  type: "capital_outflow" | "return_inflow" | "capital_withdrawal" | "valuation_update";
+  // capital_outflow = capital investi / apport
+  // return_inflow = rendement/gain encaissé en cash
+  // capital_withdrawal = retrait / récupération de capital (désinvestissement)
+  // valuation_update = actualisation de la valeur marchande estimée
   amount: number;
   date: string;
   notes?: string;
@@ -620,6 +624,8 @@ export interface InvestmentItem {
   targetAmount: number;
   investedAmount: number;
   totalReturns: number;
+  totalWithdrawals?: number;
+  currentValuation?: number;
   expectedReturnPercent: number;
   startDate?: string;
   status: "active" | "completed" | "paused";
@@ -754,6 +760,142 @@ export function getMonthlyInvestmentReturns(
   for (const inv of investments) {
     for (const op of inv.operations || []) {
       if (op.type !== "return_inflow" || !op.date) continue;
+      const parts = op.date.split("-");
+      if (parts.length >= 2) {
+        const oYear = parseInt(parts[0], 10);
+        const oMonth = parseInt(parts[1], 10);
+        if (oYear === year && oMonth === month) {
+          total += Number(op.amount) || 0;
+        }
+      }
+    }
+  }
+  return total;
+}
+
+/**
+ * Capital net engagé dans un projet (Capital investi - Retraits de capital)
+ */
+export function getNetInvestedCapital(
+  inv: Pick<InvestmentItem, "investedAmount"> & Partial<Pick<InvestmentItem, "totalWithdrawals">>
+): number {
+  const invested = Number(inv.investedAmount) || 0;
+  const withdrawals = Number(inv.totalWithdrawals) || 0;
+  return Math.max(0, invested - withdrawals);
+}
+
+/**
+ * Total du capital net engagé sur l'ensemble du portefeuille
+ */
+export function getTotalNetInvestedCapital(investments: InvestmentItem[]): number {
+  if (!investments || !Array.isArray(investments)) return 0;
+  return investments.reduce((sum, inv) => sum + getNetInvestedCapital(inv), 0);
+}
+
+/**
+ * Total des retraits de capital (désinvestissements) effectués sur le portefeuille
+ */
+export function getTotalCapitalWithdrawals(investments: InvestmentItem[]): number {
+  if (!investments || !Array.isArray(investments)) return 0;
+  return investments.reduce((sum, inv) => sum + (Number(inv.totalWithdrawals) || 0), 0);
+}
+
+/**
+ * Valeur marchande ou actuelle estimée d'un investissement
+ * (Si non spécifiée explicitement, équivaut au capital net engagé)
+ */
+export function getInvestmentCurrentValue(
+  inv: Pick<InvestmentItem, "investedAmount"> &
+    Partial<Pick<InvestmentItem, "totalWithdrawals" | "currentValuation">>
+): number {
+  if (inv.currentValuation !== undefined && inv.currentValuation !== null) {
+    return Math.max(0, Number(inv.currentValuation) || 0);
+  }
+  return getNetInvestedCapital(inv);
+}
+
+/**
+ * Valeur globale actuelle de l'ensemble du portefeuille d'investissements
+ */
+export function getTotalPortfolioCurrentValue(investments: InvestmentItem[]): number {
+  if (!investments || !Array.isArray(investments)) return 0;
+  return investments.reduce((sum, inv) => sum + getInvestmentCurrentValue(inv), 0);
+}
+
+/**
+ * Plus-value ou moins-value latente sur un investissement (Valeur actuelle - Capital net)
+ */
+export function getInvestmentUnrealizedGain(
+  inv: Pick<InvestmentItem, "investedAmount"> &
+    Partial<Pick<InvestmentItem, "totalWithdrawals" | "currentValuation">>
+): number {
+  return getInvestmentCurrentValue(inv) - getNetInvestedCapital(inv);
+}
+
+/**
+ * Total des plus-values ou moins-values latentes du portefeuille
+ */
+export function getTotalPortfolioUnrealizedGain(investments: InvestmentItem[]): number {
+  if (!investments || !Array.isArray(investments)) return 0;
+  return investments.reduce((sum, inv) => sum + getInvestmentUnrealizedGain(inv), 0);
+}
+
+/**
+ * Rendement Global Net (%) d'un investissement individuel :
+ * Prend en compte : Gains perçus (dividendes) + Retraits de capital + Valorisation actuelle vs Capital investi total.
+ */
+export function getInvestmentGlobalROI(
+  inv: Pick<InvestmentItem, "investedAmount" | "totalReturns"> &
+    Partial<Pick<InvestmentItem, "totalWithdrawals" | "currentValuation">>
+): number {
+  const invested = Number(inv.investedAmount) || 0;
+  if (invested <= 0) return 0;
+  const returns = Number(inv.totalReturns) || 0;
+  const withdrawals = Number(inv.totalWithdrawals) || 0;
+  const curVal = getInvestmentCurrentValue(inv);
+  const totalNetGain = returns + withdrawals + curVal - invested;
+  return Math.round((totalNetGain / invested) * 1000) / 10;
+}
+
+/**
+ * Rendement Global Net (%) du portefeuille complet
+ */
+export function getPortfolioGlobalROI(investments: InvestmentItem[]): number {
+  const totalInvested = getTotalInvestedCapital(investments);
+  if (totalInvested <= 0) return 0;
+  const totalReturns = getTotalInvestmentReturns(investments);
+  const totalWithdrawals = getTotalCapitalWithdrawals(investments);
+  const totalCurVal = getTotalPortfolioCurrentValue(investments);
+  const totalNetGain = totalReturns + totalWithdrawals + totalCurVal - totalInvested;
+  return Math.round((totalNetGain / totalInvested) * 1000) / 10;
+}
+
+/**
+ * Taux d'amortissement / Récupération du capital initial (Payback en %)
+ */
+export function getInvestmentPaybackPercent(
+  inv: Pick<InvestmentItem, "investedAmount" | "totalReturns"> &
+    Partial<Pick<InvestmentItem, "totalWithdrawals">>
+): number {
+  const invested = Number(inv.investedAmount) || 0;
+  if (invested <= 0) return 0;
+  const recovered = (Number(inv.totalReturns) || 0) + (Number(inv.totalWithdrawals) || 0);
+  return Math.min(100, Math.round((recovered / invested) * 1000) / 10);
+}
+
+/**
+ * Total des retraits de capital durant un mois spécifique
+ */
+export function getMonthlyCapitalWithdrawals(
+  investments: InvestmentItem[],
+  year: number,
+  month: number
+): number {
+  if (!investments || !Array.isArray(investments)) return 0;
+  let total = 0;
+  for (const inv of investments) {
+    for (const op of inv.operations || []) {
+      if (op.type !== "capital_withdrawal" || !op.date) continue;
       const parts = op.date.split("-");
       if (parts.length >= 2) {
         const oYear = parseInt(parts[0], 10);

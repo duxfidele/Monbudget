@@ -99,6 +99,8 @@ function stripExtendedSyncColumns<T extends Record<string, unknown>>(row: T): Pa
   delete copy.deleted_at;
   delete copy.sync_version;
   delete copy.updated_at;
+  delete (copy as Record<string, unknown>).current_valuation;
+  delete (copy as Record<string, unknown>).total_withdrawals;
   return copy;
 }
 
@@ -863,6 +865,13 @@ export async function executeSingleOutboxEntry(
         status: p.status || "active",
         color: p.color || "bg-indigo-600",
         notes: p.notes || null,
+        current_valuation:
+          p.current_valuation !== undefined
+            ? (p.current_valuation === null ? null : Number(p.current_valuation))
+            : (p.currentValuation !== undefined
+                ? (p.currentValuation === null ? null : Number(p.currentValuation))
+                : null),
+        total_withdrawals: Math.max(0, Number(p.total_withdrawals ?? p.totalWithdrawals) || 0),
         client_op_id: entry.opId,
         deleted_at: null,
       };
@@ -912,10 +921,19 @@ export async function executeSingleOutboxEntry(
       const opId = ensureValidUuid(p.id || entry.entityId);
       const invId = ensureValidUuid(p.investment_id || p.investmentId);
 
+      const opType = [
+        "capital_outflow",
+        "return_inflow",
+        "capital_withdrawal",
+        "valuation_update",
+      ].includes(p.type)
+        ? p.type
+        : "capital_outflow";
+
       const row = {
         id: opId,
         investment_id: invId,
-        type: p.type === "return_inflow" ? "return_inflow" : "capital_outflow",
+        type: opType,
         amount: Math.max(0, Number(p.amount) || 0),
         operation_date: p.operation_date || p.date || new Date().toISOString().split("T")[0],
         notes: p.notes || null,
@@ -945,6 +963,12 @@ export async function executeSingleOutboxEntry(
       }
       if (p.totalReturns !== undefined) {
         invUpdates.total_returns = Math.max(0, Number(p.totalReturns) || 0);
+      }
+      if (p.totalWithdrawals !== undefined) {
+        invUpdates.total_withdrawals = Math.max(0, Number(p.totalWithdrawals) || 0);
+      }
+      if (p.currentValuation !== undefined) {
+        invUpdates.current_valuation = Math.max(0, Number(p.currentValuation) || 0);
       }
       if (p.investmentStatus) {
         invUpdates.status = p.investmentStatus;

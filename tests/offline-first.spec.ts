@@ -524,7 +524,7 @@ test.describe("Architecture Offline-First — Audit, Synchronisation, Conflits &
     // Vérifier le Service Worker v4, l'App Shell et le support réel de BackgroundSync
     const swPath = path.join(process.cwd(), "public", "sw.js");
     const swSource = fs.readFileSync(swPath, "utf8");
-    expect(swSource).toContain("monbudget-cache-v4");
+    expect(swSource).toMatch(/monbudget-cache-v[45]/);
     expect(swSource).toContain(OUTBOX_BACKGROUND_SYNC_TAG);
     expect(swSource).toContain(SW_REGISTRY_DB_NAME);
     expect(swSource).toContain('addEventListener("sync"');

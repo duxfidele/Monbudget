@@ -22,6 +22,17 @@ import {
   getPortfolioROI,
   getMonthlyInvestedCapital,
   getMonthlyInvestmentReturns,
+  getNetInvestedCapital,
+  getTotalNetInvestedCapital,
+  getTotalCapitalWithdrawals,
+  getInvestmentCurrentValue,
+  getTotalPortfolioCurrentValue,
+  getInvestmentUnrealizedGain,
+  getTotalPortfolioUnrealizedGain,
+  getInvestmentGlobalROI,
+  getPortfolioGlobalROI,
+  getInvestmentPaybackPercent,
+  getMonthlyCapitalWithdrawals,
   INVESTMENT_CATEGORIES,
   INVESTMENT_TEMPLATES,
   generateFinancialAIAnalysis,
@@ -417,6 +428,53 @@ test.describe('Budget Calculation Engine (budget-calc)', () => {
     expect(getPortfolioROI(investments)).toBe(20); // 60k / 300k = 20%
     expect(getMonthlyInvestedCapital(investments, 2026, 11)).toBe(200000);
     expect(getMonthlyInvestmentReturns(investments, 2026, 11)).toBe(60000);
+
+    // Enhanced financial calculations: Net invested, valuations, capital withdrawals, payback, global ROI
+    const advancedInvestments = [
+      {
+        id: "inv-parcelle",
+        name: "Parcelle Calavi",
+        category: "Immobilier & Terrain",
+        investedAmount: 2500000,
+        totalReturns: 100000, // loyer encaissé
+        totalWithdrawals: 500000, // vente d'une fraction
+        currentValuation: 3200000, // valorisation marchande
+        targetAmount: 2500000,
+        expectedReturnPercent: 20,
+        status: "active" as const,
+        color: "bg-amber-600",
+        operations: [
+          {
+            id: "op-w1",
+            type: "capital_withdrawal" as const,
+            amount: 500000,
+            date: "2026-11-05",
+          },
+        ],
+      },
+    ];
+
+    // Net capital: 2.5M - 500k = 2.0M
+    expect(getNetInvestedCapital(advancedInvestments[0])).toBe(2000000);
+    expect(getTotalNetInvestedCapital(advancedInvestments)).toBe(2000000);
+    expect(getTotalCapitalWithdrawals(advancedInvestments)).toBe(500000);
+    expect(getMonthlyCapitalWithdrawals(advancedInvestments, 2026, 11)).toBe(500000);
+
+    // Current value: 3.2M
+    expect(getInvestmentCurrentValue(advancedInvestments[0])).toBe(3200000);
+    expect(getTotalPortfolioCurrentValue(advancedInvestments)).toBe(3200000);
+
+    // Unrealized gain: 3.2M - 2.0M = +1.2M
+    expect(getInvestmentUnrealizedGain(advancedInvestments[0])).toBe(1200000);
+    expect(getTotalPortfolioUnrealizedGain(advancedInvestments)).toBe(1200000);
+
+    // Global ROI Net: (returns (100k) + withdrawals (500k) + curVal (3.2M) - invested (2.5M)) / 2.5M
+    // = (3.8M - 2.5M) / 2.5M = 1.3M / 2.5M = +52%
+    expect(getInvestmentGlobalROI(advancedInvestments[0])).toBe(52);
+    expect(getPortfolioGlobalROI(advancedInvestments)).toBe(52);
+
+    // Payback: (100k + 500k) / 2.5M = 600k / 2.5M = 24%
+    expect(getInvestmentPaybackPercent(advancedInvestments[0])).toBe(24);
 
     // Gating verification: locked on Free plan after 30-day trial, unlocked during 30-day trial and on Personal/Business
     expect(canAccessFeature("free", "investments")).toBe(false);
