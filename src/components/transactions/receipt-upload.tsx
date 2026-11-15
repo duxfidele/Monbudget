@@ -73,7 +73,17 @@ export function ReceiptUpload({ receipt, onChange, disabled }: ReceiptUploadProp
 
     if (!canAttachReceipts) {
       toast.info(
-        "Fonctionnalité cadenassée — Prenez l'abonnement Particulier à 500 FCFA/mois pour joindre des reçus."
+        "Fonctionnalité cadenassée — Prenez l'abonnement Particulier à 500 FCFA/mois pour joindre des reçus.",
+        {
+          action: {
+            label: "Abonnement 500 F",
+            onClick: () => {
+              if (typeof window !== "undefined") {
+                window.location.href = "/settings?tab=subscription&plan=personal#plan-card-personal";
+              }
+            },
+          },
+        }
       );
       return;
     }

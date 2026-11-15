@@ -222,7 +222,17 @@ export const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => {
               onClick={() => {
                 if (isLocked) {
                   toast.info(
-                    `« ${route.label} » est cadenassé — Prenez l'abonnement Particulier à ${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois pour le débloquer.`
+                    `« ${route.label} » est cadenassé — Prenez l'abonnement Particulier à ${catalog.personal.monthlyPriceXof.toLocaleString("fr-FR")} FCFA/mois pour le débloquer.`,
+                    {
+                      action: {
+                        label: "Abonnement 500 F",
+                        onClick: () => {
+                          if (typeof window !== "undefined") {
+                            window.location.href = "/settings?tab=subscription&plan=personal#plan-card-personal";
+                          }
+                        },
+                      },
+                    }
                   );
                 }
                 onNavigate?.();

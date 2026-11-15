@@ -91,7 +91,17 @@ export const BottomNav = () => {
         onClick={() => {
           if (isLocked) {
             toast.info(
-              `« ${route.label} » est cadenassé — Prenez l'abonnement Particulier à 500 FCFA/mois pour le débloquer.`
+              `« ${route.label} » est cadenassé — Prenez l'abonnement Particulier à 500 FCFA/mois pour le débloquer.`,
+              {
+                action: {
+                  label: "Abonnement 500 F",
+                  onClick: () => {
+                    if (typeof window !== "undefined") {
+                      window.location.href = "/settings?tab=subscription&plan=personal#plan-card-personal";
+                    }
+                  },
+                },
+              }
             );
           }
         }}

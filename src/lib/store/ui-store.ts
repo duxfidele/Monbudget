@@ -68,6 +68,22 @@ export interface InAppNotificationItem {
 
 const LOCKED_FEATURE_TOAST =
   "Fonctionnalité cadenassée — Passez au plan Particulier à 500 FCFA/mois pour la débloquer.";
+
+function notifyLockedPaidFeature(featureName?: string) {
+  const message = featureName
+    ? `« ${featureName} » est cadenassé — Passez au plan Particulier à 500 FCFA/mois pour le débloquer.`
+    : LOCKED_FEATURE_TOAST;
+  toast.error(message, {
+    action: {
+      label: "Abonnement 500 F",
+      onClick: () => {
+        if (typeof window !== "undefined") {
+          window.location.href = "/settings?tab=subscription&plan=personal#plan-card-personal";
+        }
+      },
+    },
+  });
+}
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -2668,28 +2684,26 @@ export const useUIStore = create<UIState>((set, get) => ({
       clientUpdatedAt: new Date().toISOString(),
     });
 
-    if (canModifyPaidFeature(curState)) {
-      for (const cat of curState.categories) {
-        if (!UUID_REGEX.test(cat.id)) continue;
-        await enqueueOutboxEntry(uid, {
-          entityType: "allocation",
-          entityId: cat.id,
-          monthKey,
-          coalesceKey: `alloc:${monthKey}:${cat.id}`,
-          type: "upsert_allocation",
-          payload: {
-            allocation_id: cat.allocation_id,
-            budgetId: curState.budget_id,
-            year,
-            month,
-            categoryId: cat.id,
-            categoryName: cat.name,
-            categoryColor: cat.color,
-            amount: cat.amount,
-          },
-          clientUpdatedAt: new Date().toISOString(),
-        });
-      }
+    for (const cat of curState.categories) {
+      if (!UUID_REGEX.test(cat.id)) continue;
+      await enqueueOutboxEntry(uid, {
+        entityType: "allocation",
+        entityId: cat.id,
+        monthKey,
+        coalesceKey: `alloc:${monthKey}:${cat.id}`,
+        type: "upsert_allocation",
+        payload: {
+          allocation_id: cat.allocation_id,
+          budgetId: curState.budget_id,
+          year,
+          month,
+          categoryId: cat.id,
+          categoryName: cat.name,
+          categoryColor: cat.color,
+          amount: cat.amount,
+        },
+        clientUpdatedAt: new Date().toISOString(),
+      });
     }
 
     await get().refreshOfflineDiagnostics();
@@ -2699,10 +2713,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   addCategory: async (cat) => {
-    if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
-      return;
-    }
     const trimmedName = cat.name.trim();
     if (!trimmedName) return;
 
@@ -2768,10 +2778,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   removeCategory: async (id) => {
-    if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
-      return;
-    }
     const updated = get().categories.filter((c) => c.id !== id);
     set({ categories: updated });
 
@@ -2801,10 +2807,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   updateCategory: async (id, updates) => {
-    if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
-      return;
-    }
     const updated = get().categories.map((c) => (c.id === id ? { ...c, ...updates } : c));
     set({ categories: updated });
 
@@ -2835,10 +2837,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   updateCategoryAmount: async (id, amount) => {
-    if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
-      return;
-    }
     const updated = get().categories.map((c) => (c.id === id ? { ...c, amount } : c));
     set({ categories: updated });
 
@@ -2906,7 +2904,6 @@ export const useUIStore = create<UIState>((set, get) => ({
       tx.label.trim().toLowerCase().startsWith("épargne :");
 
     if (
-      canModifyPaidFeature(get()) &&
       !isInc &&
       assignedCatName &&
       assignedCatName !== "Autre (Hors Budget)"
@@ -3325,10 +3322,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   duplicatePreviousMonth: async () => {
-    if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
-      return { prevMonthName: "", allocationsCount: 0, income: 0 };
-    }
     const { year, month } = get().activeMonth;
     const prevYear = month === 1 ? year - 1 : year;
     const prevMonth = month === 1 ? 12 : month - 1;
@@ -3479,7 +3472,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addSavingsGoal: async (goal) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Objectifs d'Épargne");
       return;
     }
     const goalId = ensureValidUuid(null);
@@ -3529,7 +3522,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   removeSavingsGoal: async (id) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Objectifs d'Épargne");
       return;
     }
     const updated = get().savingsGoals.filter((g) => g.id !== id);
@@ -3559,7 +3552,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   updateSavingsGoalStatus: async (id, status) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Objectifs d'Épargne");
       return;
     }
     const updated = get().savingsGoals.map((g) => (g.id === id ? { ...g, status } : g));
@@ -3590,7 +3583,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addSavingsContribution: async (goalId, amount, notes, date) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Objectifs d'Épargne");
       return;
     }
     const goal = get().savingsGoals.find((g) => g.id === goalId);
@@ -3727,7 +3720,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   removeSavingsContribution: async (contributionId, goalId) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Objectifs d'Épargne");
       return;
     }
     const targetGoal = get().savingsGoals.find((g) => g.id === goalId);
@@ -3840,7 +3833,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addDebt: async (debt) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Dettes & Créances");
       return;
     }
     const cleanAmount = Math.max(0, Number(debt.totalAmount) || 0);
@@ -3903,7 +3896,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   removeDebt: async (id) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Dettes & Créances");
       return;
     }
     const updatedDebts = get().debts.filter((d) => d.id !== id);
@@ -3933,7 +3926,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addDebtPayment: async (debtId, amount, notes, date) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Dettes & Créances");
       return;
     }
     const debt = get().debts.find((d) => d.id === debtId);
@@ -4065,7 +4058,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   removeDebtPayment: async (paymentId, debtId) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Dettes & Créances");
       return;
     }
     const targetDebt = get().debts.find((d) => d.id === debtId);
@@ -4164,7 +4157,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addInvestment: async (inv) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Investissements");
       return;
     }
     const cleanTarget = Math.max(0, Number(inv.targetAmount) || 0);
@@ -4233,7 +4226,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   removeInvestment: async (id) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Investissements");
       return;
     }
     const targetInv = get().investments.find((i) => i.id === id);
@@ -4332,7 +4325,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   updateInvestmentStatus: async (id, status) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Investissements");
       return;
     }
     const updatedInvestments = get().investments.map((inv) =>
@@ -4365,7 +4358,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   addInvestmentOperation: async (investmentId, type, amount, notes, date) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Investissements");
       return;
     }
     const inv = get().investments.find((i) => i.id === investmentId);
@@ -4537,7 +4530,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   removeInvestmentOperation: async (operationId, investmentId) => {
     if (!canModifyPaidFeature(get())) {
-      toast.error(LOCKED_FEATURE_TOAST);
+      notifyLockedPaidFeature("Investissements");
       return;
     }
     const targetInv = get().investments.find((i) => i.id === investmentId);

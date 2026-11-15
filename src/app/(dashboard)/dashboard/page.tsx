@@ -91,7 +91,7 @@ export default function DashboardPage() {
     trialChoiceMadeAt,
     isAdmin: isAdminUser,
   });
-  const canUseBudgetTools =
+  const canUseDailyPilotage =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "daily_pilotage");
   const canViewSavings =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "savings");
@@ -104,7 +104,7 @@ export default function DashboardPage() {
   const canAccessAdvisor =
     isAdminUser || canAccessFeature(subscriptionCountdown.effectivePlanId, "advisor");
 
-  const showBudgetSection = !subscriptionHydrated || canUseBudgetTools;
+  const showDailyPilotage = !subscriptionHydrated || canUseDailyPilotage;
   const showSavingsSection = !subscriptionHydrated || canViewSavings;
   const showDebtsSection = !subscriptionHydrated || canViewDebts;
   const showInvestmentsSection = !subscriptionHydrated || canViewInvestments;
@@ -514,7 +514,7 @@ export default function DashboardPage() {
 
       {/* Bannière de rappel du jour de paie si activée et débloquée */}
       {subscriptionHydrated &&
-        canUseBudgetTools &&
+        canUseDailyPilotage &&
         notifications?.payDayReminder !== false &&
         dailyInfo.daysRemaining <= (notifications?.payDayReminderDays || 7) &&
         !dailyInfo.isPayDayToday && (
@@ -528,7 +528,7 @@ export default function DashboardPage() {
       )}
 
       {/* HERO CARD : Budget Journalier Conseillé déduit automatiquement (Cadenassé en mode Gratuit) */}
-      {showBudgetSection ? (
+      {showDailyPilotage ? (
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1E3A5F] via-[#24436E] to-[#152B47] text-white p-4 sm:p-6 md:p-8 shadow-xl">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
@@ -713,11 +713,11 @@ export default function DashboardPage() {
             <div suppressHydrationWarning className="text-base sm:text-2xl font-extrabold text-slate-800 dark:text-slate-100 truncate">
               {formatMoney(depenses, currency)}
             </div>
-            {showBudgetSection && epargneMois > 0 ? (
+            {epargneMois > 0 ? (
               <p className="text-[10px] sm:text-xs text-sky-600 dark:text-sky-400 mt-0.5 sm:mt-1 font-medium truncate">
                 dont {formatMoney(epargneMois, currency)} épargnés
               </p>
-            ) : showBudgetSection ? (
+            ) : depensesPrevues > 0 ? (
               <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
                 Prévu : {formatMoney(depensesPrevues, currency)}
               </p>
@@ -1242,79 +1242,43 @@ export default function DashboardPage() {
               <div className="min-w-0">
                 <CardTitle className="text-slate-900 dark:text-slate-100">Enveloppes par Catégorie</CardTitle>
                 <CardDescription className="text-slate-500 dark:text-slate-400">
-                  {showBudgetSection
-                    ? "Consommation par rapport aux plafonds prévus"
-                    : "Cadenassé en mode Gratuit limité"}
+                  Consommation par rapport aux plafonds prévus
                 </CardDescription>
               </div>
-              {showBudgetSection ? (
-                <Link href="/budget">
-                  <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium">
-                    Ajuster
-                  </Button>
-                </Link>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                  <Lock className="h-3 w-3" /> 500 F
-                </span>
-              )}
+              <Link href="/budget">
+                <Button variant="ghost" size="sm" className="text-blue-600 dark:text-sky-400 font-medium">
+                  Ajuster
+                </Button>
+              </Link>
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            {showBudgetSection ? (
-              <>
-                {categoryStats.map((cat, idx) => {
-                  return (
-                    <div key={idx} className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2 text-sm">
-                        <span className="font-medium text-slate-700 dark:text-slate-300 truncate min-w-0">{cat.name}</span>
-                        <span suppressHydrationWarning className="font-medium text-slate-900 dark:text-slate-100 text-xs shrink-0 text-right">
-                          {formatMoney(cat.spent, currency)} <span className="text-slate-400 dark:text-slate-500 font-normal">/ {formatMoney(cat.amount, currency)}</span>
-                        </span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${cat.color || 'bg-blue-500'} rounded-full transition-all duration-500 ${cat.isOverBudget ? '!bg-red-500' : ''}`}
-                          style={{ width: `${Math.min(cat.percent, 100)}%` }}
-                        />
-                      </div>
-                      {cat.isOverBudget && (
-                        <p className="text-[11px] text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3" /> Plafond dépassé
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-                {categoryStats.length === 0 && (
-                  <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
-                    Aucune enveloppe définie. Cliquez sur « Ajuster » pour configurer votre budget.
+            {categoryStats.map((cat, idx) => {
+              return (
+                <div key={idx} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2 text-sm">
+                    <span className="font-medium text-slate-700 dark:text-slate-300 truncate min-w-0">{cat.name}</span>
+                    <span suppressHydrationWarning className="font-medium text-slate-900 dark:text-slate-100 text-xs shrink-0 text-right">
+                      {formatMoney(cat.spent, currency)} <span className="text-slate-400 dark:text-slate-500 font-normal">/ {formatMoney(cat.amount, currency)}</span>
+                    </span>
                   </div>
-                )}
-              </>
-            ) : (
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => promptUnlockPersonal("Enveloppes par Catégorie")}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    promptUnlockPersonal("Enveloppes par Catégorie");
-                  }
-                }}
-                className="p-5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-center space-y-2.5 cursor-pointer hover:border-amber-400 transition-colors"
-              >
-                <Lock className="h-6 w-6 text-amber-600 dark:text-amber-400 mx-auto" />
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                  Enveloppes budgétaires cadenassées
-                </p>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Prenez un abonnement Particulier à <strong>500 FCFA / mois</strong> pour fixer vos plafonds par catégorie et recevoir les alertes de seuil.
-                </p>
-                <Button size="sm" className="bg-[#1E3A5F] hover:bg-[#1E3A5F]/90 text-white text-xs font-bold rounded-xl">
-                  Prendre l&apos;abonnement 500 F
-                </Button>
+                  <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${cat.color || 'bg-blue-500'} rounded-full transition-all duration-500 ${cat.isOverBudget ? '!bg-red-500' : ''}`}
+                      style={{ width: `${Math.min(cat.percent, 100)}%` }}
+                    />
+                  </div>
+                  {cat.isOverBudget && (
+                    <p className="text-[11px] text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> Plafond dépassé
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+            {categoryStats.length === 0 && (
+              <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
+                Aucune enveloppe définie. Cliquez sur « Ajuster » pour configurer votre budget.
               </div>
             )}
           </CardContent>
